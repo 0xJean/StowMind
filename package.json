@@ -1,6 +1,7 @@
 {
   "name": "stowmind",
   "version": "1.0.0",
+  "packageManager": "pnpm@8.15.5",
   "type": "module",
   "scripts": {
     "dev": "vite",

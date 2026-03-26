@@ -48,7 +48,8 @@ jobs:
       - name: setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: latest
+          # 须与 pnpm-lock.yaml（lockfileVersion 6.x = pnpm 8）一致；latest 常为 pnpm 9/10 会报 LOCKFILE_BREAKING_CHANGE
+          version: 8.15.5
 
       - name: setup node
         uses: actions/setup-node@v4
