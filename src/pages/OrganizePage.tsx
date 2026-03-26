@@ -35,7 +35,7 @@ export function OrganizePage() {
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [thinkingText, setThinkingText] = useState('')
   const [useAI, setUseAI] = useState(true)
-  const [organizeFolders, setOrganizeFolders] = useState(true)
+  const [organizeFolders, setOrganizeFolders] = useState(false)
   const [showTempFiles, setShowTempFiles] = useState(true)
   const [dragOver, setDragOver] = useState(false)
   
