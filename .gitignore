@@ -1,0 +1,98 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物
+dist/
+dist-ssr/
+*.local
+
+# TypeScript / 工具缓存
+*.tsbuildinfo
+.eslintcache
+
+# Rust / Tauri
+src-tauri/target/
+**/*.rs.bk
+
+# IDE
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+desktop.ini
+*.exe
+*.msi
+
+# 日志
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 本机/云凭据（避免误提交）
+.aws/
+.ssh/
+
+# Terraform / IaC（可能包含密钥或状态）
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# 证书/私钥/密钥库（强烈建议忽略）
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# 常见敏感配置文件名（按需使用）
+secrets.*
+credentials.*
+
+# 设计/可视化草稿（本地生成）
+.superpowers/
+
+# 测试
+coverage/
+.nyc_output/
+
+# 临时文件
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Python 虚拟环境
+.venv/
+**/.venv/
+
+# 打包产物
+*.dmg
+*.app
+*.deb
+*.AppImage
+*.pkg
+*.rpm
