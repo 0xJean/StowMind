@@ -69,19 +69,63 @@ jobs:
       - name: install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      # macOS 签名与公证：一律使用 GitHub Actions Secrets，勿将证书或密码写入仓库。
+      # 未配置 Secrets 时，${{ secrets.X }} 会变成「空字符串」。若把空的 APPLE_CERTIFICATE 传给进程，
+      # Tauri 仍会走「从环境变量导入钥匙串证书」分支并失败（全平台同一 workflow 里也会拖垮 mac 矩阵）。
+      # 因此仅在 macOS 且证书 Secret 非空时，才把 Apple 变量写入 GITHUB_ENV（变量未设置 = 不签名，构建可成功）。
       # 见 https://tauri.app/v1/guides/distribution/sign-macos
-      # 必填（签名）：APPLE_CERTIFICATE（.p12 的 base64）、APPLE_CERTIFICATE_PASSWORD、APPLE_SIGNING_IDENTITY（如证书括号内 Team ID）
-      # 选填（公证，Developer ID 分发强烈建议）：APPLE_ID、APPLE_PASSWORD（App 专用密码）、APPLE_TEAM_ID
-      - uses: tauri-apps/tauri-action@v0
+      - name: macOS signing env from secrets (optional)
+        if: matrix.platform == 'macos-latest'
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_CERTIFICATE}" ]; then
+            echo "APPLE_CERTIFICATE not set — building unsigned macOS artifacts."
+            exit 0
+          fi
+          d="APPLE_EOF_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_$(openssl rand -hex 8)"
+          {
+            echo "APPLE_CERTIFICATE<<${d}"
+            printf '%s\n' "${APPLE_CERTIFICATE}"
+            echo "${d}"
+          } >> "${GITHUB_ENV}"
+          {
+            echo "APPLE_CERTIFICATE_PASSWORD<<${d}_P12"
+            printf '%s\n' "${APPLE_CERTIFICATE_PASSWORD}"
+            echo "${d}_P12"
+          } >> "${GITHUB_ENV}"
+          {
+            echo "APPLE_SIGNING_IDENTITY<<${d}_ID"
+            printf '%s\n' "${APPLE_SIGNING_IDENTITY}"
+            echo "${d}_ID"
+          } >> "${GITHUB_ENV}"
+          if [ -n "${APPLE_ID}" ] && [ -n "${APPLE_PASSWORD}" ] && [ -n "${APPLE_TEAM_ID}" ]; then
+            {
+              echo "APPLE_ID<<${d}_AID"
+              printf '%s\n' "${APPLE_ID}"
+              echo "${d}_AID"
+            } >> "${GITHUB_ENV}"
+            {
+              echo "APPLE_PASSWORD<<${d}_APW"
+              printf '%s\n' "${APPLE_PASSWORD}"
+              echo "${d}_APW"
+            } >> "${GITHUB_ENV}"
+            {
+              echo "APPLE_TEAM_ID<<${d}_TID"
+              printf '%s\n' "${APPLE_TEAM_ID}"
+              echo "${d}_TID"
+            } >> "${GITHUB_ENV}"
+          fi
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           releaseName: "StowMind ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
