@@ -22,6 +22,7 @@
 
 - [Why StowMind](#why-stowmind)
 - [Features](#features)
+- [Roadmap](#roadmap)
 - [Screenshots](#screenshots)
 - [Download](#download)
 - [Requirements](#requirements)
@@ -37,9 +38,9 @@
 
 ## Why StowMind
 
-Messy download folders and project dumps are universal. StowMind helps you **preview** where each file will go, then **execute** moves safely — with **undo**, **automatic rollback** if something fails mid-run, and **cross-volume** support when `rename` is not enough.
+Messy download folders and project dumps are universal. StowMind helps you **scan** a folder, **adjust** categories per file, optionally **preview** moves (dry-run), then **execute** — with **undo** from History and **cross-volume** safe moves when `rename` is not enough.
 
-Classification is **rule-first** (extensions, filename keywords, parent-folder hints) so everyday files never hit an API. Turn on **AI only for hard cases** to save time and tokens while still handling ambiguous files.
+Successful moves are **kept** if some items fail (no all-or-nothing rollback). Classification is **rule-first** (extensions, filename keywords, parent-folder hints) so everyday files never hit an API. Turn on **AI only for hard cases** to save time and tokens while still handling ambiguous files.
 
 ---
 
@@ -50,10 +51,18 @@ Classification is **rule-first** (extensions, filename keywords, parent-folder h
 | **Classification** | Extension + keyword + directory-hint rules; optional Ollama / OpenAI / Claude |
 | **Cost & speed** | “AI for hard cases only” (default): rules hit first, AI for edge cases |
 | **Consistency** | Similar filenames grouped; majority vote can align categories |
-| **Safety** | Confirm before run; partial failure rolls back completed moves; **undo** from History |
+| **Scan scope** | By default, only files in the selected folder (non-recursive); optional **recursive** scan; **exclude patterns** (e.g. `node_modules`, `.git`) in Settings |
+| **Organize** | **Preview** (dry-run) lists source → destination without writing disk; **execute** applies moves; per-item **category** override; **Skip this run** checkbox per file/folder |
+| **Safety** | Confirm before run; partial failures recorded, successes retained; **undo** last run from Organize banner or History |
 | **UX** | Drag a folder onto Organize; light / dark / system theme; **English & 中文** UI |
 | **Rules editor** | Collapsible categories, keywords, reorder, reset to defaults |
 | **Insights** | History search & filters; statistics & 7-day trend |
+
+---
+
+## Roadmap
+
+Planned and completed capabilities are tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md) (trust/scope, control, reliability, UX polish, and advanced ideas).
 
 ---
 
@@ -170,12 +179,24 @@ Settings → **Language**: **English** or **中文**. Preference is stored in th
 
 Edit extensions and keywords per category, reorder categories, or **Reset defaults**. The reserved category **其他** (“Other”) cannot be removed.
 
+### Scan exclusions
+
+**Settings → Scan exclusions**: one pattern per line (substring match on the file path, case-insensitive). Paths containing any pattern are skipped during scan (e.g. `node_modules`, `.git`, `__pycache__`).
+
+### Organize workflow
+
+1. Pick a folder and **Scan** (toggle **recursive file scan** if you need subfolders).
+2. Adjust **category** or check **Skip this run** for items you do not want to move.
+3. **Preview** to see planned moves, then **Execute** (or execute directly after confirming the dialog).
+
 ---
 
 ## Project structure
 
 ```text
 stowmind/
+├── docs/
+│   └── ROADMAP.md          # Product roadmap & implementation checklist
 ├── public/                 # Static assets (e.g. icon.svg)
 ├── src/
 │   ├── components/         # UI (e.g. Sidebar)

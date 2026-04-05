@@ -24,6 +24,8 @@ export interface FileItem {
   reason: string
   method: 'ai' | 'rule' | 'group' | 'fallback'
   subFolder?: string
+  /** 本次整理不移动（仅前端会话，不传给后端） */
+  skip?: boolean
 }
 
 export interface FolderItem {
@@ -32,6 +34,8 @@ export interface FolderItem {
   category: string
   fileCount: number
   totalSize: number
+  /** 本次整理不移动（仅前端会话，不传给后端） */
+  skip?: boolean
 }
 
 export interface MoveRecord {
@@ -93,6 +97,13 @@ interface AppState {
   // Ollama 状态
   ollamaOnline: boolean
   setOllamaOnline: (online: boolean) => void
+
+  /** 扫描时是否递归子文件夹（仅文件；文件夹整理仍为当前层） */
+  scanRecursive: boolean
+  setScanRecursive: (value: boolean) => void
+  /** 路径子串匹配，命中则跳过（如 node_modules、.git） */
+  excludePatterns: string[]
+  setExcludePatterns: (patterns: string[]) => void
 }
 
 export const defaultCategories: Category[] = [
@@ -264,6 +275,11 @@ export const useAppStore = create<AppState>()(
       
       ollamaOnline: false,
       setOllamaOnline: (online) => set({ ollamaOnline: online }),
+
+      scanRecursive: false,
+      setScanRecursive: (scanRecursive) => set({ scanRecursive }),
+      excludePatterns: ['node_modules', '.git', '__pycache__', '.venv'],
+      setExcludePatterns: (excludePatterns) => set({ excludePatterns }),
     }),
     {
       name: 'stowmind',

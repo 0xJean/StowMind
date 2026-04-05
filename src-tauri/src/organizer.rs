@@ -145,7 +145,31 @@ pub struct Category {
     pub keywords: Vec<String>,
 }
 
-pub fn scan_files(directory: &str, show_temp_files: bool) -> Result<Vec<FileItem>, std::io::Error> {
+/// 路径是否命中排除规则（子串匹配，不区分大小写）
+fn path_matches_exclude(path: &Path, patterns: &[String]) -> bool {
+    if patterns.is_empty() {
+        return false;
+    }
+    let normalized = path.to_string_lossy().replace('\\', "/").to_lowercase();
+    for pat in patterns {
+        let p = pat.trim();
+        if p.is_empty() {
+            continue;
+        }
+        if normalized.contains(&p.to_lowercase()) {
+            return true;
+        }
+    }
+    false
+}
+
+/// `recursive == false` 时仅扫描当前目录下直接文件；为 true 时递归子目录内所有文件。
+pub fn scan_files(
+    directory: &str,
+    show_temp_files: bool,
+    recursive: bool,
+    exclude_patterns: &[String],
+) -> Result<Vec<FileItem>, std::io::Error> {
     let mut files = Vec::new();
     let path = Path::new(directory);
 
@@ -156,51 +180,60 @@ pub fn scan_files(directory: &str, show_temp_files: bool) -> Result<Vec<FileItem
         ));
     }
 
-    for entry in WalkDir::new(path).max_depth(1).into_iter().filter_map(|e| e.ok()) {
+    let walker = WalkDir::new(path).min_depth(1);
+    let walker = if recursive {
+        walker
+    } else {
+        walker.max_depth(1)
+    };
+
+    for entry in walker.into_iter().filter_map(|e| e.ok()) {
         let entry_path = entry.path();
-        
-        if entry_path == path {
+
+        if !entry_path.is_file() {
             continue;
         }
 
-        if entry_path.is_file() {
-            let name = entry_path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-
-            // 跳过系统文件
-            if name == "desktop.ini" || name == "Thumbs.db" || name == ".DS_Store" {
-                continue;
-            }
-
-            // 跳过隐藏文件（以 . 开头，但不是临时文件）
-            if name.starts_with('.') && !name.starts_with(".~") && !name.starts_with("._") {
-                continue;
-            }
-
-            // 检查是否为临时/缓存文件
-            let is_temp_file = is_temporary_file(&name);
-            
-            // 如果不显示临时文件且当前是临时文件，跳过
-            if !show_temp_files && is_temp_file {
-                continue;
-            }
-
-            let extension = entry_path
-                .extension()
-                .map(|e| format!(".{}", e.to_string_lossy()))
-                .unwrap_or_default();
-
-            let metadata = entry_path.metadata()?;
-
-            files.push(FileItem {
-                name,
-                path: entry_path.to_string_lossy().to_string(),
-                size: metadata.len(),
-                extension,
-            });
+        if path_matches_exclude(entry_path, exclude_patterns) {
+            continue;
         }
+
+        let name = entry_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        // 跳过系统文件
+        if name == "desktop.ini" || name == "Thumbs.db" || name == ".DS_Store" {
+            continue;
+        }
+
+        // 跳过隐藏文件（以 . 开头，但不是临时文件）
+        if name.starts_with('.') && !name.starts_with(".~") && !name.starts_with("._") {
+            continue;
+        }
+
+        // 检查是否为临时/缓存文件
+        let is_temp_file = is_temporary_file(&name);
+
+        // 如果不显示临时文件且当前是临时文件，跳过
+        if !show_temp_files && is_temp_file {
+            continue;
+        }
+
+        let extension = entry_path
+            .extension()
+            .map(|e| format!(".{}", e.to_string_lossy()))
+            .unwrap_or_default();
+
+        let metadata = entry_path.metadata()?;
+
+        files.push(FileItem {
+            name,
+            path: entry_path.to_string_lossy().to_string(),
+            size: metadata.len(),
+            extension,
+        });
     }
 
     Ok(files)
@@ -355,7 +388,8 @@ pub struct OrganizeOutcome {
 }
 
 /// 移动文件夹到对应分类目录（单项失败仅记录，不影响已成功项）
-pub fn move_folders(directory: &str, folders: &[FolderItem]) -> Result<OrganizeOutcome, std::io::Error> {
+/// `dry_run` 为 true 时不创建目录、不移动，仅返回计划中的 `moves`。
+pub fn move_folders(directory: &str, folders: &[FolderItem], dry_run: bool) -> Result<OrganizeOutcome, std::io::Error> {
     let base_path = resolve_existing_dir(directory)?;
     let mut moves: Vec<MoveRecord> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
@@ -398,7 +432,7 @@ pub fn move_folders(directory: &str, folders: &[FolderItem]) -> Result<OrganizeO
             continue;
         }
 
-        if !category_dir.exists() {
+        if !dry_run && !category_dir.exists() {
             if let Err(e) = fs::create_dir_all(&category_dir) {
                 errors.push(format!("{}: 创建分类目录失败 {}", folder.path, e));
                 continue;
@@ -410,6 +444,14 @@ pub fn move_folders(directory: &str, folders: &[FolderItem]) -> Result<OrganizeO
         while target.exists() {
             target = category_dir.join(format!("{}_{}", folder.name, counter));
             counter += 1;
+        }
+
+        if dry_run {
+            moves.push(MoveRecord {
+                from: source.to_string_lossy().to_string(),
+                to: target.to_string_lossy().to_string(),
+            });
+            continue;
         }
 
         if let Err(e) = safe_move(&source, &target) {
@@ -629,10 +671,12 @@ pub fn group_similar_files(files: &[(String, String)]) -> HashMap<String, Option
     result
 }
 
+/// `dry_run` 为 true 时不创建目录、不移动，仅返回计划中的 `moves`。
 pub fn move_files(
     directory: &str,
     _files: &[FileItem],
     categories: &[(String, String, Option<String>)], // (path, category, sub_folder)
+    dry_run: bool,
 ) -> Result<OrganizeOutcome, std::io::Error> {
     let base_path = resolve_existing_dir(directory)?;
     let mut moves: Vec<MoveRecord> = Vec::new();
@@ -675,7 +719,7 @@ pub fn move_files(
             base_path.join(&cat)
         };
 
-        if !category_dir.exists() {
+        if !dry_run && !category_dir.exists() {
             if let Err(e) = fs::create_dir_all(&category_dir) {
                 errors.push(format!("{}: 创建分类目录失败 {}", file_path, e));
                 continue;
@@ -704,6 +748,14 @@ pub fn move_files(
                 .unwrap_or_default();
             target = category_dir.join(format!("{}_{}{}", stem, counter, ext));
             counter += 1;
+        }
+
+        if dry_run {
+            moves.push(MoveRecord {
+                from: source.to_string_lossy().to_string(),
+                to: target.to_string_lossy().to_string(),
+            });
+            continue;
         }
 
         if let Err(e) = safe_move(&source, &target) {

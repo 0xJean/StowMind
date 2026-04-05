@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/i18n'
 import { formatFileSize, pathRoughlyEqual } from '@/lib/utils'
@@ -10,8 +11,8 @@ import { FileItem, FolderItem, MoveRecord, OrganizeOutcome, useAppStore } from '
 import { open } from '@tauri-apps/api/dialog'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/tauri'
-import { Brain, Folder, FolderOpen, Loader2, Play, RotateCcw, Scan, Undo2 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { Brain, Eye, Folder, FolderOpen, Loader2, Play, RotateCcw, Scan, Undo2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 
@@ -38,7 +39,11 @@ export function OrganizePage() {
   const [organizeFolders, setOrganizeFolders] = useState(false)
   const [showTempFiles, setShowTempFiles] = useState(true)
   const [dragOver, setDragOver] = useState(false)
-  
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewMoves, setPreviewMoves] = useState<MoveRecord[]>([])
+  const [previewErrors, setPreviewErrors] = useState<string[]>([])
+  const [organizePhase, setOrganizePhase] = useState<'idle' | 'preview' | 'execute'>('idle')
+
   const aiProvider = useAppStore((s) => s.aiProvider)
   const categories = useAppStore((s) => s.categories)
   const aiOnlyHardCases = useAppStore((s) => s.aiOnlyHardCases)
@@ -49,6 +54,9 @@ export function OrganizePage() {
   const markUndone = useAppStore((s) => s.markUndone)
   const lastOrganizeRecordId = useAppStore((s) => s.lastOrganizeRecordId)
   const setLastOrganizeRecordId = useAppStore((s) => s.setLastOrganizeRecordId)
+  const scanRecursive = useAppStore((s) => s.scanRecursive)
+  const setScanRecursive = useAppStore((s) => s.setScanRecursive)
+  const excludePatterns = useAppStore((s) => s.excludePatterns)
   const [undoingLast, setUndoingLast] = useState(false)
 
   useEffect(() => {
@@ -109,11 +117,13 @@ export function OrganizePage() {
     try {
       const fileResult = await invoke<FileItem[]>('scan_directory', {
         directory,
-        useAi: useAI,
-        aiOnlyHardCases,
-        aiProvider,
+        use_ai: useAI,
+        ai_only_hard_cases: aiOnlyHardCases,
+        ai_provider: aiProvider,
         categories,
-        showTempFiles
+        show_temp_files: showTempFiles,
+        recursive: scanRecursive,
+        exclude_patterns: excludePatterns
       })
       setFiles(fileResult)
       
@@ -132,37 +142,89 @@ export function OrganizePage() {
     }
   }
 
-  const organizeFiles = async () => {
+  const setFileCategory = (path: string, category: string) => {
+    setFiles((prev) => prev.map((f) => (f.path === path ? { ...f, category } : f)))
+  }
+
+  const setFolderCategory = (path: string, category: string) => {
+    setFolders((prev) => prev.map((f) => (f.path === path ? { ...f, category } : f)))
+  }
+
+  const setFileSkip = (path: string, skip: boolean) => {
+    setFiles((prev) => prev.map((f) => (f.path === path ? { ...f, skip } : f)))
+  }
+
+  const setFolderSkip = (path: string, skip: boolean) => {
+    setFolders((prev) => prev.map((f) => (f.path === path ? { ...f, skip } : f)))
+  }
+
+  const activeFiles = useMemo(() => files.filter((f) => !f.skip), [files])
+  const activeFolders = useMemo(() => folders.filter((f) => !f.skip), [folders])
+  const movingCount = activeFiles.length + activeFolders.length
+
+  const fileForApi = (f: FileItem): FileItem => {
+    const { skip: _s, ...rest } = f
+    return rest
+  }
+  const folderForApi = (f: FolderItem): FolderItem => {
+    const { skip: _s, ...rest } = f
+    return rest
+  }
+
+  const runOrganize = async (dryRun: boolean, opts?: { skipInitialConfirm?: boolean }) => {
     if (files.length === 0 && folders.length === 0) return
 
-    const totalCount = files.length + folders.length
-    const confirmed = window.confirm(t('organize.confirmMsg', { n: totalCount }))
-    if (!confirmed) return
+    if (movingCount === 0) {
+      toast.info(t('organize.noItemsToMove'))
+      return
+    }
 
-    setLastOrganizeRecordId(null)
+    if (!dryRun && !opts?.skipInitialConfirm) {
+      const confirmed = window.confirm(t('organize.confirmMsg', { n: movingCount }))
+      if (!confirmed) return
+      setLastOrganizeRecordId(null)
+    }
 
     setOrganizing(true)
+    setOrganizePhase(dryRun ? 'preview' : 'execute')
 
     try {
       const allMoves: MoveRecord[] = []
       const allErrors: string[] = []
 
-      if (files.length > 0) {
+      const filesPayload = activeFiles.map(fileForApi)
+      const foldersPayload = activeFolders.map(folderForApi)
+
+      if (filesPayload.length > 0) {
         const out = await invoke<OrganizeOutcome>('organize_files', {
           directory,
-          files
+          files: filesPayload,
+          dry_run: dryRun
         })
         allMoves.push(...out.moves)
         allErrors.push(...out.errors)
       }
 
-      if (folders.length > 0) {
+      if (foldersPayload.length > 0) {
         const out = await invoke<OrganizeOutcome>('organize_folders', {
           directory,
-          folders
+          folders: foldersPayload,
+          dry_run: dryRun
         })
         allMoves.push(...out.moves)
         allErrors.push(...out.errors)
+      }
+
+      if (dryRun) {
+        setPreviewMoves(allMoves)
+        setPreviewErrors(allErrors)
+        if (allMoves.length > 0 || allErrors.length > 0) {
+          setPreviewOpen(true)
+        }
+        if (allMoves.length === 0 && allErrors.length === 0) {
+          toast.info(t('organize.nothingDone'))
+        }
+        return
       }
 
       const okCount = allMoves.length
@@ -170,13 +232,15 @@ export function OrganizePage() {
 
       let sizeOk = 0
       const successesByCategory: Record<string, number> = {}
+      const snapshotFiles = files
+      const snapshotFolders = folders
       for (const m of allMoves) {
-        const fi = files.find((f) => pathRoughlyEqual(f.path, m.from))
+        const fi = snapshotFiles.find((f) => pathRoughlyEqual(f.path, m.from))
         if (fi) {
           sizeOk += fi.size
           successesByCategory[fi.category] = (successesByCategory[fi.category] || 0) + 1
         }
-        const fo = folders.find((f) => pathRoughlyEqual(f.path, m.from))
+        const fo = snapshotFolders.find((f) => pathRoughlyEqual(f.path, m.from))
         if (fo) {
           sizeOk += fo.totalSize
           successesByCategory[fo.category] = (successesByCategory[fo.category] || 0) + 1
@@ -215,11 +279,19 @@ export function OrganizePage() {
       }
 
       if (failCount === 0 && okCount > 0) {
-        setFiles([])
-        setFolders([])
-        setDirectory('')
-        toast.success(t('organize.successMsg', { n: okCount }))
-        setTimeout(() => navigate('/history', { state: { fromOrganize: true } }), 1500)
+        const movedFrom = new Set(allMoves.map((m) => m.from))
+        const nextFiles = snapshotFiles.filter((f) => f.skip || !movedFrom.has(f.path))
+        const nextFolders = snapshotFolders.filter((f) => f.skip || !movedFrom.has(f.path))
+        const kept = nextFiles.length + nextFolders.length
+        setFiles(nextFiles)
+        setFolders(nextFolders)
+        if (kept === 0) {
+          setDirectory('')
+          toast.success(t('organize.successMsg', { n: okCount }))
+          setTimeout(() => navigate('/history', { state: { fromOrganize: true } }), 1500)
+        } else {
+          toast.success(t('organize.successKeptInList', { n: okCount, k: kept }))
+        }
       } else if (okCount > 0 && failCount > 0) {
         toast.warning(
           t('organize.partialMsg', { ok: okCount, fail: failCount }) +
@@ -241,8 +313,20 @@ export function OrganizePage() {
       toast.error(t('organize.failMsg', { error: String(error) }))
     } finally {
       setOrganizing(false)
+      setOrganizePhase('idle')
     }
   }
+
+  const runPreview = () => void runOrganize(true)
+
+  const applyAfterPreview = () => {
+    if (!window.confirm(t('organize.confirmAfterPreview'))) return
+    setPreviewOpen(false)
+    setLastOrganizeRecordId(null)
+    void runOrganize(false, { skipInitialConfirm: true })
+  }
+
+  const organizeFiles = () => void runOrganize(false)
 
   const groupedFiles = files.reduce((acc, file) => {
     if (!acc[file.category]) acc[file.category] = []
@@ -302,6 +386,59 @@ export function OrganizePage() {
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false) }}
       onDrop={(e) => { setDragOver(false); handleDrop(e) }}
     >
+      {previewOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <Card className="w-full max-w-3xl max-h-[85vh] flex flex-col shadow-lg border-border">
+            <CardHeader className="shrink-0 space-y-1">
+              <CardTitle className="text-lg">{t('organize.previewTitle')}</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {t('organize.previewHint', { n: previewMoves.length })}
+              </p>
+            </CardHeader>
+            <CardContent className="overflow-y-auto flex-1 min-h-0 space-y-3">
+              {previewMoves.length > 0 && (
+                <div className="rounded-md border border-border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 sticky top-0">
+                      <tr>
+                        <th className="text-left p-2 font-medium w-[45%]">{t('organize.previewFrom')}</th>
+                        <th className="text-left p-2 font-medium w-[45%]">{t('organize.previewTo')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewMoves.map((m, i) => (
+                        <tr key={`${m.from}-${i}`} className="border-t border-border align-top">
+                          <td className="p-2 break-all font-mono text-xs">{m.from}</td>
+                          <td className="p-2 break-all font-mono text-xs">{m.to}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {previewErrors.length > 0 && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3">
+                  <p className="text-sm font-medium text-destructive mb-2">{t('organize.previewErrors')}</p>
+                  <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
+                    {previewErrors.map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+            <div className="flex flex-wrap justify-end gap-2 p-4 border-t shrink-0">
+              <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+                {t('organize.previewClose')}
+              </Button>
+              <Button onClick={applyAfterPreview} disabled={previewMoves.length === 0}>
+                {t('organize.previewExecute')}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {dragOver && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-lg backdrop-blur-sm">
           <div className="text-center">
@@ -364,8 +501,8 @@ export function OrganizePage() {
             </Button>
           </div>
           
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <div className="flex items-center gap-2">
                 <Switch checked={useAI} onCheckedChange={setUseAI} />
                 <span className="text-sm">{t('organize.aiClassify')}</span>
@@ -378,9 +515,18 @@ export function OrganizePage() {
                 <Switch checked={showTempFiles} onCheckedChange={setShowTempFiles} />
                 <span className="text-sm">{t('organize.showTemp')}</span>
               </div>
+              <div className="flex items-start gap-2">
+                <Switch checked={scanRecursive} onCheckedChange={setScanRecursive} />
+                <div>
+                  <span className="text-sm">{t('organize.recursiveScan')}</span>
+                  <p className="text-xs text-muted-foreground max-w-[20rem]">
+                    {t('organize.recursiveScanHint')}
+                  </p>
+                </div>
+              </div>
             </div>
-            
-            <Button onClick={scanDirectory} disabled={!directory || scanning}>
+
+            <Button onClick={scanDirectory} disabled={!directory || scanning} className="shrink-0">
               {scanning ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
@@ -471,18 +617,45 @@ export function OrganizePage() {
       {(files.length > 0 || folders.length > 0) && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>
-              {t('organize.resultTitle')} ({t('organize.nFiles', { n: files.length })}
-              {folders.length > 0 ? `, ${t('organize.nFolders', { n: folders.length })}` : ''})
-            </CardTitle>
-            <div className="flex gap-2">
+            <div>
+              <CardTitle>
+                {t('organize.resultTitle')} ({t('organize.nFiles', { n: files.length })}
+                {folders.length > 0 ? `, ${t('organize.nFolders', { n: folders.length })}` : ''})
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                {t('organize.resultMoving', {
+                  moving: movingCount,
+                  total: files.length + folders.length
+                })}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => { setFiles([]); setFolders([]) }}>
                 <RotateCcw className="w-4 h-4 mr-2" />
                 {t('organize.reset')}
               </Button>
-              <Button onClick={organizeFiles} disabled={organizing}>
-                <Play className="w-4 h-4 mr-2" />
-                {organizing ? t('organize.organizing') : t('organize.execute')}
+              <Button
+                variant="outline"
+                onClick={runPreview}
+                disabled={organizing || scanning || movingCount === 0}
+              >
+                {organizePhase === 'preview' && organizing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Eye className="w-4 h-4 mr-2" />
+                )}
+                {t('organize.preview')}
+              </Button>
+              <Button
+                onClick={organizeFiles}
+                disabled={organizing || scanning || movingCount === 0}
+              >
+                {organizePhase === 'execute' && organizing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Play className="w-4 h-4 mr-2" />
+                )}
+                {organizePhase === 'execute' && organizing ? t('organize.organizing') : t('organize.execute')}
               </Button>
             </div>
           </CardHeader>
@@ -507,16 +680,46 @@ export function OrganizePage() {
                           <Badge variant="secondary">{categoryFolders.length}</Badge>
                         </div>
                         <div className="pl-8 space-y-1 max-h-32 overflow-y-auto">
-                          {categoryFolders.map((folder, idx) => (
+                          {categoryFolders.map((folder) => (
                             <div
-                              key={idx}
-                              className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm"
+                              key={folder.path}
+                              className={`flex flex-wrap items-center gap-2 p-2 rounded bg-muted/50 text-sm ${
+                                folder.skip ? 'opacity-60' : ''
+                              }`}
                             >
-                              <div className="flex items-center gap-2">
-                                <Folder className="w-4 h-4 text-muted-foreground" />
+                              <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(folder.skip)}
+                                  onChange={(e) => setFolderSkip(folder.path, e.target.checked)}
+                                  className="h-4 w-4 rounded border border-input"
+                                  aria-label={t('organize.skipThisRun')}
+                                />
+                                <span className="sr-only">{t('organize.skipThisRun')}</span>
+                              </label>
+                              <div className="flex items-center gap-2 min-w-0 flex-1 basis-[10rem]">
+                                <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
                                 <span className="truncate max-w-md">{folder.name}</span>
                               </div>
-                              <div className="flex items-center gap-3 text-muted-foreground">
+                              <div className="w-[min(100%,10rem)] sm:w-40 shrink-0">
+                                <Select
+                                  value={folder.category}
+                                  onValueChange={(v) => setFolderCategory(folder.path, v)}
+                                >
+                                  <SelectTrigger className="h-8 text-xs" aria-label={t('organize.categoryColumn')}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {categories.map((c) => (
+                                      <SelectItem key={c.name} value={c.name}>
+                                        <span className="mr-1">{c.icon}</span>
+                                        {c.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex items-center gap-3 text-muted-foreground shrink-0 ml-auto">
                                 <span>{t('organize.nFiles', { n: folder.fileCount })}</span>
                                 <span>{formatFileSize(folder.totalSize)}</span>
                               </div>
@@ -560,20 +763,57 @@ export function OrganizePage() {
                             </div>
                           )}
                           <div className={`space-y-1 max-h-48 overflow-y-auto ${subFolder !== '_root' ? 'pl-6' : ''}`}>
-                            {subFiles.map((file, idx) => {
-                              const dest = [category, subFolder !== '_root' ? subFolder : null, file.name].filter(Boolean).join('/')
+                            {subFiles.map((file) => {
+                              const dest = [file.category, subFolder !== '_root' ? subFolder : null, file.name]
+                                .filter(Boolean)
+                                .join('/')
                               return (
                                 <div
-                                  key={idx}
-                                  className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm"
+                                  key={file.path}
+                                  className={`flex flex-wrap items-center gap-2 p-2 rounded bg-muted/50 text-sm ${
+                                    file.skip ? 'opacity-60' : ''
+                                  }`}
                                 >
-                                  <div className="min-w-0 flex-1 mr-3">
+                                  <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(file.skip)}
+                                      onChange={(e) => setFileSkip(file.path, e.target.checked)}
+                                      className="h-4 w-4 rounded border border-input"
+                                      aria-label={t('organize.skipThisRun')}
+                                    />
+                                    <span className="sr-only">{t('organize.skipThisRun')}</span>
+                                  </label>
+                                  <div className="min-w-0 flex-1 basis-[12rem]">
                                     <span className="truncate block max-w-md">{file.name}</span>
-                                    <span className="text-xs text-muted-foreground truncate block max-w-md">→ {dest}</span>
+                                    <span className="text-xs text-muted-foreground truncate block max-w-md">
+                                      → {dest}
+                                    </span>
                                   </div>
-                                  <div className="flex items-center gap-3 text-muted-foreground shrink-0">
+                                  <div className="w-[min(100%,10rem)] sm:w-40 shrink-0">
+                                    <Select
+                                      value={file.category}
+                                      onValueChange={(v) => setFileCategory(file.path, v)}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs" aria-label={t('organize.categoryColumn')}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {categories.map((c) => (
+                                          <SelectItem key={c.name} value={c.name}>
+                                            <span className="mr-1">{c.icon}</span>
+                                            {c.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-muted-foreground shrink-0 ml-auto">
                                     <span>{formatFileSize(file.size)}</span>
-                                    <Badge variant={file.method === 'ai' ? 'default' : 'outline'} className="text-xs">
+                                    <Badge
+                                      variant={file.method === 'ai' ? 'default' : 'outline'}
+                                      className="text-xs"
+                                    >
                                       {methodLabel(file.method)}
                                     </Badge>
                                   </div>

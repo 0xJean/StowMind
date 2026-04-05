@@ -56,8 +56,11 @@ async fn scan_directory(
     ai_provider: AIProvider,
     categories: Vec<Category>,
     show_temp_files: bool,
+    recursive: bool,
+    exclude_patterns: Vec<String>,
 ) -> Result<Vec<ScanResult>, String> {
-    let files = scan_files(&directory, show_temp_files).map_err(|e| e.to_string())?;
+    let files = scan_files(&directory, show_temp_files, recursive, &exclude_patterns)
+        .map_err(|e| e.to_string())?;
     let total = files.len();
     let mut results = Vec::new();
 
@@ -353,7 +356,11 @@ fn apply_group_majority(results: &mut [ScanResult]) {
 }
 
 #[tauri::command]
-async fn organize_files(directory: String, files: Vec<ScanResult>) -> Result<OrganizeOutcome, String> {
+async fn organize_files(
+    directory: String,
+    files: Vec<ScanResult>,
+    dry_run: bool,
+) -> Result<OrganizeOutcome, String> {
     let categories: Vec<(String, String, Option<String>)> = files
         .iter()
         .map(|f| (f.path.clone(), f.category.clone(), f.sub_folder.clone()))
@@ -369,7 +376,7 @@ async fn organize_files(directory: String, files: Vec<ScanResult>) -> Result<Org
         })
         .collect();
 
-    move_files(&directory, &items, &categories).map_err(|e| e.to_string())
+    move_files(&directory, &items, &categories, dry_run).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -381,8 +388,12 @@ async fn scan_folders_cmd(
 }
 
 #[tauri::command]
-async fn organize_folders(directory: String, folders: Vec<FolderItem>) -> Result<OrganizeOutcome, String> {
-    move_folders(&directory, &folders).map_err(|e| e.to_string())
+async fn organize_folders(
+    directory: String,
+    folders: Vec<FolderItem>,
+    dry_run: bool,
+) -> Result<OrganizeOutcome, String> {
+    move_folders(&directory, &folders, dry_run).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

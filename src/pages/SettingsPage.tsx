@@ -9,9 +9,11 @@ import { useI18n, type Locale } from '@/i18n'
 import { AIProvider, Category, defaultCategories, useAppStore } from '@/stores/app'
 import { invoke } from '@tauri-apps/api/tauri'
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Globe, Moon, Plus, RefreshCw, RotateCcw, Save, Sun, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 
 export function SettingsPage() {
+  const location = useLocation()
   const { t, locale, setLocale } = useI18n()
   const { theme, setTheme } = useTheme()
   const aiProvider = useAppStore((s) => s.aiProvider)
@@ -21,7 +23,14 @@ export function SettingsPage() {
   const setOllamaOnline = useAppStore((s) => s.setOllamaOnline)
   const aiOnlyHardCases = useAppStore((s) => s.aiOnlyHardCases)
   const setAIOnlyHardCases = useAppStore((s) => s.setAIOnlyHardCases)
-  
+  const excludePatterns = useAppStore((s) => s.excludePatterns)
+  const setExcludePatterns = useAppStore((s) => s.setExcludePatterns)
+  const [excludeDraft, setExcludeDraft] = useState(() => excludePatterns.join('\n'))
+
+  useEffect(() => {
+    setExcludeDraft(excludePatterns.join('\n'))
+  }, [location.pathname])
+
   const [localProvider, setLocalProvider] = useState<AIProvider>(aiProvider)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null)
@@ -148,6 +157,32 @@ export function SettingsPage() {
               <SelectItem value="en">English</SelectItem>
             </SelectContent>
           </Select>
+        </CardContent>
+      </Card>
+
+      {/* Scan exclusions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('settings.scanExclude')}</CardTitle>
+          <CardDescription>{t('settings.scanExcludeDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <textarea
+            className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+            value={excludeDraft}
+            onChange={(e) => {
+              const v = e.target.value
+              setExcludeDraft(v)
+              setExcludePatterns(
+                v
+                  .split('\n')
+                  .map((s) => s.trim())
+                  .filter((s) => s.length > 0)
+              )
+            }}
+            placeholder={t('settings.scanExcludePlaceholder')}
+            spellCheck={false}
+          />
         </CardContent>
       </Card>
 
