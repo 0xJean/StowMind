@@ -16,6 +16,62 @@ fn resolve_existing_dir(directory: &str) -> Result<PathBuf, std::io::Error> {
     fs::canonicalize(p)
 }
 
+/// `path` 是否等于 `base` 或位于其下（Windows 下按组件比较且忽略大小写，避免 `starts_with` 误判）
+fn path_is_within(base: &Path, path: &Path) -> bool {
+    let b: Vec<_> = base.components().collect();
+    let p: Vec<_> = path.components().collect();
+    if p.len() < b.len() {
+        return false;
+    }
+    for i in 0..b.len() {
+        if !path_component_eq(&b[i], &p[i]) {
+            return false;
+        }
+    }
+    true
+}
+
+fn path_component_eq(a: &std::path::Component<'_>, b: &std::path::Component<'_>) -> bool {
+    #[cfg(windows)]
+    {
+        a.as_os_str().to_string_lossy().to_lowercase() == b.as_os_str().to_string_lossy().to_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        a == b
+    }
+}
+
+/// 分类/子文件夹名在 Windows 上不能含 <>:"/\|?* 等；禁止 `.` / `..`；避免保留设备名。
+fn sanitize_segment(raw: &str) -> Option<String> {
+    let t = raw.trim();
+    if t.is_empty() || t == "." || t == ".." {
+        return None;
+    }
+    let invalid = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+    let mut out = String::new();
+    for c in t.chars() {
+        if c < ' ' || invalid.contains(&c) {
+            out.push('_');
+        } else {
+            out.push(c);
+        }
+    }
+    let out = out.trim_end_matches('.').trim().to_string();
+    if out.is_empty() {
+        return None;
+    }
+    let upper: String = out.chars().map(|c| c.to_ascii_uppercase()).collect();
+    const RESERVED: &[&str] = &[
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+        "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    if RESERVED.iter().any(|r| upper == *r) {
+        return Some(format!("_{}", out));
+    }
+    Some(out)
+}
+
 /// Move a file or directory, falling back to recursive copy + delete when
 /// `fs::rename` fails (e.g. cross-device moves returning EXDEV).
 fn safe_move(from: &Path, to: &Path) -> Result<(), std::io::Error> {
@@ -305,17 +361,24 @@ pub fn move_folders(directory: &str, folders: &[FolderItem]) -> Result<Vec<MoveR
                 continue;
             }
 
+            let Some(cat) = sanitize_segment(&folder.category) else {
+                continue;
+            };
+
             let source = Path::new(&folder.path);
             if !source.exists() {
                 continue;
             }
             let source = fs::canonicalize(source)?;
-            if !source.starts_with(&base_path) {
+            if !path_is_within(&base_path, &source) {
                 continue;
             }
 
-            let category_dir = base_path.join(&folder.category);
-            if source == category_dir || source.starts_with(&category_dir) || category_dir.starts_with(&source) {
+            let category_dir = base_path.join(&cat);
+            if source == category_dir
+                || path_is_within(&category_dir, &source)
+                || path_is_within(&source, &category_dir)
+            {
                 continue;
             }
 
@@ -565,19 +628,27 @@ pub fn move_files(
                 continue;
             }
 
+            let Some(cat) = sanitize_segment(category) else {
+                continue;
+            };
+
             let source = Path::new(file_path);
             if !source.exists() {
                 continue;
             }
             let source = fs::canonicalize(source)?;
-            if !source.starts_with(&base_path) {
+            if !path_is_within(&base_path, &source) {
                 continue;
             }
 
             let category_dir = if let Some(sub) = sub_folder {
-                base_path.join(category).join(sub)
+                if let Some(s) = sanitize_segment(sub) {
+                    base_path.join(&cat).join(&s)
+                } else {
+                    base_path.join(&cat)
+                }
             } else {
-                base_path.join(category)
+                base_path.join(&cat)
             };
 
             if !category_dir.exists() {
@@ -659,7 +730,15 @@ pub fn undo_moves(records: &[MoveRecord]) -> Result<Vec<String>, std::io::Error>
 
 #[cfg(test)]
 mod tests {
-    use super::group_similar_files;
+    use super::{group_similar_files, sanitize_segment};
+
+    #[test]
+    fn sanitize_segment_strips_windows_invalid_chars() {
+        assert_eq!(sanitize_segment("图片").as_deref(), Some("图片"));
+        assert_eq!(sanitize_segment("a:b").as_deref(), Some("a_b"));
+        assert_eq!(sanitize_segment(".."), None);
+        assert_eq!(sanitize_segment("CON").as_deref(), Some("_CON"));
+    }
 
     #[test]
     fn group_similar_files_handles_multibyte_names_without_panic() {
