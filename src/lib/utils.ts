@@ -13,6 +13,14 @@ export function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+/** 比较两条路径是否指向同一位置（忽略 / 与 \\、大小写） */
+export function pathRoughlyEqual(a: string, b: string): boolean {
+  if (a === b) return true
+  const na = a.replace(/\\/g, '/').toLowerCase()
+  const nb = b.replace(/\\/g, '/').toLowerCase()
+  return na === nb
+}
+
 export function formatDate(date: Date | string): string {
   const d = new Date(date)
   return d.toLocaleDateString('zh-CN', {

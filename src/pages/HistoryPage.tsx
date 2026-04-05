@@ -175,6 +175,14 @@ export function HistoryPage() {
                         </Badge>
                       ))}
                     </div>
+                    {record.organizeErrors && record.organizeErrors.length > 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-500 mt-2 max-w-2xl whitespace-pre-wrap">
+                        {t('history.partialErrors')}: {record.organizeErrors.length}
+                        {'\n'}
+                        {record.organizeErrors.slice(0, 5).join('\n')}
+                        {record.organizeErrors.length > 5 ? `\n…+${record.organizeErrors.length - 5}` : ''}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {record.executed && !record.undone && record.moves?.length > 0 && (

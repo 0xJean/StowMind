@@ -56,7 +56,10 @@ export const zh = {
   'organize.methodRule': '规则',
   'organize.confirmMsg': '即将移动 {n} 个项目到对应分类目录，确定执行？',
   'organize.successMsg': '整理完成！共处理 {n} 个项目，可在历史记录中撤销',
-  'organize.failMsg': '整理失败（已自动回滚已移动的文件）: {error}',
+  'organize.partialMsg': '部分完成：成功 {ok} 项，失败 {fail} 项（成功项已保留，可查看下方原因后重试）',
+  'organize.allFailedMsg': '全部失败（{n} 项），未移动任何文件',
+  'organize.nothingDone': '没有移动任何项目（可能无可整理项或已全部跳过）',
+  'organize.failMsg': '整理无法开始: {error}',
   'organize.dialogTitle': '选择要整理的文件夹',
 
   // HistoryPage
@@ -72,6 +75,7 @@ export const zh = {
   'history.noMatch': '没有匹配的记录',
   'history.statusUndone': '已撤销',
   'history.statusExecuted': '已执行',
+  'history.partialErrors': '部分失败',
   'history.statusPreview': '仅预览',
   'history.nFiles': '共 {n} 个文件',
   'history.undo': '撤销',

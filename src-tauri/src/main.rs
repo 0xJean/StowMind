@@ -4,7 +4,7 @@ mod ai;
 mod organizer;
 
 use ai::{AIProvider, classify_file_stream};
-use organizer::{scan_files, scan_folders, move_files, move_folders, undo_moves, group_similar_files, FileItem, FolderItem, Category, MoveRecord};
+use organizer::{scan_files, scan_folders, move_files, move_folders, undo_moves, group_similar_files, FileItem, FolderItem, Category, MoveRecord, OrganizeOutcome};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -353,7 +353,7 @@ fn apply_group_majority(results: &mut [ScanResult]) {
 }
 
 #[tauri::command]
-async fn organize_files(directory: String, files: Vec<ScanResult>) -> Result<Vec<MoveRecord>, String> {
+async fn organize_files(directory: String, files: Vec<ScanResult>) -> Result<OrganizeOutcome, String> {
     let categories: Vec<(String, String, Option<String>)> = files
         .iter()
         .map(|f| (f.path.clone(), f.category.clone(), f.sub_folder.clone()))
@@ -381,7 +381,7 @@ async fn scan_folders_cmd(
 }
 
 #[tauri::command]
-async fn organize_folders(directory: String, folders: Vec<FolderItem>) -> Result<Vec<MoveRecord>, String> {
+async fn organize_folders(directory: String, folders: Vec<FolderItem>) -> Result<OrganizeOutcome, String> {
     move_folders(&directory, &folders).map_err(|e| e.to_string())
 }
 

@@ -56,7 +56,10 @@ export const en = {
   'organize.methodRule': 'Rule',
   'organize.confirmMsg': 'Move {n} items to classified directories. Proceed?',
   'organize.successMsg': 'Done! {n} items organized. You can undo in History.',
-  'organize.failMsg': 'Organization failed (moved files have been rolled back): {error}',
+  'organize.partialMsg': 'Partial: {ok} succeeded, {fail} failed (successful moves kept; fix issues and retry).',
+  'organize.allFailedMsg': 'All {n} items failed; nothing was moved.',
+  'organize.nothingDone': 'Nothing was moved (nothing to organize or all skipped).',
+  'organize.failMsg': 'Cannot start organizing: {error}',
   'organize.dialogTitle': 'Select folder to organize',
 
   // HistoryPage
@@ -72,6 +75,7 @@ export const en = {
   'history.noMatch': 'No matching records',
   'history.statusUndone': 'Undone',
   'history.statusExecuted': 'Executed',
+  'history.partialErrors': 'Partial failures',
   'history.statusPreview': 'Preview',
   'history.nFiles': '{n} files total',
   'history.undo': 'Undo',

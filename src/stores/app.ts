@@ -39,6 +39,12 @@ export interface MoveRecord {
   to: string
 }
 
+/** 与后端 `OrganizeOutcome` 一致 */
+export interface OrganizeOutcome {
+  moves: MoveRecord[]
+  errors: string[]
+}
+
 export interface HistoryRecord {
   id: string
   timestamp: string
@@ -47,6 +53,8 @@ export interface HistoryRecord {
   categories: Record<string, number>
   executed: boolean
   moves: MoveRecord[]
+  /** 整理时部分失败的原因（成功项仍会保留） */
+  organizeErrors?: string[]
   undone?: boolean
 }
 

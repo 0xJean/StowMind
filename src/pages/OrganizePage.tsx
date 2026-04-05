@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/i18n'
-import { formatFileSize } from '@/lib/utils'
-import { FileItem, FolderItem, MoveRecord, useAppStore } from '@/stores/app'
+import { formatFileSize, pathRoughlyEqual } from '@/lib/utils'
+import { FileItem, FolderItem, MoveRecord, OrganizeOutcome, useAppStore } from '@/stores/app'
 import { open } from '@tauri-apps/api/dialog'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/tauri'
@@ -137,60 +137,94 @@ export function OrganizePage() {
     setOrganizing(true)
     
     try {
-      let allMoves: MoveRecord[] = []
+      const allMoves: MoveRecord[] = []
+      const allErrors: string[] = []
 
       if (files.length > 0) {
-        const fileMoves = await invoke<MoveRecord[]>('organize_files', {
+        const out = await invoke<OrganizeOutcome>('organize_files', {
           directory,
           files
         })
-        allMoves = allMoves.concat(fileMoves)
+        allMoves.push(...out.moves)
+        allErrors.push(...out.errors)
       }
-      
+
       if (folders.length > 0) {
-        const folderMoves = await invoke<MoveRecord[]>('organize_folders', {
+        const out = await invoke<OrganizeOutcome>('organize_folders', {
           directory,
           folders
         })
-        allMoves = allMoves.concat(folderMoves)
+        allMoves.push(...out.moves)
+        allErrors.push(...out.errors)
       }
-      
-      const totalSize = files.reduce((sum, f) => sum + f.size, 0) + 
-                        folders.reduce((sum, f) => sum + f.totalSize, 0)
+
+      const okCount = allMoves.length
+      const failCount = allErrors.length
+
+      let sizeOk = 0
+      const successesByCategory: Record<string, number> = {}
+      for (const m of allMoves) {
+        const fi = files.find((f) => pathRoughlyEqual(f.path, m.from))
+        if (fi) {
+          sizeOk += fi.size
+          successesByCategory[fi.category] = (successesByCategory[fi.category] || 0) + 1
+        }
+        const fo = folders.find((f) => pathRoughlyEqual(f.path, m.from))
+        if (fo) {
+          sizeOk += fo.totalSize
+          successesByCategory[fo.category] = (successesByCategory[fo.category] || 0) + 1
+        }
+      }
+
       const categoryCounts = { ...statistics.categoryCounts }
-      files.forEach(f => {
-        categoryCounts[f.category] = (categoryCounts[f.category] || 0) + 1
-      })
-      folders.forEach(f => {
-        categoryCounts[f.category] = (categoryCounts[f.category] || 0) + 1
-      })
-      
-      updateStatistics({
-        totalFilesOrganized: statistics.totalFilesOrganized + files.length + folders.length,
-        totalSizeOrganized: statistics.totalSizeOrganized + totalSize,
-        categoryCounts,
-        lastOrganized: new Date().toISOString()
-      })
-      
-      addHistory({
-        id: Date.now().toString(),
-        timestamp: new Date().toISOString(),
-        directory,
-        totalFiles: totalCount,
-        categories: [...files, ...folders.map(f => ({ category: f.category }))].reduce((acc, f) => {
-          acc[f.category] = (acc[f.category] || 0) + 1
-          return acc
-        }, {} as Record<string, number>),
-        executed: true,
-        moves: allMoves,
-      })
-      
-      setFiles([])
-      setFolders([])
-      setDirectory('')
-      
-      toast.success(t('organize.successMsg', { n: totalCount }))
-      setTimeout(() => navigate('/history'), 1500)
+      for (const [cat, n] of Object.entries(successesByCategory)) {
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + n
+      }
+
+      if (okCount > 0) {
+        updateStatistics({
+          totalFilesOrganized: statistics.totalFilesOrganized + okCount,
+          totalSizeOrganized: statistics.totalSizeOrganized + sizeOk,
+          categoryCounts,
+          lastOrganized: new Date().toISOString()
+        })
+      }
+
+      if (okCount > 0 || failCount > 0) {
+        addHistory({
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          directory,
+          totalFiles: okCount,
+          categories: successesByCategory,
+          executed: true,
+          moves: allMoves,
+          organizeErrors: failCount > 0 ? allErrors : undefined
+        })
+      }
+
+      if (failCount === 0 && okCount > 0) {
+        setFiles([])
+        setFolders([])
+        setDirectory('')
+        toast.success(t('organize.successMsg', { n: okCount }))
+        setTimeout(() => navigate('/history'), 1500)
+      } else if (okCount > 0 && failCount > 0) {
+        toast.warning(
+          t('organize.partialMsg', { ok: okCount, fail: failCount }) +
+            '\n' +
+            allErrors.slice(0, 8).join('\n') +
+            (failCount > 8 ? `\n…+${failCount - 8}` : '')
+        )
+      } else if (okCount === 0 && failCount > 0) {
+        toast.error(
+          t('organize.allFailedMsg', { n: failCount }) +
+            '\n' +
+            allErrors.slice(0, 10).join('\n')
+        )
+      } else {
+        toast.info(t('organize.nothingDone'))
+      }
     } catch (error) {
       console.error('Organize failed:', error)
       toast.error(t('organize.failMsg', { error: String(error) }))

@@ -347,67 +347,82 @@ pub struct MoveRecord {
     pub to: String,
 }
 
-/// 移动文件夹到对应分类目录（带回滚：出错时自动还原已移动项）
-pub fn move_folders(directory: &str, folders: &[FolderItem]) -> Result<Vec<MoveRecord>, std::io::Error> {
+/// 整理结果：成功的移动 + 每项失败原因（不再因单项失败而回滚已成功项）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrganizeOutcome {
+    pub moves: Vec<MoveRecord>,
+    pub errors: Vec<String>,
+}
+
+/// 移动文件夹到对应分类目录（单项失败仅记录，不影响已成功项）
+pub fn move_folders(directory: &str, folders: &[FolderItem]) -> Result<OrganizeOutcome, std::io::Error> {
     let base_path = resolve_existing_dir(directory)?;
-    let mut done: Vec<MoveRecord> = Vec::new();
+    let mut moves: Vec<MoveRecord> = Vec::new();
+    let mut errors: Vec<String> = Vec::new();
 
-    let result = (|| -> Result<(), std::io::Error> {
-        for folder in folders {
-            if folder.category.is_empty() || folder.category == "其他" {
-                continue;
-            }
-            if folder.name == folder.category {
-                continue;
-            }
-
-            let Some(cat) = sanitize_segment(&folder.category) else {
-                continue;
-            };
-
-            let source = Path::new(&folder.path);
-            if !source.exists() {
-                continue;
-            }
-            let source = fs::canonicalize(source)?;
-            if !path_is_within(&base_path, &source) {
-                continue;
-            }
-
-            let category_dir = base_path.join(&cat);
-            if source == category_dir
-                || path_is_within(&category_dir, &source)
-                || path_is_within(&source, &category_dir)
-            {
-                continue;
-            }
-
-            if !category_dir.exists() {
-                fs::create_dir_all(&category_dir)?;
-            }
-
-            let mut target = category_dir.join(&folder.name);
-            let mut counter = 1;
-            while target.exists() {
-                target = category_dir.join(format!("{}_{}", folder.name, counter));
-                counter += 1;
-            }
-
-            safe_move(&source, &target)?;
-            done.push(MoveRecord {
-                from: source.to_string_lossy().to_string(),
-                to: target.to_string_lossy().to_string(),
-            });
+    for folder in folders {
+        if folder.category.is_empty() || folder.category == "其他" {
+            continue;
         }
-        Ok(())
-    })();
+        if folder.name == folder.category {
+            continue;
+        }
 
-    if let Err(e) = result {
-        rollback_moves(&done);
-        return Err(e);
+        let Some(cat) = sanitize_segment(&folder.category) else {
+            errors.push(format!("{}: 分类名无效，已跳过", folder.path));
+            continue;
+        };
+
+        let source = Path::new(&folder.path);
+        if !source.exists() {
+            errors.push(format!("{}: 源文件夹不存在", folder.path));
+            continue;
+        }
+        let source = match fs::canonicalize(source) {
+            Ok(p) => p,
+            Err(e) => {
+                errors.push(format!("{}: {}", folder.path, e));
+                continue;
+            }
+        };
+        if !path_is_within(&base_path, &source) {
+            errors.push(format!("{}: 不在所选目录内", folder.path));
+            continue;
+        }
+
+        let category_dir = base_path.join(&cat);
+        if source == category_dir
+            || path_is_within(&category_dir, &source)
+            || path_is_within(&source, &category_dir)
+        {
+            continue;
+        }
+
+        if !category_dir.exists() {
+            if let Err(e) = fs::create_dir_all(&category_dir) {
+                errors.push(format!("{}: 创建分类目录失败 {}", folder.path, e));
+                continue;
+            }
+        }
+
+        let mut target = category_dir.join(&folder.name);
+        let mut counter = 1;
+        while target.exists() {
+            target = category_dir.join(format!("{}_{}", folder.name, counter));
+            counter += 1;
+        }
+
+        if let Err(e) = safe_move(&source, &target) {
+            errors.push(format!("{}: {}", folder.path, e));
+            continue;
+        }
+        moves.push(MoveRecord {
+            from: source.to_string_lossy().to_string(),
+            to: target.to_string_lossy().to_string(),
+        });
     }
 
-    Ok(done)
+    Ok(OrganizeOutcome { moves, errors })
 }
 
 /// 提取文件名的基础部分（去除数字后缀、日期等）
@@ -618,94 +633,90 @@ pub fn move_files(
     directory: &str,
     _files: &[FileItem],
     categories: &[(String, String, Option<String>)], // (path, category, sub_folder)
-) -> Result<Vec<MoveRecord>, std::io::Error> {
+) -> Result<OrganizeOutcome, std::io::Error> {
     let base_path = resolve_existing_dir(directory)?;
-    let mut done: Vec<MoveRecord> = Vec::new();
+    let mut moves: Vec<MoveRecord> = Vec::new();
+    let mut errors: Vec<String> = Vec::new();
 
-    let result = (|| -> Result<(), std::io::Error> {
-        for (file_path, category, sub_folder) in categories {
-            if category.is_empty() {
+    for (file_path, category, sub_folder) in categories {
+        if category.is_empty() {
+            continue;
+        }
+
+        let Some(cat) = sanitize_segment(category) else {
+            errors.push(format!("{}: 分类名无效，已跳过", file_path));
+            continue;
+        };
+
+        let source = Path::new(file_path);
+        if !source.exists() {
+            errors.push(format!("{}: 源文件不存在", file_path));
+            continue;
+        }
+        let source = match fs::canonicalize(source) {
+            Ok(p) => p,
+            Err(e) => {
+                errors.push(format!("{}: {}", file_path, e));
                 continue;
             }
+        };
+        if !path_is_within(&base_path, &source) {
+            errors.push(format!("{}: 不在所选目录内", file_path));
+            continue;
+        }
 
-            let Some(cat) = sanitize_segment(category) else {
-                continue;
-            };
-
-            let source = Path::new(file_path);
-            if !source.exists() {
-                continue;
-            }
-            let source = fs::canonicalize(source)?;
-            if !path_is_within(&base_path, &source) {
-                continue;
-            }
-
-            let category_dir = if let Some(sub) = sub_folder {
-                if let Some(s) = sanitize_segment(sub) {
-                    base_path.join(&cat).join(&s)
-                } else {
-                    base_path.join(&cat)
-                }
+        let category_dir = if let Some(sub) = sub_folder {
+            if let Some(s) = sanitize_segment(sub) {
+                base_path.join(&cat).join(&s)
             } else {
                 base_path.join(&cat)
-            };
-
-            if !category_dir.exists() {
-                fs::create_dir_all(&category_dir)?;
             }
+        } else {
+            base_path.join(&cat)
+        };
 
-            let file_name = source
-                .file_name()
-                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "无效的文件名"))?;
-
-            let mut target = category_dir.join(file_name);
-
-            let mut counter = 1;
-            while target.exists() {
-                let stem = source
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                let ext = source
-                    .extension()
-                    .map(|e| format!(".{}", e.to_string_lossy()))
-                    .unwrap_or_default();
-                target = category_dir.join(format!("{}_{}{}", stem, counter, ext));
-                counter += 1;
-            }
-
-            safe_move(&source, &target)?;
-            done.push(MoveRecord {
-                from: source.to_string_lossy().to_string(),
-                to: target.to_string_lossy().to_string(),
-            });
-        }
-        Ok(())
-    })();
-
-    if let Err(e) = result {
-        rollback_moves(&done);
-        return Err(e);
-    }
-
-    Ok(done)
-}
-
-/// 尽力逆向还原已移动的文件/文件夹（不抛出错误，仅日志）
-fn rollback_moves(records: &[MoveRecord]) {
-    for rec in records.iter().rev() {
-        let to_path = Path::new(&rec.to);
-        let from_path = Path::new(&rec.from);
-        if to_path.exists() {
-            if let Some(parent) = from_path.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-            if let Err(e) = safe_move(to_path, from_path) {
-                eprintln!("[rollback] failed to restore {} -> {}: {}", rec.to, rec.from, e);
+        if !category_dir.exists() {
+            if let Err(e) = fs::create_dir_all(&category_dir) {
+                errors.push(format!("{}: 创建分类目录失败 {}", file_path, e));
+                continue;
             }
         }
+
+        let file_name = match source.file_name() {
+            Some(n) => n,
+            None => {
+                errors.push(format!("{}: 无效的文件名", file_path));
+                continue;
+            }
+        };
+
+        let mut target = category_dir.join(file_name);
+
+        let mut counter = 1;
+        while target.exists() {
+            let stem = source
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let ext = source
+                .extension()
+                .map(|e| format!(".{}", e.to_string_lossy()))
+                .unwrap_or_default();
+            target = category_dir.join(format!("{}_{}{}", stem, counter, ext));
+            counter += 1;
+        }
+
+        if let Err(e) = safe_move(&source, &target) {
+            errors.push(format!("{}: {}", file_path, e));
+            continue;
+        }
+        moves.push(MoveRecord {
+            from: source.to_string_lossy().to_string(),
+            to: target.to_string_lossy().to_string(),
+        });
     }
+
+    Ok(OrganizeOutcome { moves, errors })
 }
 
 /// 撤销一批移动操作（供前端 undo 调用）
