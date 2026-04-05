@@ -10,8 +10,8 @@ import { FileItem, FolderItem, MoveRecord, OrganizeOutcome, useAppStore } from '
 import { open } from '@tauri-apps/api/dialog'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/tauri'
-import { Brain, Folder, FolderOpen, Loader2, Play, RotateCcw, Scan } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Brain, Folder, FolderOpen, Loader2, Play, RotateCcw, Scan, Undo2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 
@@ -45,6 +45,11 @@ export function OrganizePage() {
   const addHistory = useAppStore((s) => s.addHistory)
   const updateStatistics = useAppStore((s) => s.updateStatistics)
   const statistics = useAppStore((s) => s.statistics)
+  const history = useAppStore((s) => s.history)
+  const markUndone = useAppStore((s) => s.markUndone)
+  const lastOrganizeRecordId = useAppStore((s) => s.lastOrganizeRecordId)
+  const setLastOrganizeRecordId = useAppStore((s) => s.setLastOrganizeRecordId)
+  const [undoingLast, setUndoingLast] = useState(false)
 
   useEffect(() => {
     const unlisten = listen<ScanProgress>('scan-progress', (event) => {
@@ -133,9 +138,11 @@ export function OrganizePage() {
     const totalCount = files.length + folders.length
     const confirmed = window.confirm(t('organize.confirmMsg', { n: totalCount }))
     if (!confirmed) return
-    
+
+    setLastOrganizeRecordId(null)
+
     setOrganizing(true)
-    
+
     try {
       const allMoves: MoveRecord[] = []
       const allErrors: string[] = []
@@ -190,9 +197,10 @@ export function OrganizePage() {
         })
       }
 
+      const recordId = `${Date.now()}`
       if (okCount > 0 || failCount > 0) {
         addHistory({
-          id: Date.now().toString(),
+          id: recordId,
           timestamp: new Date().toISOString(),
           directory,
           totalFiles: okCount,
@@ -202,13 +210,16 @@ export function OrganizePage() {
           organizeErrors: failCount > 0 ? allErrors : undefined
         })
       }
+      if (okCount > 0) {
+        setLastOrganizeRecordId(recordId)
+      }
 
       if (failCount === 0 && okCount > 0) {
         setFiles([])
         setFolders([])
         setDirectory('')
         toast.success(t('organize.successMsg', { n: okCount }))
-        setTimeout(() => navigate('/history'), 1500)
+        setTimeout(() => navigate('/history', { state: { fromOrganize: true } }), 1500)
       } else if (okCount > 0 && failCount > 0) {
         toast.warning(
           t('organize.partialMsg', { ok: okCount, fail: failCount }) +
@@ -250,6 +261,40 @@ export function OrganizePage() {
     }
   }
 
+  const lastOrganizeRecord = lastOrganizeRecordId
+    ? history.find((r) => r.id === lastOrganizeRecordId)
+    : undefined
+  const showUndoBanner = Boolean(
+    lastOrganizeRecord &&
+      lastOrganizeRecord.executed &&
+      !lastOrganizeRecord.undone &&
+      (lastOrganizeRecord.moves?.length ?? 0) > 0
+  )
+
+  const handleUndoLastOrganize = useCallback(async () => {
+    if (!lastOrganizeRecord?.moves?.length) return
+    const confirmed = window.confirm(
+      t('history.undoConfirm', { n: lastOrganizeRecord.moves.length })
+    )
+    if (!confirmed) return
+    setUndoingLast(true)
+    try {
+      const errors = await invoke<string[]>('undo_organize', {
+        records: lastOrganizeRecord.moves,
+      })
+      markUndone(lastOrganizeRecord.id)
+      if (errors.length > 0) {
+        toast.warn(t('history.undoPartialFail', { n: errors.length }))
+      } else {
+        toast.success(t('history.undoSuccess'))
+      }
+    } catch (e) {
+      toast.error(t('history.undoFail', { error: String(e) }))
+    } finally {
+      setUndoingLast(false)
+    }
+  }, [lastOrganizeRecord, markUndone, t])
+
   return (
     <div
       className="p-6 space-y-6 relative"
@@ -269,6 +314,37 @@ export function OrganizePage() {
         <h1 className="text-2xl font-bold">{t('organize.title')}</h1>
         <p className="text-muted-foreground">{t('organize.subtitle')}</p>
       </div>
+
+      {showUndoBanner && lastOrganizeRecord && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm">
+            <p className="font-medium text-amber-900 dark:text-amber-100">
+              {t('organize.undoBannerTitle')}
+            </p>
+            <p className="text-muted-foreground mt-1">
+              {t('organize.undoBannerHint', { n: lastOrganizeRecord.moves.length })}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button
+              variant="default"
+              size="sm"
+              disabled={undoingLast}
+              onClick={() => void handleUndoLastOrganize()}
+            >
+              {undoingLast ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Undo2 className="w-4 h-4 mr-2" />
+              )}
+              {t('organize.undoBannerBtn')}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/history')}>
+              {t('organize.undoBannerHistory')}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

@@ -7,13 +7,16 @@ import { formatDate } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { invoke } from '@tauri-apps/api/tauri'
 import { Calendar, FolderOpen, Loader2, Search, Trash2, Undo2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 
 type StatusFilter = 'all' | 'executed' | 'undone'
 
 export function HistoryPage() {
   const { t } = useI18n()
+  const location = useLocation()
+  const navigate = useNavigate()
   const history = useAppStore((s) => s.history)
   const clearHistory = useAppStore((s) => s.clearHistory)
   const markUndone = useAppStore((s) => s.markUndone)
@@ -21,6 +24,14 @@ export function HistoryPage() {
   const [undoingId, setUndoingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+
+  useEffect(() => {
+    const st = location.state as { fromOrganize?: boolean } | null
+    if (st?.fromOrganize) {
+      toast.info(t('history.undoHint'))
+      navigate(location.pathname, { replace: true, state: null })
+    }
+  }, [location, navigate, t])
 
   const filtered = useMemo(() => {
     let list = history

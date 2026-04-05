@@ -59,6 +59,10 @@ export const en = {
   'organize.partialMsg': 'Partial: {ok} succeeded, {fail} failed (successful moves kept; fix issues and retry).',
   'organize.allFailedMsg': 'All {n} items failed; nothing was moved.',
   'organize.nothingDone': 'Nothing was moved (nothing to organize or all skipped).',
+  'organize.undoBannerTitle': 'You can undo this run',
+  'organize.undoBannerHint': '{n} item(s) moved successfully. Undo here or use History.',
+  'organize.undoBannerBtn': 'Undo',
+  'organize.undoBannerHistory': 'Open history',
   'organize.failMsg': 'Cannot start organizing: {error}',
   'organize.dialogTitle': 'Select folder to organize',
 
@@ -76,6 +80,7 @@ export const en = {
   'history.statusUndone': 'Undone',
   'history.statusExecuted': 'Executed',
   'history.partialErrors': 'Partial failures',
+  'history.undoHint': 'Use Undo on the latest record to restore files.',
   'history.statusPreview': 'Preview',
   'history.nFiles': '{n} files total',
   'history.undo': 'Undo',

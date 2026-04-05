@@ -59,6 +59,10 @@ export const zh = {
   'organize.partialMsg': '部分完成：成功 {ok} 项，失败 {fail} 项（成功项已保留，可查看下方原因后重试）',
   'organize.allFailedMsg': '全部失败（{n} 项），未移动任何文件',
   'organize.nothingDone': '没有移动任何项目（可能无可整理项或已全部跳过）',
+  'organize.undoBannerTitle': '本次整理可一键撤销',
+  'organize.undoBannerHint': '已成功移动 {n} 项，可在此撤销或到历史记录操作',
+  'organize.undoBannerBtn': '一键撤销',
+  'organize.undoBannerHistory': '打开历史记录',
   'organize.failMsg': '整理无法开始: {error}',
   'organize.dialogTitle': '选择要整理的文件夹',
 
@@ -76,6 +80,7 @@ export const zh = {
   'history.statusUndone': '已撤销',
   'history.statusExecuted': '已执行',
   'history.partialErrors': '部分失败',
+  'history.undoHint': '最新一条记录可点击「撤销」恢复文件位置',
   'history.statusPreview': '仅预览',
   'history.nFiles': '共 {n} 个文件',
   'history.undo': '撤销',

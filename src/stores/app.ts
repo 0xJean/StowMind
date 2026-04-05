@@ -82,6 +82,9 @@ interface AppState {
   markUndone: (id: string) => void
   removeHistory: (id: string) => void
   clearHistory: () => void
+  /** 最近一次成功整理（含部分成功）的记录 id，用于整理页一键撤销提示 */
+  lastOrganizeRecordId: string | null
+  setLastOrganizeRecordId: (id: string | null) => void
   
   // 统计
   statistics: Statistics
@@ -233,18 +236,22 @@ export const useAppStore = create<AppState>()(
       setCategories: (categories) => set({ categories }),
       
       history: [],
+      lastOrganizeRecordId: null,
       addHistory: (record) => set((state) => ({ 
         history: [record, ...state.history].slice(0, 100) 
       })),
+      setLastOrganizeRecordId: (id) => set({ lastOrganizeRecordId: id }),
       markUndone: (id) => set((state) => ({
         history: state.history.map((r) =>
           r.id === id ? { ...r, undone: true } : r
         ),
+        lastOrganizeRecordId: state.lastOrganizeRecordId === id ? null : state.lastOrganizeRecordId,
       })),
       removeHistory: (id) => set((state) => ({
         history: state.history.filter((r) => r.id !== id),
+        lastOrganizeRecordId: state.lastOrganizeRecordId === id ? null : state.lastOrganizeRecordId,
       })),
-      clearHistory: () => set({ history: [] }),
+      clearHistory: () => set({ history: [], lastOrganizeRecordId: null }),
       
       statistics: {
         totalFilesOrganized: 0,
