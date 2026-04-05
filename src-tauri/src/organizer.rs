@@ -1,8 +1,20 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+
+/// 解析为绝对、规范化路径（Windows 下可统一大小写与 `\\?\` 长路径前缀，减少「同一路径不同字符串」问题）
+fn resolve_existing_dir(directory: &str) -> Result<PathBuf, std::io::Error> {
+    let p = Path::new(directory);
+    if !p.exists() || !p.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "目录不存在",
+        ));
+    }
+    fs::canonicalize(p)
+}
 
 /// Move a file or directory, falling back to recursive copy + delete when
 /// `fs::rename` fails (e.g. cross-device moves returning EXDEV).
@@ -281,7 +293,7 @@ pub struct MoveRecord {
 
 /// 移动文件夹到对应分类目录（带回滚：出错时自动还原已移动项）
 pub fn move_folders(directory: &str, folders: &[FolderItem]) -> Result<Vec<MoveRecord>, std::io::Error> {
-    let base_path = Path::new(directory);
+    let base_path = resolve_existing_dir(directory)?;
     let mut done: Vec<MoveRecord> = Vec::new();
 
     let result = (|| -> Result<(), std::io::Error> {
@@ -297,9 +309,13 @@ pub fn move_folders(directory: &str, folders: &[FolderItem]) -> Result<Vec<MoveR
             if !source.exists() {
                 continue;
             }
+            let source = fs::canonicalize(source)?;
+            if !source.starts_with(&base_path) {
+                continue;
+            }
 
             let category_dir = base_path.join(&folder.category);
-            if source == category_dir || source.starts_with(&category_dir) || category_dir.starts_with(source) {
+            if source == category_dir || source.starts_with(&category_dir) || category_dir.starts_with(&source) {
                 continue;
             }
 
@@ -314,7 +330,7 @@ pub fn move_folders(directory: &str, folders: &[FolderItem]) -> Result<Vec<MoveR
                 counter += 1;
             }
 
-            safe_move(source, &target)?;
+            safe_move(&source, &target)?;
             done.push(MoveRecord {
                 from: source.to_string_lossy().to_string(),
                 to: target.to_string_lossy().to_string(),
@@ -540,7 +556,7 @@ pub fn move_files(
     _files: &[FileItem],
     categories: &[(String, String, Option<String>)], // (path, category, sub_folder)
 ) -> Result<Vec<MoveRecord>, std::io::Error> {
-    let base_path = Path::new(directory);
+    let base_path = resolve_existing_dir(directory)?;
     let mut done: Vec<MoveRecord> = Vec::new();
 
     let result = (|| -> Result<(), std::io::Error> {
@@ -551,6 +567,10 @@ pub fn move_files(
 
             let source = Path::new(file_path);
             if !source.exists() {
+                continue;
+            }
+            let source = fs::canonicalize(source)?;
+            if !source.starts_with(&base_path) {
                 continue;
             }
 
@@ -584,7 +604,7 @@ pub fn move_files(
                 counter += 1;
             }
 
-            safe_move(source, &target)?;
+            safe_move(&source, &target)?;
             done.push(MoveRecord {
                 from: source.to_string_lossy().to_string(),
                 to: target.to_string_lossy().to_string(),
