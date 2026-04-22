@@ -136,13 +136,13 @@ export function OrganizePage() {
     try {
       const fileResult = await invoke<FileItem[]>('scan_directory', {
         directory,
-        use_ai: useAI,
-        ai_only_hard_cases: aiOnlyHardCases,
-        ai_provider: aiProvider,
+        useAi: useAI,
+        aiOnlyHardCases: aiOnlyHardCases,
+        aiProvider: aiProvider,
         categories,
-        show_temp_files: showTempFiles,
+        showTempFiles: showTempFiles,
         recursive: scanRecursive,
-        exclude_patterns: excludePatterns
+        excludePatterns: excludePatterns
       })
       setFiles(fileResult)
       
@@ -225,14 +225,14 @@ export function OrganizePage() {
       const backupSessionId = useBackup ? Date.now().toString() : undefined
       const backupPayload =
         useBackup && backupSessionId
-          ? { backup_directory: backupDirectory.trim(), backup_session_id: backupSessionId }
-          : { backup_directory: null as string | null, backup_session_id: null as string | null }
+          ? { backupDirectory: backupDirectory.trim(), backupSessionId: backupSessionId }
+          : { backupDirectory: null as string | null, backupSessionId: null as string | null }
 
       if (filesPayload.length > 0) {
         const out = await invoke<OrganizeOutcome>('organize_files', {
           directory,
           files: filesPayload,
-          dry_run: dryRun,
+          dryRun: dryRun,
           ...backupPayload
         })
         allMoves.push(...out.moves)
@@ -243,7 +243,7 @@ export function OrganizePage() {
         const out = await invoke<OrganizeOutcome>('organize_folders', {
           directory,
           folders: foldersPayload,
-          dry_run: dryRun,
+          dryRun: dryRun,
           ...backupPayload
         })
         allMoves.push(...out.moves)

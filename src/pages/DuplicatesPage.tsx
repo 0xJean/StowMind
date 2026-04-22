@@ -8,9 +8,9 @@ import { useI18n } from '@/i18n'
 import { formatFileSize } from '@/lib/utils'
 import { DuplicateGroup, useAppStore } from '@/stores/app'
 import { open } from '@tauri-apps/api/dialog'
-import { invoke } from '@tauri-apps/api/tauri'
 import { listen } from '@tauri-apps/api/event'
 import { open as openPath } from '@tauri-apps/api/shell'
+import { invoke } from '@tauri-apps/api/tauri'
 import { FolderOpen, Loader2, ScanSearch } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'react-toastify'
@@ -62,7 +62,7 @@ export function DuplicatesPage() {
       const result = await invoke<DuplicateGroup[]>('find_duplicates_cmd', {
         directory: directory.trim(),
         recursive,
-        exclude_patterns: excludePatterns,
+        excludePatterns: excludePatterns,
       })
       setGroups(result)
       if (result.length === 0) {
