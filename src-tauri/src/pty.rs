@@ -80,9 +80,18 @@ pub async fn pty_spawn(
     }
     // Set TERM so TUI programs know they have full terminal support
     cmd.env("TERM", "xterm-256color");
-    // Inherit HOME for config file access
+    // Inherit HOME (Unix) or USERPROFILE (Windows) for config file access
     if let Ok(home) = std::env::var("HOME") {
         cmd.env("HOME", home);
+    }
+    #[cfg(windows)]
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        cmd.env("USERPROFILE", profile);
+    }
+    // Windows also needs APPDATA for many tools
+    #[cfg(windows)]
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        cmd.env("APPDATA", appdata);
     }
 
     let child = pair
