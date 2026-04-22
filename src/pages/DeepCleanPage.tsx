@@ -62,8 +62,12 @@ function MoleBrand({ version, githubUrl }: { version?: string | null; githubUrl:
   )
 }
 
-function InstallGuide({ platform, onRecheck }: { platform: string; onRecheck: () => void }) {
+function InstallGuide({ platform, onRecheck, onInstall }: { platform: string; onRecheck: () => void; onInstall: (cmd: string) => void }) {
   const { t } = useI18n()
+  const installCmd = platform === 'windows'
+    ? 'powershell -Command "irm https://raw.githubusercontent.com/tw93/Mole/windows/install.ps1 | iex"'
+    : 'bash -c "curl -fsSL https://raw.githubusercontent.com/tw93/mole/main/install.sh | bash"'
+
   return (
     <div className="flex flex-col items-center justify-center flex-1 gap-6 p-8">
       <img src="/mole.png" alt="Mole" className="w-16 h-16 rounded-2xl" draggable={false} />
@@ -71,25 +75,39 @@ function InstallGuide({ platform, onRecheck }: { platform: string; onRecheck: ()
         <h2 className="text-xl font-semibold">{t('deepclean.installTitle')}</h2>
         <p className="text-sm text-muted-foreground max-w-md">{t('deepclean.installDesc')}</p>
       </div>
+
+      {/* One-click install button */}
+      <button
+        onClick={() => onInstall(installCmd)}
+        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors"
+      >
+        <Download className="w-4 h-4" />
+        {t('deepclean.autoInstall')}
+      </button>
+
       {platform === 'windows' ? (
         <div className="space-y-3 w-full max-w-md">
-          <p className="text-xs text-muted-foreground">{t('deepclean.winRequirements')}</p>
-          <div className="text-xs space-y-1 text-muted-foreground">
-            <p>• PowerShell 5.1+ — {t('deepclean.winPreinstalled')}</p>
-            <p>• Git — {t('deepclean.winGitRequired')}</p>
-            <p>• Go 1.21+ — {t('deepclean.winGoOptional')}</p>
+          <p className="text-xs text-muted-foreground text-center">{t('deepclean.installManual')}</p>
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5">
+            <p className="text-xs text-muted-foreground">{t('deepclean.winRequirements')}</p>
+            <div className="text-xs space-y-0.5 text-muted-foreground">
+              <p>• PowerShell 5.1+ — {t('deepclean.winPreinstalled')}</p>
+              <p>• Git — {t('deepclean.winGitRequired')}</p>
+              <p>• Go 1.24+ — {t('deepclean.winGoOptional')}</p>
+            </div>
           </div>
-          <code className="block bg-muted rounded-lg p-3 text-xs font-mono break-all">
+          <code className="block bg-muted rounded-lg p-3 text-xs font-mono break-all select-all">
             irm https://raw.githubusercontent.com/tw93/Mole/windows/install.ps1 | iex
           </code>
         </div>
       ) : (
         <div className="space-y-3 w-full max-w-md">
-          <code className="block bg-muted rounded-lg p-3 text-xs font-mono break-all">
+          <p className="text-xs text-muted-foreground text-center">{t('deepclean.installManual')}</p>
+          <code className="block bg-muted rounded-lg p-3 text-xs font-mono break-all select-all">
             brew install mole
           </code>
-          <p className="text-xs text-muted-foreground">{t('deepclean.installAlt')}</p>
-          <code className="block bg-muted rounded-lg p-3 text-xs font-mono break-all">
+          <p className="text-xs text-muted-foreground text-center">{t('deepclean.installAlt')}</p>
+          <code className="block bg-muted rounded-lg p-3 text-xs font-mono break-all select-all">
             curl -fsSL https://raw.githubusercontent.com/tw93/mole/main/install.sh | bash
           </code>
         </div>
@@ -151,7 +169,7 @@ export function DeepCleanPage() {
   }
 
   // Not installed
-  if (!installed) {
+  if (!installed && view !== 'terminal') {
     return (
       <div className="flex flex-col h-full">
         <InstallGuide
@@ -160,6 +178,10 @@ export function DeepCleanPage() {
             useDeepCleanStore.setState({ moleChecked: false, moleStatus: null })
             void checkMole()
           }}
+          onInstall={(cmd) => {
+            setActiveCommand(cmd)
+            setView('terminal')
+          }}
         />
       </div>
     )
@@ -167,13 +189,20 @@ export function DeepCleanPage() {
 
   // Terminal view
   if (view === 'terminal') {
+    const handleCloseTerminal = () => {
+      // Re-check Mole after closing terminal (might have just installed it)
+      useDeepCleanStore.setState({ moleChecked: false, moleStatus: null })
+      void checkMole()
+      setView('cards')
+    }
+
     return (
       <div className="flex flex-col h-full bg-[#0d1117]">
         {/* macOS-style terminal title bar */}
         <div className="flex items-center h-10 px-4 bg-[#161b22] border-b border-[#30363d] shrink-0">
           {/* Traffic light dots / close button */}
           <button
-            onClick={() => setView('cards')}
+            onClick={handleCloseTerminal}
             className="group flex items-center gap-1.5 mr-4"
             title="Close terminal"
           >
@@ -191,14 +220,14 @@ export function DeepCleanPage() {
           </div>
           {/* Back button */}
           <button
-            onClick={() => setView('cards')}
+            onClick={handleCloseTerminal}
             className="flex items-center gap-1.5 text-xs text-[#8b949e] hover:text-[#c9d1d9] transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back</span>
           </button>
         </div>
-        <TerminalPanel command={activeCommand} onClose={() => setView('cards')} />
+        <TerminalPanel command={activeCommand} onClose={handleCloseTerminal} />
       </div>
     )
   }

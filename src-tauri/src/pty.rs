@@ -74,25 +74,13 @@ pub async fn pty_spawn(
 
     let mut cmd = CommandBuilder::new(&command);
     cmd.args(&args);
-    // Inherit PATH so `mo` and other commands can be found
-    if let Ok(path) = std::env::var("PATH") {
-        cmd.env("PATH", path);
+    // Inherit the entire environment from the parent process so all
+    // tools (mo, brew, git, etc.) can be found and config paths work
+    for (key, value) in std::env::vars() {
+        cmd.env(key, value);
     }
-    // Set TERM so TUI programs know they have full terminal support
+    // Override TERM to ensure TUI programs get full terminal support
     cmd.env("TERM", "xterm-256color");
-    // Inherit HOME (Unix) or USERPROFILE (Windows) for config file access
-    if let Ok(home) = std::env::var("HOME") {
-        cmd.env("HOME", home);
-    }
-    #[cfg(windows)]
-    if let Ok(profile) = std::env::var("USERPROFILE") {
-        cmd.env("USERPROFILE", profile);
-    }
-    // Windows also needs APPDATA for many tools
-    #[cfg(windows)]
-    if let Ok(appdata) = std::env::var("APPDATA") {
-        cmd.env("APPDATA", appdata);
-    }
 
     let child = pair
         .slave

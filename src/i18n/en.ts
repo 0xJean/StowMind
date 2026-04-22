@@ -248,6 +248,8 @@ export const en = {
   'deepclean.installAlt': 'Or install via script:',
   'deepclean.viewGithub': 'GitHub',
   'deepclean.recheck': 'Re-check',
+  'deepclean.autoInstall': 'Install Mole Now',
+  'deepclean.installManual': 'Or install manually:',
   'deepclean.moleTagline': 'Open-source deep clean & system optimization · MIT License',
   'deepclean.winRequirements': 'Requirements',
   'deepclean.winPreinstalled': 'pre-installed',

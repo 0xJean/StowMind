@@ -248,6 +248,8 @@ export const zh = {
   'deepclean.installAlt': '或通过脚本安装：',
   'deepclean.viewGithub': 'GitHub',
   'deepclean.recheck': '重新检测',
+  'deepclean.autoInstall': '一键安装 Mole',
+  'deepclean.installManual': '或手动安装：',
   'deepclean.moleTagline': '开源深度清理与系统优化工具 · MIT License',
   'deepclean.winRequirements': '系统要求',
   'deepclean.winPreinstalled': '已预装',
