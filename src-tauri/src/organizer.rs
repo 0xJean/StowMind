@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -104,6 +105,125 @@ fn is_cross_device(e: &std::io::Error) -> bool {
     false
 }
 
+/// 将常见 I/O 失败归类为带标签的说明（权限 / 占用 / 路径 / 云盘占位 / 其他），便于用户排查。
+pub fn classify_io_error_msg(e: &std::io::Error) -> String {
+    let detail = e.to_string();
+    #[cfg(windows)]
+    {
+        if let Some(code) = e.raw_os_error() {
+            match code {
+                5 => {
+                    return format!("[权限] 拒绝访问（Access denied）— {detail}");
+                }
+                32 | 33 => {
+                    return format!("[占用] 文件正被使用或已锁定 — {detail}");
+                }
+                145 => {
+                    return format!("[占用] 目录非空或无法删除 — {detail}");
+                }
+                2 => {
+                    return format!("[路径] 找不到文件 — {detail}");
+                }
+                3 => {
+                    return format!("[路径] 找不到路径 — {detail}");
+                }
+                123 | 161 => {
+                    return format!("[路径] 文件名或路径非法 — {detail}");
+                }
+                206 => {
+                    return format!("[路径] 文件名或扩展名过长 — {detail}");
+                }
+                // ERROR_CLOUD_FILE_NOT_AVAILABLE — OneDrive 等「仅联机」常见
+                362 => {
+                    return format!(
+                        "[云盘] 仅联机或云文件尚未就绪（可在资源管理器中打开本文件以下载）— {detail}"
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+    #[cfg(unix)]
+    {
+        if let Some(code) = e.raw_os_error() {
+            match code {
+                1 | 13 => {
+                    return format!("[权限] 无权限 — {detail}");
+                }
+                2 => {
+                    return format!("[路径] 找不到文件 — {detail}");
+                }
+                16 | 26 => {
+                    return format!("[占用] 资源忙或文件被占用 — {detail}");
+                }
+                36 => {
+                    return format!("[路径] 路径过长 — {detail}");
+                }
+                _ => {}
+            }
+        }
+    }
+    match e.kind() {
+        ErrorKind::PermissionDenied => format!("[权限] {detail}"),
+        ErrorKind::NotFound => format!("[路径] 不存在 — {detail}"),
+        ErrorKind::AlreadyExists => format!("[冲突] 已存在 — {detail}"),
+        ErrorKind::InvalidInput => format!("[参数] 无效输入 — {detail}"),
+        _ => format!("[其他] {detail}"),
+    }
+}
+
+fn format_path_io_error(path: &str, e: &std::io::Error) -> String {
+    format!("{} — {}", path, classify_io_error_msg(e))
+}
+
+fn sanitize_backup_session_id(s: &str) -> String {
+    let t: String = s
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(80)
+        .collect();
+    if t.is_empty() {
+        "backup".to_string()
+    } else {
+        t
+    }
+}
+
+/// 将 `source`（须在 `base` 下）复制到 `backup_root/<session>/相对路径`（文件或整个文件夹）。
+fn copy_to_backup(base: &Path, source: &Path, backup_root: &Path, session: &str) -> Result<(), std::io::Error> {
+    let sid = sanitize_backup_session_id(session);
+    let rel = source.strip_prefix(base).map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path not under base directory")
+    })?;
+    let dest = backup_root.join(&sid).join(rel);
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    if source.is_dir() {
+        copy_dir_recursive(source, &dest)?;
+    } else {
+        fs::copy(source, &dest)?;
+    }
+    Ok(())
+}
+
+/// 备份根目录不得位于待整理目录之内，避免把备份写进即将被打乱的目录树。
+fn validate_backup_root(base: &Path, backup_root: &Path) -> Result<(), std::io::Error> {
+    if base == backup_root || path_is_within(base, backup_root) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "备份目录不能位于待整理文件夹内部",
+        ));
+    }
+    Ok(())
+}
+
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
@@ -146,7 +266,7 @@ pub struct Category {
 }
 
 /// 路径是否命中排除规则（子串匹配，不区分大小写）
-fn path_matches_exclude(path: &Path, patterns: &[String]) -> bool {
+pub fn path_matches_exclude(path: &Path, patterns: &[String]) -> bool {
     if patterns.is_empty() {
         return false;
     }
@@ -389,12 +509,43 @@ pub struct OrganizeOutcome {
 
 /// 移动文件夹到对应分类目录（单项失败仅记录，不影响已成功项）
 /// `dry_run` 为 true 时不创建目录、不移动，仅返回计划中的 `moves`。
-pub fn move_folders(directory: &str, folders: &[FolderItem], dry_run: bool) -> Result<OrganizeOutcome, std::io::Error> {
+/// `on_progress`：`(当前序号, 总数, 当前路径)`，在每一轮处理开始前调用。
+pub fn move_folders<F>(
+    directory: &str,
+    folders: &[FolderItem],
+    dry_run: bool,
+    backup_root: Option<&Path>,
+    backup_session_id: Option<&str>,
+    mut on_progress: F,
+) -> Result<OrganizeOutcome, std::io::Error>
+where
+    F: FnMut(usize, usize, &str),
+{
     let base_path = resolve_existing_dir(directory)?;
+    let backup_plan: Option<(PathBuf, String)> = if dry_run {
+        None
+    } else {
+        match (backup_root, backup_session_id) {
+            (Some(br), Some(sid)) if !br.as_os_str().is_empty() && !sid.trim().is_empty() => {
+                let p = fs::canonicalize(br)?;
+                if !p.is_dir() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "备份目录不存在或不是文件夹",
+                    ));
+                }
+                validate_backup_root(&base_path, &p)?;
+                Some((p, sid.to_string()))
+            }
+            _ => None,
+        }
+    };
+    let total = folders.len().max(1);
     let mut moves: Vec<MoveRecord> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
 
-    for folder in folders {
+    for (i, folder) in folders.iter().enumerate() {
+        on_progress(i + 1, total, folder.path.as_str());
         if folder.category.is_empty() || folder.category == "其他" {
             continue;
         }
@@ -415,7 +566,7 @@ pub fn move_folders(directory: &str, folders: &[FolderItem], dry_run: bool) -> R
         let source = match fs::canonicalize(source) {
             Ok(p) => p,
             Err(e) => {
-                errors.push(format!("{}: {}", folder.path, e));
+                errors.push(format_path_io_error(&folder.path, &e));
                 continue;
             }
         };
@@ -434,7 +585,11 @@ pub fn move_folders(directory: &str, folders: &[FolderItem], dry_run: bool) -> R
 
         if !dry_run && !category_dir.exists() {
             if let Err(e) = fs::create_dir_all(&category_dir) {
-                errors.push(format!("{}: 创建分类目录失败 {}", folder.path, e));
+                errors.push(format!(
+                    "{} — 创建分类目录失败：{}",
+                    folder.path,
+                    classify_io_error_msg(&e)
+                ));
                 continue;
             }
         }
@@ -454,8 +609,19 @@ pub fn move_folders(directory: &str, folders: &[FolderItem], dry_run: bool) -> R
             continue;
         }
 
+        if let Some((ref br, ref sid)) = backup_plan {
+            if let Err(e) = copy_to_backup(&base_path, &source, br, sid.as_str()) {
+                errors.push(format!(
+                    "{} — 备份失败，已跳过移动：{}",
+                    folder.path,
+                    classify_io_error_msg(&e)
+                ));
+                continue;
+            }
+        }
+
         if let Err(e) = safe_move(&source, &target) {
-            errors.push(format!("{}: {}", folder.path, e));
+            errors.push(format_path_io_error(&folder.path, &e));
             continue;
         }
         moves.push(MoveRecord {
@@ -672,17 +838,44 @@ pub fn group_similar_files(files: &[(String, String)]) -> HashMap<String, Option
 }
 
 /// `dry_run` 为 true 时不创建目录、不移动，仅返回计划中的 `moves`。
-pub fn move_files(
+/// `on_progress`：`(当前序号, 总数, 当前路径)`，在每一轮处理开始前调用。
+pub fn move_files<F>(
     directory: &str,
     _files: &[FileItem],
     categories: &[(String, String, Option<String>)], // (path, category, sub_folder)
     dry_run: bool,
-) -> Result<OrganizeOutcome, std::io::Error> {
+    backup_root: Option<&Path>,
+    backup_session_id: Option<&str>,
+    mut on_progress: F,
+) -> Result<OrganizeOutcome, std::io::Error>
+where
+    F: FnMut(usize, usize, &str),
+{
     let base_path = resolve_existing_dir(directory)?;
+    let backup_plan: Option<(PathBuf, String)> = if dry_run {
+        None
+    } else {
+        match (backup_root, backup_session_id) {
+            (Some(br), Some(sid)) if !br.as_os_str().is_empty() && !sid.trim().is_empty() => {
+                let p = fs::canonicalize(br)?;
+                if !p.is_dir() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "备份目录不存在或不是文件夹",
+                    ));
+                }
+                validate_backup_root(&base_path, &p)?;
+                Some((p, sid.to_string()))
+            }
+            _ => None,
+        }
+    };
+    let total = categories.len().max(1);
     let mut moves: Vec<MoveRecord> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
 
-    for (file_path, category, sub_folder) in categories {
+    for (i, (file_path, category, sub_folder)) in categories.iter().enumerate() {
+        on_progress(i + 1, total, file_path.as_str());
         if category.is_empty() {
             continue;
         }
@@ -700,7 +893,7 @@ pub fn move_files(
         let source = match fs::canonicalize(source) {
             Ok(p) => p,
             Err(e) => {
-                errors.push(format!("{}: {}", file_path, e));
+                errors.push(format_path_io_error(file_path, &e));
                 continue;
             }
         };
@@ -721,7 +914,11 @@ pub fn move_files(
 
         if !dry_run && !category_dir.exists() {
             if let Err(e) = fs::create_dir_all(&category_dir) {
-                errors.push(format!("{}: 创建分类目录失败 {}", file_path, e));
+                errors.push(format!(
+                    "{} — 创建分类目录失败：{}",
+                    file_path,
+                    classify_io_error_msg(&e)
+                ));
                 continue;
             }
         }
@@ -758,8 +955,19 @@ pub fn move_files(
             continue;
         }
 
+        if let Some((ref br, ref sid)) = backup_plan {
+            if let Err(e) = copy_to_backup(&base_path, &source, br, sid.as_str()) {
+                errors.push(format!(
+                    "{} — 备份失败，已跳过移动：{}",
+                    file_path,
+                    classify_io_error_msg(&e)
+                ));
+                continue;
+            }
+        }
+
         if let Err(e) = safe_move(&source, &target) {
-            errors.push(format!("{}: {}", file_path, e));
+            errors.push(format_path_io_error(file_path, &e));
             continue;
         }
         moves.push(MoveRecord {
@@ -785,7 +993,12 @@ pub fn undo_moves(records: &[MoveRecord]) -> Result<Vec<String>, std::io::Error>
             let _ = fs::create_dir_all(parent);
         }
         if let Err(e) = safe_move(to_path, from_path) {
-            errors.push(format!("{} -> {}: {}", rec.to, rec.from, e));
+            errors.push(format!(
+                "{} → {} — {}",
+                rec.to,
+                rec.from,
+                classify_io_error_msg(&e)
+            ));
         }
     }
     Ok(errors)
@@ -793,7 +1006,7 @@ pub fn undo_moves(records: &[MoveRecord]) -> Result<Vec<String>, std::io::Error>
 
 #[cfg(test)]
 mod tests {
-    use super::{group_similar_files, sanitize_segment};
+    use super::{classify_io_error_msg, group_similar_files, sanitize_segment};
 
     #[test]
     fn sanitize_segment_strips_windows_invalid_chars() {
@@ -826,5 +1039,26 @@ mod tests {
 
         assert!(sub.is_some());
         assert!(!sub.unwrap().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn classify_io_maps_unix_eacces() {
+        let e = std::io::Error::from_raw_os_error(13);
+        assert!(classify_io_error_msg(&e).contains("[权限]"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn classify_io_maps_windows_access_denied() {
+        let e = std::io::Error::from_raw_os_error(5);
+        assert!(classify_io_error_msg(&e).contains("[权限]"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn classify_io_maps_cloud_placeholder_code() {
+        let e = std::io::Error::from_raw_os_error(362);
+        assert!(classify_io_error_msg(&e).contains("[云盘]"));
     }
 }

@@ -1,14 +1,20 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod ai;
+mod deepclean;
+mod duplicates;
 mod organizer;
+mod pty;
+mod watch;
 
 use ai::{AIProvider, classify_file_stream};
+use duplicates::DuplicateGroup;
 use organizer::{scan_files, scan_folders, move_files, move_folders, undo_moves, group_similar_files, FileItem, FolderItem, Category, MoveRecord, OrganizeOutcome};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
-use tauri::Window;
+use tauri::{AppHandle, State, Window};
+use watch::WatchManager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ScanResult {
@@ -31,6 +37,22 @@ struct ScanProgressEvent {
     status: String, // "scanning", "thinking", "classified", "grouping", "error"
     thinking: Option<String>,
     category: Option<String>,
+}
+
+/// 整理阶段进度（移动文件 / 文件夹时由后端 emit）
+#[derive(Clone, Serialize)]
+struct OrganizeProgressEvent {
+    current: usize,
+    total: usize,
+    path: String,
+    /// "files" | "folders"
+    phase: String,
+}
+
+#[derive(Clone, Serialize)]
+struct DuplicateScanProgress {
+    current: usize,
+    total: usize,
 }
 
 #[tauri::command]
@@ -357,9 +379,12 @@ fn apply_group_majority(results: &mut [ScanResult]) {
 
 #[tauri::command]
 async fn organize_files(
+    window: Window,
     directory: String,
     files: Vec<ScanResult>,
     dry_run: bool,
+    backup_directory: Option<String>,
+    backup_session_id: Option<String>,
 ) -> Result<OrganizeOutcome, String> {
     let categories: Vec<(String, String, Option<String>)> = files
         .iter()
@@ -376,7 +401,29 @@ async fn organize_files(
         })
         .collect();
 
-    move_files(&directory, &items, &categories, dry_run).map_err(|e| e.to_string())
+    let backup_root = backup_directory.as_deref().map(Path::new);
+    let backup_sid = backup_session_id.as_deref();
+
+    move_files(
+        &directory,
+        &items,
+        &categories,
+        dry_run,
+        backup_root,
+        backup_sid,
+        |cur, total, path| {
+        let _ = window.emit(
+            "organize-progress",
+            OrganizeProgressEvent {
+                current: cur,
+                total,
+                path: path.to_string(),
+                phase: "files".to_string(),
+            },
+        );
+    },
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -389,11 +436,35 @@ async fn scan_folders_cmd(
 
 #[tauri::command]
 async fn organize_folders(
+    window: Window,
     directory: String,
     folders: Vec<FolderItem>,
     dry_run: bool,
+    backup_directory: Option<String>,
+    backup_session_id: Option<String>,
 ) -> Result<OrganizeOutcome, String> {
-    move_folders(&directory, &folders, dry_run).map_err(|e| e.to_string())
+    let backup_root = backup_directory.as_deref().map(Path::new);
+    let backup_sid = backup_session_id.as_deref();
+
+    move_folders(
+        &directory,
+        &folders,
+        dry_run,
+        backup_root,
+        backup_sid,
+        |cur, total, path| {
+        let _ = window.emit(
+            "organize-progress",
+            OrganizeProgressEvent {
+                current: cur,
+                total,
+                path: path.to_string(),
+                phase: "folders".to_string(),
+            },
+        );
+    },
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -401,8 +472,39 @@ async fn undo_organize(records: Vec<MoveRecord>) -> Result<Vec<String>, String> 
     undo_moves(&records).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn find_duplicates_cmd(
+    window: Window,
+    directory: String,
+    recursive: bool,
+    exclude_patterns: Vec<String>,
+) -> Result<Vec<DuplicateGroup>, String> {
+    duplicates::find_duplicates(&directory, recursive, &exclude_patterns, |cur, total| {
+        let _ = window.emit(
+            "duplicate-scan-progress",
+            DuplicateScanProgress { current: cur, total },
+        );
+    })
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn watch_set_paths(paths: Vec<String>, app: AppHandle, state: State<WatchManager>) -> Result<(), String> {
+    state.restart(app, paths);
+    Ok(())
+}
+
+// ── Deep Clean (Mole integration) ──
+
+#[tauri::command]
+async fn mole_check() -> deepclean::MoleStatus {
+    deepclean::check_mole().await
+}
+
 fn main() {
     tauri::Builder::default()
+        .manage(WatchManager::default())
+        .manage(pty::PtyManager::new())
         .invoke_handler(tauri::generate_handler![
             check_ollama,
             test_api_connection,
@@ -411,6 +513,13 @@ fn main() {
             scan_folders_cmd,
             organize_folders,
             undo_organize,
+            find_duplicates_cmd,
+            watch_set_paths,
+            mole_check,
+            pty::pty_spawn,
+            pty::pty_write,
+            pty::pty_resize,
+            pty::pty_kill,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -2,7 +2,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
-import { BarChart3, FolderOpen, History, Home, Moon, Settings, Sun } from 'lucide-react'
+import { BarChart3, Copy, FolderOpen, History, Home, Moon, Settings, Sun } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 export function Sidebar() {
@@ -16,6 +16,8 @@ export function Sidebar() {
     { path: '/organize', icon: FolderOpen, label: t('nav.organize') },
     { path: '/history', icon: History, label: t('nav.history') },
     { path: '/statistics', icon: BarChart3, label: t('nav.statistics') },
+    { path: '/duplicates', icon: Copy, label: t('nav.duplicates') },
+    { path: '/deepclean', icon: null, label: t('nav.deepclean'), customIcon: '/mole.png' },
     { path: '/settings', icon: Settings, label: t('nav.settings') },
   ]
 
@@ -50,7 +52,11 @@ export function Sidebar() {
               )
             }
           >
-            <item.icon className="w-5 h-5" />
+            {item.customIcon ? (
+              <img src={item.customIcon} alt="" className="w-5 h-5 rounded" draggable={false} />
+            ) : item.icon ? (
+              <item.icon className="w-5 h-5" />
+            ) : null}
             {item.label}
           </NavLink>
         ))}

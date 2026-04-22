@@ -6,11 +6,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useI18n, type Locale } from '@/i18n'
+import { parseCategoriesImport, serializeCategories } from '@/lib/categoryRules'
 import { AIProvider, Category, defaultCategories, useAppStore } from '@/stores/app'
+import { open, save } from '@tauri-apps/api/dialog'
+import { readTextFile, writeTextFile } from '@tauri-apps/api/fs'
 import { invoke } from '@tauri-apps/api/tauri'
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Globe, Moon, Plus, RefreshCw, RotateCcw, Save, Sun, Trash2 } from 'lucide-react'
+import {
+  Archive,
+  Eye,
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Globe,
+  Moon,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Sun,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { toast } from 'react-toastify'
 
 export function SettingsPage() {
   const location = useLocation()
@@ -25,6 +46,14 @@ export function SettingsPage() {
   const setAIOnlyHardCases = useAppStore((s) => s.setAIOnlyHardCases)
   const excludePatterns = useAppStore((s) => s.excludePatterns)
   const setExcludePatterns = useAppStore((s) => s.setExcludePatterns)
+  const backupBeforeOrganize = useAppStore((s) => s.backupBeforeOrganize)
+  const setBackupBeforeOrganize = useAppStore((s) => s.setBackupBeforeOrganize)
+  const backupDirectory = useAppStore((s) => s.backupDirectory)
+  const setBackupDirectory = useAppStore((s) => s.setBackupDirectory)
+  const watchFolderEnabled = useAppStore((s) => s.watchFolderEnabled)
+  const setWatchFolderEnabled = useAppStore((s) => s.setWatchFolderEnabled)
+  const watchFolderPathsText = useAppStore((s) => s.watchFolderPathsText)
+  const setWatchFolderPathsText = useAppStore((s) => s.setWatchFolderPathsText)
   const [excludeDraft, setExcludeDraft] = useState(() => excludePatterns.join('\n'))
 
   useEffect(() => {
@@ -110,6 +139,61 @@ export function SettingsPage() {
     }
   }
 
+  const exportCategoryRules = async () => {
+    try {
+      const path = await save({
+        defaultPath: 'stowmind-categories.json',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+        title: t('settings.rulesExportDialogTitle'),
+      })
+      if (path == null || typeof path !== 'string') return
+      await writeTextFile(path, serializeCategories(categories))
+      toast.success(t('settings.rulesExportSuccess'))
+    } catch (e) {
+      toast.error(t('settings.rulesExportFail', { error: String(e) }))
+    }
+  }
+
+  const pickBackupDirectory = async () => {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: t('settings.organizeBackupDialogTitle'),
+    })
+    if (selected && typeof selected === 'string') {
+      setBackupDirectory(selected)
+    }
+  }
+
+  const importCategoryRules = async () => {
+    try {
+      const path = await open({
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+        multiple: false,
+        title: t('settings.rulesImportDialogTitle'),
+      })
+      if (path == null || typeof path !== 'string') return
+      const text = await readTextFile(path)
+      const next = parseCategoriesImport(text)
+      if (!window.confirm(t('settings.rulesImportConfirm', { n: next.length }))) return
+      setCategories(next)
+      setExpandedIdx(null)
+      toast.success(t('settings.rulesImportSuccess', { n: next.length }))
+    } catch (e) {
+      if (e instanceof Error) {
+        if (e.message === 'json') {
+          toast.error(t('settings.rulesImportInvalidJson'))
+        } else if (e.message === 'shape' || e.message === 'empty' || e.message === 'none') {
+          toast.error(t('settings.rulesImportInvalidShape'))
+        } else {
+          toast.error(t('settings.rulesImportFail', { error: e.message }))
+        }
+      } else {
+        toast.error(t('settings.rulesImportFail', { error: String(e) }))
+      }
+    }
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -183,6 +267,75 @@ export function SettingsPage() {
             placeholder={t('settings.scanExcludePlaceholder')}
             spellCheck={false}
           />
+        </CardContent>
+      </Card>
+
+      {/* Backup before organize */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Archive className="w-5 h-5" />
+            {t('settings.organizeBackup')}
+          </CardTitle>
+          <CardDescription>{t('settings.organizeBackupDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
+            <div>
+              <div className="text-sm font-medium">{t('settings.organizeBackupEnable')}</div>
+              <div className="text-xs text-muted-foreground">
+                {t('settings.organizeBackupEnableDesc')}
+              </div>
+            </div>
+            <Switch checked={backupBeforeOrganize} onCheckedChange={setBackupBeforeOrganize} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">{t('settings.organizeBackupPath')}</label>
+            <div className="flex gap-2">
+              <Input
+                value={backupDirectory}
+                onChange={(e) => setBackupDirectory(e.target.value)}
+                placeholder={t('settings.organizeBackupPathPlaceholder')}
+                className="font-mono text-sm"
+              />
+              <Button type="button" variant="secondary" onClick={() => void pickBackupDirectory()}>
+                {t('settings.organizeBackupBrowse')}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Watch folders */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Eye className="w-5 h-5" />
+            {t('settings.watchFolder')}
+          </CardTitle>
+          <CardDescription>{t('settings.watchFolderDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
+            <div>
+              <div className="text-sm font-medium">{t('settings.watchFolderEnable')}</div>
+              <div className="text-xs text-muted-foreground">
+                {t('settings.watchFolderEnableDesc')}
+              </div>
+            </div>
+            <Switch checked={watchFolderEnabled} onCheckedChange={setWatchFolderEnabled} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">{t('settings.watchFolderPaths')}</label>
+            <textarea
+              className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+              value={watchFolderPathsText}
+              onChange={(e) => setWatchFolderPathsText(e.target.value)}
+              placeholder={t('settings.watchFolderPathsPlaceholder')}
+              spellCheck={false}
+            />
+            <p className="text-xs text-muted-foreground">{t('settings.watchFolderHint')}</p>
+          </div>
         </CardContent>
       </Card>
 
@@ -310,7 +463,15 @@ export function SettingsPage() {
             <CardTitle>{t('settings.categoryRules')}</CardTitle>
             <CardDescription>{t('settings.categoryRulesDesc')}</CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 justify-end">
+            <Button variant="outline" size="sm" onClick={() => void exportCategoryRules()}>
+              <Download className="w-4 h-4 mr-2" />
+              {t('settings.rulesExport')}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => void importCategoryRules()}>
+              <Upload className="w-4 h-4 mr-2" />
+              {t('settings.rulesImport')}
+            </Button>
             <Button variant="outline" size="sm" onClick={resetCategories}>
               <RotateCcw className="w-4 h-4 mr-2" />
               {t('settings.resetDefaults')}

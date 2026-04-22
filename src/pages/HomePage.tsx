@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useI18n } from '@/i18n'
 import { formatFileSize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
-import { BarChart3, FolderOpen, History, Settings, Sparkles } from 'lucide-react'
+import { BarChart3, Copy, FolderOpen, History, Settings, Sparkles, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 export function HomePage() {
@@ -16,6 +16,8 @@ export function HomePage() {
     { icon: FolderOpen, label: t('home.action.organize'), path: '/organize', color: 'text-blue-500' },
     { icon: History, label: t('home.action.history'), path: '/history', color: 'text-green-500' },
     { icon: BarChart3, label: t('home.action.stats'), path: '/statistics', color: 'text-purple-500' },
+    { icon: Copy, label: t('home.action.duplicates'), path: '/duplicates', color: 'text-cyan-500' },
+    { icon: Trash2, label: t('home.action.deepclean'), path: '/deepclean', color: 'text-red-500' },
     { icon: Settings, label: t('home.action.settings'), path: '/settings', color: 'text-orange-500' },
   ]
 

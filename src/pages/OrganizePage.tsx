@@ -11,8 +11,8 @@ import { FileItem, FolderItem, MoveRecord, OrganizeOutcome, useAppStore } from '
 import { open } from '@tauri-apps/api/dialog'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/tauri'
-import { Brain, Eye, Folder, FolderOpen, Loader2, Play, RotateCcw, Scan, Undo2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Brain, Eye, Folder, FolderOpen, Keyboard, Loader2, Play, RotateCcw, Scan, Undo2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 
@@ -23,6 +23,13 @@ interface ScanProgress {
   status: 'scanning' | 'thinking' | 'classified' | 'grouping' | 'error'
   thinking?: string
   category?: string
+}
+
+interface OrganizeProgressEvent {
+  current: number
+  total: number
+  path: string
+  phase: 'files' | 'folders'
 }
 
 export function OrganizePage() {
@@ -43,6 +50,7 @@ export function OrganizePage() {
   const [previewMoves, setPreviewMoves] = useState<MoveRecord[]>([])
   const [previewErrors, setPreviewErrors] = useState<string[]>([])
   const [organizePhase, setOrganizePhase] = useState<'idle' | 'preview' | 'execute'>('idle')
+  const [organizeProgress, setOrganizeProgress] = useState<OrganizeProgressEvent | null>(null)
 
   const aiProvider = useAppStore((s) => s.aiProvider)
   const categories = useAppStore((s) => s.categories)
@@ -57,6 +65,8 @@ export function OrganizePage() {
   const scanRecursive = useAppStore((s) => s.scanRecursive)
   const setScanRecursive = useAppStore((s) => s.setScanRecursive)
   const excludePatterns = useAppStore((s) => s.excludePatterns)
+  const backupBeforeOrganize = useAppStore((s) => s.backupBeforeOrganize)
+  const backupDirectory = useAppStore((s) => s.backupDirectory)
   const [undoingLast, setUndoingLast] = useState(false)
 
   useEffect(() => {
@@ -73,6 +83,15 @@ export function OrganizePage() {
 
     return () => {
       unlisten.then(fn => fn())
+    }
+  }, [])
+
+  useEffect(() => {
+    const unlisten = listen<OrganizeProgressEvent>('organize-progress', (event) => {
+      setOrganizeProgress(event.payload)
+    })
+    return () => {
+      unlisten.then((fn) => fn())
     }
   }, [])
 
@@ -187,6 +206,7 @@ export function OrganizePage() {
 
     setOrganizing(true)
     setOrganizePhase(dryRun ? 'preview' : 'execute')
+    setOrganizeProgress(null)
 
     try {
       const allMoves: MoveRecord[] = []
@@ -195,11 +215,25 @@ export function OrganizePage() {
       const filesPayload = activeFiles.map(fileForApi)
       const foldersPayload = activeFolders.map(folderForApi)
 
+      const useBackup =
+        !dryRun &&
+        backupBeforeOrganize &&
+        backupDirectory.trim().length > 0
+      if (!dryRun && backupBeforeOrganize && backupDirectory.trim().length === 0) {
+        toast.warning(t('organize.backupPathMissing'))
+      }
+      const backupSessionId = useBackup ? Date.now().toString() : undefined
+      const backupPayload =
+        useBackup && backupSessionId
+          ? { backup_directory: backupDirectory.trim(), backup_session_id: backupSessionId }
+          : { backup_directory: null as string | null, backup_session_id: null as string | null }
+
       if (filesPayload.length > 0) {
         const out = await invoke<OrganizeOutcome>('organize_files', {
           directory,
           files: filesPayload,
-          dry_run: dryRun
+          dry_run: dryRun,
+          ...backupPayload
         })
         allMoves.push(...out.moves)
         allErrors.push(...out.errors)
@@ -209,7 +243,8 @@ export function OrganizePage() {
         const out = await invoke<OrganizeOutcome>('organize_folders', {
           directory,
           folders: foldersPayload,
-          dry_run: dryRun
+          dry_run: dryRun,
+          ...backupPayload
         })
         allMoves.push(...out.moves)
         allErrors.push(...out.errors)
@@ -314,8 +349,26 @@ export function OrganizePage() {
     } finally {
       setOrganizing(false)
       setOrganizePhase('idle')
+      setOrganizeProgress(null)
     }
   }
+
+  const runOrganizeRef = useRef(runOrganize)
+  runOrganizeRef.current = runOrganize
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return
+      const el = e.target as HTMLElement | null
+      if (el?.closest('input, textarea, [contenteditable="true"]')) return
+      if (previewOpen || organizing || scanning) return
+      if (movingCount === 0) return
+      e.preventDefault()
+      runOrganizeRef.current(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [previewOpen, organizing, scanning, movingCount])
 
   const runPreview = () => void runOrganize(true)
 
@@ -378,6 +431,11 @@ export function OrganizePage() {
       setUndoingLast(false)
     }
   }, [lastOrganizeRecord, markUndone, t])
+
+  const showGuideCard = files.length === 0 && folders.length === 0 && !scanning
+  const organizeProgressPercent = organizeProgress
+    ? (organizeProgress.current / Math.max(organizeProgress.total, 1)) * 100
+    : 0
 
   return (
     <div
@@ -451,6 +509,30 @@ export function OrganizePage() {
         <h1 className="text-2xl font-bold">{t('organize.title')}</h1>
         <p className="text-muted-foreground">{t('organize.subtitle')}</p>
       </div>
+
+      {showGuideCard && (
+        <Card className="bg-muted/30 border-dashed">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t('organize.guideTitle')}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-3">
+            {!directory ? (
+              <ol className="list-decimal pl-5 space-y-1.5">
+                <li>{t('organize.guideStep1')}</li>
+                <li>{t('organize.guideStep2')}</li>
+                <li>{t('organize.guideStep3')}</li>
+                <li>{t('organize.guideStep4')}</li>
+              </ol>
+            ) : (
+              <p>{t('organize.guideAfterDir')}</p>
+            )}
+            <p className="flex items-center gap-2 pt-1 text-xs border-t border-border/60">
+              <Keyboard className="w-4 h-4 shrink-0" aria-hidden />
+              {t('organize.shortcutHint')}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {showUndoBanner && lastOrganizeRecord && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -610,6 +692,42 @@ export function OrganizePage() {
                 <span className="text-red-500">{progress.thinking}</span>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {organizing && (
+        <Card className="border-primary/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              {t('organize.organizeProgressTitle')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {organizeProgress ? (
+              <>
+                <div className="flex justify-between text-xs text-muted-foreground gap-2">
+                  <span>
+                    {organizeProgress.phase === 'files'
+                      ? t('organize.organizePhaseFiles')
+                      : t('organize.organizePhaseFolders')}
+                  </span>
+                  <span className="shrink-0">
+                    {organizeProgress.current} / {organizeProgress.total}
+                  </span>
+                </div>
+                <Progress value={organizeProgressPercent} className="h-2" />
+                <p
+                  className="text-xs font-mono truncate text-muted-foreground"
+                  title={organizeProgress.path}
+                >
+                  {organizeProgress.path}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t('organize.organizing')}</p>
+            )}
           </CardContent>
         </Card>
       )}

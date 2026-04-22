@@ -77,6 +77,22 @@ else
     echo "   下载地址: https://ollama.ai"
 fi
 
+# 检查 Mole (可选 - 深度清理功能)
+echo ""
+echo "📋 检查 Mole (可选，用于深度清理)..."
+if command -v mo &> /dev/null; then
+    echo "✅ Mole 已安装 ($(mo --version 2>/dev/null || echo '未知版本'))"
+else
+    echo "⚠️  未安装 Mole (可选，用于系统深度清理)"
+    if [[ "$OS" == "macos" ]]; then
+        echo "   安装: brew install mole"
+        echo "   或: curl -fsSL https://raw.githubusercontent.com/tw93/mole/main/install.sh | bash"
+    else
+        echo "   安装: irm https://raw.githubusercontent.com/tw93/Mole/windows/install.ps1 | iex"
+    fi
+    echo "   项目地址: https://github.com/tw93/Mole"
+fi
+
 # 安装前端依赖
 echo ""
 echo "📦 安装前端依赖..."

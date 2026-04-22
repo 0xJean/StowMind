@@ -49,6 +49,13 @@ export interface OrganizeOutcome {
   errors: string[]
 }
 
+/** 与后端 `DuplicateGroup` 一致（同哈希、至少 2 路径） */
+export interface DuplicateGroup {
+  size: number
+  hash: string
+  paths: string[]
+}
+
 export interface HistoryRecord {
   id: string
   timestamp: string
@@ -104,6 +111,19 @@ interface AppState {
   /** 路径子串匹配，命中则跳过（如 node_modules、.git） */
   excludePatterns: string[]
   setExcludePatterns: (patterns: string[]) => void
+
+  /** 执行整理前将源项复制到备份目录（同一会话共用 session 子目录） */
+  backupBeforeOrganize: boolean
+  setBackupBeforeOrganize: (value: boolean) => void
+  backupDirectory: string
+  setBackupDirectory: (path: string) => void
+
+  /** 文件夹监视（每行一个绝对路径；启用时由后端 notify 防抖后 emit） */
+  watchFolderEnabled: boolean
+  setWatchFolderEnabled: (value: boolean) => void
+  /** 原始文本，按行解析为路径 */
+  watchFolderPathsText: string
+  setWatchFolderPathsText: (text: string) => void
 }
 
 export const defaultCategories: Category[] = [
@@ -280,6 +300,16 @@ export const useAppStore = create<AppState>()(
       setScanRecursive: (scanRecursive) => set({ scanRecursive }),
       excludePatterns: ['node_modules', '.git', '__pycache__', '.venv'],
       setExcludePatterns: (excludePatterns) => set({ excludePatterns }),
+
+      backupBeforeOrganize: false,
+      setBackupBeforeOrganize: (backupBeforeOrganize) => set({ backupBeforeOrganize }),
+      backupDirectory: '',
+      setBackupDirectory: (backupDirectory) => set({ backupDirectory }),
+
+      watchFolderEnabled: false,
+      setWatchFolderEnabled: (watchFolderEnabled) => set({ watchFolderEnabled }),
+      watchFolderPathsText: '',
+      setWatchFolderPathsText: (watchFolderPathsText) => set({ watchFolderPathsText }),
     }),
     {
       name: 'stowmind',

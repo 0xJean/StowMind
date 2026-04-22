@@ -30,6 +30,7 @@
 - [Development](#development)
 - [Build & release](#build--release)
 - [Configuration](#configuration)
+- [Deep Clean (powered by Mole)](#deep-clean-powered-by-mole)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
 - [License](#license)
@@ -57,6 +58,7 @@ Successful moves are **kept** if some items fail (no all-or-nothing rollback). C
 | **UX** | Drag a folder onto Organize; light / dark / system theme; **English & 中文** UI |
 | **Rules editor** | Collapsible categories, keywords, reorder, reset to defaults |
 | **Insights** | History search & filters; statistics & 7-day trend |
+| **Deep Clean** | Integrated [Mole](https://github.com/tw93/Mole) for system cache cleanup, build artifact purging, and disk space analysis (macOS & [Windows](https://github.com/tw93/Mole/tree/windows)) |
 
 ---
 
@@ -191,6 +193,31 @@ Edit extensions and keywords per category, reorder categories, or **Reset defaul
 
 ---
 
+### Deep Clean (powered by Mole)
+
+StowMind integrates [Mole](https://github.com/tw93/Mole) — an open-source (MIT) macOS/Windows deep cleaning tool by [@tw93](https://github.com/tw93) — to provide system-level cleanup without reinventing the wheel.
+
+Navigate to **Deep Clean** in the sidebar to access three capabilities:
+
+| Tab | Mole command | What it does |
+|-----|-------------|--------------|
+| System Clean | `mo clean` | Removes system caches, app logs, browser leftovers, dev tool caches |
+| Build Artifacts | `mo purge` | Cleans `node_modules`, `target`, `.build`, and other project build artifacts |
+| Disk Analysis | `mo analyze` | Visualizes directory space usage and locates large files |
+
+All operations use **dry-run preview first** — nothing is deleted until you explicitly confirm.
+
+**Requirements:**
+
+- **macOS**: Install Mole via `brew install mole` or the [install script](https://github.com/tw93/Mole#quick-start)
+- **Windows** (experimental): See the [windows branch](https://github.com/tw93/Mole/tree/windows) — requires Windows 10/11, PowerShell 5.1+, and Git
+
+If Mole is not installed, StowMind shows an in-app installation guide with platform-specific instructions.
+
+> Mole is an independent open-source project by [@tw93](https://github.com/tw93), licensed under [MIT](https://github.com/tw93/Mole/blob/main/LICENSE). StowMind calls it as an external CLI tool and does not bundle or modify its source code.
+
+---
+
 ## Project structure
 
 ```text
@@ -202,7 +229,7 @@ stowmind/
 │   ├── components/         # UI (e.g. Sidebar)
 │   ├── hooks/              # Theme provider
 │   ├── i18n/               # zh / en strings & I18nProvider
-│   ├── pages/              # Home, Organize, History, Statistics, Settings
+│   ├── pages/              # Home, Organize, History, Statistics, Settings, DeepClean
 │   ├── stores/             # Zustand (settings, history, stats)
 │   ├── App.tsx
 │   └── main.tsx
@@ -210,7 +237,8 @@ stowmind/
 │   ├── src/
 │   │   ├── main.rs         # Tauri commands, scan pipeline
 │   │   ├── ai.rs           # LLM providers & streaming classify
-│   │   └── organizer.rs    # Scan, move, grouping, safe cross-volume move
+│   │   ├── organizer.rs    # Scan, move, grouping, safe cross-volume move
+│   │   └── deepclean.rs    # Mole CLI integration (deep clean)
 │   ├── icons/
 │   └── tauri.conf.json
 ├── .github/workflows/      # publish.yml (Tauri builds on tag)
