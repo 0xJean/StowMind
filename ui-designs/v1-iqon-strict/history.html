@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Satoshi', 'sans-serif'] },
+                    colors: {
+                        appBg: '#09090b', cardBg: '#131418', cardHover: '#1a1b20',
+                        borderLight: 'rgba(255, 255, 255, 0.06)',
+                        accentGreen: '#00e599', accentBlue: '#00d2ff', textMuted: '#8a8b94'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; }
+        .timeline-line {
+            position: absolute;
+            left: 19px;
+            top: 24px;
+            bottom: -24px;
+            width: 1px;
+            background: #27272a;
+            z-index: 0;
+        }
+        .timeline-item:last-child .timeline-line {
+            display: none;
+        }
+    </style>
+</head>
+<body class="p-8 max-w-3xl mx-auto font-sans">
+
+    <div class="mb-12">
+        <h1 class="text-3xl font-bold tracking-tight mb-2">Activity Log</h1>
+        <p class="text-secondary text-sm">A timeline of system optimizations and changes.</p>
+    </div>
+
+    <div class="space-y-8">
+
+        <!-- Day Group -->
+        <div>
+            <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-6 pl-12">Today</h3>
+
+            <div class="space-y-0">
+                <!-- Item -->
+                <div class="relative pl-12 pb-8 timeline-item group">
+                    <div class="timeline-line"></div>
+                    <div class="absolute left-0 top-1 w-10 h-10 rounded-full bg-surface border border-border flex items-center justify-center z-10 group-hover:border-zinc-500 transition-colors">
+                        <i data-lucide="sparkles" class="w-4 h-4 text-white"></i>
+                    </div>
+
+                    <div class="bg-surface border border-border rounded-xl p-4 hover:border-zinc-700 transition-colors">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-semibold text-sm">Deep Clean Completed</h4>
+                            <span class="text-xs text-secondary font-mono">10:42 AM</span>
+                        </div>
+                        <p class="text-sm text-secondary">Freed up <span class="text-white font-medium">4.2 GB</span> by removing system caches, old logs, and emptying the trash bin.</p>
+                    </div>
+                </div>
+
+                <!-- Item -->
+                <div class="relative pl-12 pb-8 timeline-item group">
+                    <div class="timeline-line"></div>
+                    <div class="absolute left-0 top-1 w-10 h-10 rounded-full bg-surface border border-border flex items-center justify-center z-10 group-hover:border-zinc-500 transition-colors">
+                        <i data-lucide="folder-tree" class="w-4 h-4 text-zinc-400"></i>
+                    </div>
+
+                    <div class="bg-surface border border-border rounded-xl p-4 hover:border-zinc-700 transition-colors">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-semibold text-sm">Automated Organization</h4>
+                            <span class="text-xs text-secondary font-mono">09:15 AM</span>
+                        </div>
+                        <p class="text-sm text-secondary">Rule <span class="text-white font-medium">"Archive Old Downloads"</span> executed automatically. Moved 15 files.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Day Group -->
+        <div class="pt-4">
+            <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-6 pl-12">Yesterday</h3>
+
+            <div class="space-y-0">
+                <!-- Item -->
+                <div class="relative pl-12 pb-8 timeline-item group">
+                    <div class="timeline-line"></div>
+                    <div class="absolute left-0 top-1 w-10 h-10 rounded-full bg-surface border border-border flex items-center justify-center z-10 group-hover:border-zinc-500 transition-colors">
+                        <i data-lucide="layout-grid" class="w-4 h-4 text-red-400"></i>
+                    </div>
+
+                    <div class="bg-surface border border-border rounded-xl p-4 hover:border-zinc-700 transition-colors">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-semibold text-sm">Application Uninstalled</h4>
+                            <span class="text-xs text-secondary font-mono">14:30 PM</span>
+                        </div>
+                        <p class="text-sm text-secondary">Uninstalled <span class="text-white font-medium">Adobe Creative Cloud</span> and removed 1.8 GB of associated leftover files.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>

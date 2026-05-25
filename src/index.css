@@ -1,49 +1,84 @@
+@import url('https://api.fontshare.com/v2/css?f[]=satoshi@900,800,700,500,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Light theme tuned to Indigo + Zinc */
-    --background: 240 20% 99%;
-    --foreground: 240 10% 12%;
+    /* iqon-business light mode */
+    --background: 220 20% 97%;
+    --foreground: 225 15% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 12%;
-    --primary: 239 84% 67%;
+    --card-foreground: 225 15% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 225 15% 12%;
+    --surface: 220 20% 97%;
+    --surface-raised: 0 0% 100%;
+    --surface-hover: 220 15% 93%;
+    --primary: 160 100% 35%;           /* darker green for light bg */
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 8% 94%;
-    --secondary-foreground: 240 8% 20%;
-    --muted: 240 8% 96%;
-    --muted-foreground: 240 5% 40%;
-    --accent: 240 8% 94%;
-    --accent-foreground: 240 8% 20%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 240 7% 88%;
-    --input: 240 7% 88%;
-    --ring: 239 84% 67%;
-    --radius: 0.5rem;
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 225 15% 12%;
+    --muted: 220 14% 92%;
+    --muted-foreground: 220 8% 46%;
+    --accent: 160 100% 35%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 160 100% 35%;
+    --radius: 1.25rem;
+    --clean-blue: 193 80% 40%;
+    --clean-green: 160 100% 35%;
+    --clean-yellow: 38 92% 45%;
+    --clean-red: 0 84% 50%;
+    --clean-cyan: 193 80% 40%;
+    --clean-purple: 272 70% 55%;
+    --iqon-row: 220 15% 93%;
+    --iqon-border-soft: 220 13% 84%;
+    --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.08);
+    --shadow-clean: 0 18px 44px rgba(0, 0, 0, 0.12);
+    --shadow-blue: 0 0 15px rgba(0, 180, 120, 0.25);
   }
 
   .dark {
-    /* Dark theme tuned to Zinc surface + Indigo accent */
-    --background: 240 6% 10%;
-    --foreground: 240 5% 92%;
-    --card: 240 6% 12%;
-    --card-foreground: 240 5% 92%;
-    --primary: 239 84% 67%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 240 5% 92%;
-    --muted: 240 4% 14%;
-    --muted-foreground: 240 5% 64%;
-    --accent: 240 4% 18%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 240 4% 22%;
-    --input: 240 4% 22%;
-    --ring: 239 84% 67%;
+    /* iqon-business: deep black shell, raised slate cards, neon accents. */
+    --background: 240 11% 3%;          /* #08080a app shell */
+    --foreground: 0 0% 100%;
+    --card: 225 9% 8%;                 /* #111215 bento card */
+    --card-foreground: 0 0% 100%;
+    --popover: 225 9% 8%;
+    --popover-foreground: 0 0% 100%;
+    --surface: 240 11% 3%;
+    --surface-raised: 225 9% 8%;
+    --surface-hover: 225 7% 10%;       /* #16171a row hover */
+    --primary: 160 100% 45%;           /* #00e599 accentGreen */
+    --primary-foreground: 240 11% 3%;
+    --secondary: 231 8% 12%;           /* #1c1d22 cardBorder */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 231 8% 12%;
+    --muted-foreground: 225 4% 53%;    /* #82838a textMuted */
+    --accent: 160 100% 45%;
+    --accent-foreground: 240 11% 3%;
+    --destructive: 0 84% 60%;          /* #ef4444 accentRed */
+    --destructive-foreground: 0 0% 100%;
+    --border: 231 8% 12%;              /* #1c1d22 */
+    --input: 231 7% 17%;               /* #27282d */
+    --ring: 160 100% 45%;
+    --radius: 1.25rem;
+    --clean-blue: 193 100% 50%;        /* #00d2ff accentCyan */
+    --clean-green: 160 100% 45%;       /* #00e599 accentGreen */
+    --clean-yellow: 38 92% 50%;        /* #f59e0b accentYellow */
+    --clean-red: 0 84% 60%;            /* #ef4444 accentRed */
+    --clean-cyan: 193 100% 50%;
+    --clean-purple: 272 100% 65%;      /* #b14bff accentPurple */
+    --iqon-row: 225 7% 10%;            /* #16171a */
+    --iqon-border-soft: 231 7% 17%;    /* #27282d */
+    --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.4);
+    --shadow-clean: 0 18px 44px rgba(0, 0, 0, 0.55);
+    --shadow-blue: 0 0 15px rgba(0, 229, 153, 0.3);
   }
 }
 
@@ -53,30 +88,464 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Satoshi', 'Inter', ui-sans-serif, system-ui, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+    letter-spacing: 0;
+    -webkit-font-smoothing: antialiased;
   }
 }
 
-/* 禁用文本选择（桌面应用体验） */
+@layer components {
+  /* ------ iqon primitive utilities ------ */
+  .iqon-card {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 20px;
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+  }
+  .iqon-card-hover:hover {
+    border-color: hsl(var(--iqon-border-soft));
+    background-color: hsl(var(--iqon-row));
+  }
+  .iqon-row {
+    background-color: hsl(var(--iqon-row));
+    border: 1px solid hsl(var(--border));
+    border-radius: 12px;
+  }
+  .iqon-row-hover:hover {
+    border-color: hsl(var(--iqon-border-soft));
+  }
+  .iqon-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    font-size: 10px;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+  }
+  .iqon-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    flex-shrink: 0;
+  }
+  .iqon-dot-green { background-color: hsl(var(--clean-green)); box-shadow: 0 0 5px hsl(var(--clean-green)); }
+  .iqon-dot-cyan  { background-color: hsl(var(--clean-cyan));  box-shadow: 0 0 5px hsl(var(--clean-cyan));  }
+  .iqon-dot-yellow{ background-color: hsl(var(--clean-yellow));box-shadow: 0 0 5px hsl(var(--clean-yellow));}
+  .iqon-dot-red   { background-color: hsl(var(--clean-red));   box-shadow: 0 0 5px hsl(var(--clean-red));   }
+  .iqon-dot-purple{ background-color: hsl(var(--clean-purple));box-shadow: 0 0 5px hsl(var(--clean-purple));}
+  .iqon-dot-muted { background-color: hsl(var(--muted-foreground)); }
+
+  .iqon-eyebrow {
+    color: hsl(var(--muted-foreground));
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .iqon-section-label {
+    color: hsl(var(--muted-foreground));
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .iqon-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 12px;
+    background-color: hsl(var(--clean-green));
+    color: hsl(var(--background));
+    font-weight: 800;
+    font-size: 12px;
+    box-shadow: 0 0 15px rgba(0, 229, 153, 0.3);
+    transition: filter 0.2s, transform 0.1s;
+  }
+  .iqon-btn-primary:hover { filter: brightness(0.92); }
+  .iqon-btn-primary:active { transform: translateY(1px); }
+  .iqon-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+
+  .iqon-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 12px;
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+    font-weight: 700;
+    font-size: 12px;
+    transition: background-color 0.2s;
+  }
+  .iqon-btn-secondary:hover { background-color: hsl(var(--iqon-row)); }
+
+  .iqon-btn-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 10px;
+    background-color: hsl(var(--clean-red) / 0.12);
+    color: hsl(var(--clean-red));
+    border: 1px solid hsl(var(--clean-red) / 0.25);
+    font-weight: 800;
+    font-size: 10px;
+  }
+  .iqon-btn-danger:hover { background-color: hsl(var(--clean-red) / 0.2); }
+
+  .iqon-checkbox {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid hsl(var(--iqon-border-soft));
+    border-radius: 4px;
+    background-color: hsl(var(--card));
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .iqon-checkbox:checked {
+    background-color: hsl(var(--clean-green));
+    border-color: hsl(var(--clean-green));
+    box-shadow: 0 0 8px rgba(0, 229, 153, 0.4);
+  }
+  .iqon-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid hsl(var(--background));
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .iqon-toggle {
+    width: 30px;
+    height: 18px;
+    background-color: hsl(var(--iqon-border-soft));
+    border-radius: 9999px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+    border: 0;
+  }
+  .iqon-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background-color: hsl(var(--muted-foreground));
+    border-radius: 50%;
+    transition: transform 0.2s, background-color 0.2s;
+  }
+  .iqon-toggle[data-state='checked'],
+  .iqon-toggle[data-active='true'] {
+    background-color: hsl(var(--clean-green));
+    box-shadow: 0 0 8px rgba(0, 229, 153, 0.4);
+  }
+  .iqon-toggle[data-state='checked']::after,
+  .iqon-toggle[data-active='true']::after {
+    transform: translateX(12px);
+    background-color: #ffffff;
+  }
+
+  /* Colored dotted mesh. Dot color = currentColor, so set `text-iqon-green` etc on the element. */
+  .iqon-mesh {
+    background-image: radial-gradient(currentColor 1px, transparent 1px);
+    background-size: 9px 9px;
+    color: rgba(0, 0, 0, 0.12);
+    opacity: 0.55;
+    mask-image: radial-gradient(ellipse at 88% 50%, black 0%, transparent 62%);
+    -webkit-mask-image: radial-gradient(ellipse at 88% 50%, black 0%, transparent 62%);
+    transform: perspective(500px) rotateY(-22deg) rotateX(8deg) scale(1.55);
+  }
+  .dark .iqon-mesh { color: rgba(255, 255, 255, 0.32); }
+  .iqon-mesh-soft {
+    background-image: radial-gradient(currentColor 1px, transparent 1px);
+    background-size: 10px 10px;
+    color: rgba(0, 0, 0, 0.08);
+    opacity: 0.5;
+    mask-image: radial-gradient(ellipse at 90% 30%, black 0%, transparent 58%);
+    -webkit-mask-image: radial-gradient(ellipse at 90% 30%, black 0%, transparent 58%);
+  }
+  .dark .iqon-mesh-soft { color: rgba(255, 255, 255, 0.18); }
+  .iqon-mesh-center {
+    background-image: radial-gradient(currentColor 1px, transparent 1px);
+    background-size: 9px 9px;
+    color: rgba(0, 0, 0, 0.1);
+    opacity: 0.55;
+    mask-image: radial-gradient(ellipse at 75% 50%, black 0%, transparent 65%);
+    -webkit-mask-image: radial-gradient(ellipse at 75% 50%, black 0%, transparent 65%);
+  }
+  .dark .iqon-mesh-center { color: rgba(255, 255, 255, 0.28); }
+
+  .iqon-app-window {
+    background-color: hsl(var(--background));
+    border: 1px solid hsl(var(--border));
+    border-radius: 28px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+  }
+
+  .iqon-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    border-radius: 12px;
+    color: hsl(var(--muted-foreground));
+    font-weight: 700;
+    font-size: 12px;
+    transition: all 0.2s ease;
+    position: relative;
+  }
+  .iqon-nav-item:hover {
+    color: hsl(var(--foreground));
+    background-color: hsl(var(--card));
+  }
+  .iqon-nav-item[data-active='true'],
+  .iqon-nav-item.active {
+    background-color: hsl(var(--clean-green) / 0.08);
+    color: hsl(var(--clean-green));
+  }
+  .iqon-nav-item[data-active='true']::before,
+  .iqon-nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 14px;
+    border-radius: 4px;
+    background-color: hsl(var(--clean-green));
+    box-shadow: 0 0 8px hsl(var(--clean-green));
+  }
+
+  /* ------ Legacy stow-* helpers, retuned for iqon look ------ */
+  .stow-page {
+    @apply mx-auto w-full max-w-[1600px] space-y-6 p-6 md:p-8;
+  }
+  .stow-page-wide {
+    @apply mx-auto w-full max-w-[1800px] space-y-6 p-6 md:p-8;
+  }
+  .stow-clean-fullscreen {
+    @apply flex min-h-screen w-full items-center justify-center p-6 md:p-8;
+  }
+  .stow-page-header {
+    @apply flex flex-col gap-4 md:flex-row md:items-start md:justify-between;
+  }
+  .stow-panel {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 20px;
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+    color: hsl(var(--foreground));
+  }
+  .stow-panel-hover:hover {
+    border-color: hsl(var(--iqon-border-soft));
+    background-color: hsl(var(--iqon-row));
+  }
+  .stow-icon-box {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
+  }
+  .stow-row {
+    @apply rounded-xl px-4 py-3 transition-colors;
+    background-color: hsl(var(--iqon-row));
+    border: 1px solid hsl(var(--border));
+  }
+  .stow-row:hover { border-color: hsl(var(--iqon-border-soft)); }
+  .stow-section-title {
+    @apply text-base font-bold tracking-tight;
+  }
+  .stow-action-card {
+    @apply stow-panel stow-panel-hover flex h-full cursor-pointer flex-col gap-3 p-5 text-left;
+  }
+  .stow-metric-card { @apply stow-panel p-5; }
+  .stow-list-shell { @apply stow-panel overflow-hidden; }
+  .stow-list-header {
+    @apply border-b px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground;
+    border-color: hsl(var(--border));
+    background-color: hsl(var(--iqon-row));
+  }
+  .stow-list-row {
+    @apply rounded-xl px-4 py-3 transition-colors;
+    background-color: hsl(var(--iqon-row));
+    border: 1px solid hsl(var(--border));
+  }
+  .stow-list-row:hover { border-color: hsl(var(--iqon-border-soft)); }
+  .stow-dropzone {
+    @apply rounded-3xl border-2 border-dashed p-8 text-center transition-colors;
+    border-color: hsl(var(--clean-green) / 0.35);
+    background-color: hsl(var(--clean-green) / 0.06);
+  }
+  .stow-dropzone:hover { background-color: hsl(var(--clean-green) / 0.1); }
+  .stow-soft-chip {
+    @apply rounded-xl border px-3 py-1.5 text-xs font-bold;
+    background-color: hsl(var(--card));
+    border-color: hsl(var(--border));
+  }
+  .stow-rule-chip {
+    @apply rounded-lg border px-3 py-1.5 text-xs font-bold font-mono;
+    background-color: hsl(var(--secondary));
+    border-color: hsl(var(--iqon-border-soft));
+  }
+  .stow-checkbox { @apply iqon-checkbox; }
+  .stow-indeterminate-bar { animation: stow-indeterminate 1.2s ease-in-out infinite; }
+
+  .clean-scan-atlas {
+    position: relative;
+    width: 14rem;
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 35% 34%, hsl(var(--clean-cyan) / 0.38), transparent 0.55rem),
+      radial-gradient(circle at 62% 28%, hsl(var(--clean-green) / 0.28), transparent 0.42rem),
+      radial-gradient(circle at 42% 68%, hsl(var(--clean-yellow) / 0.25), transparent 0.5rem),
+      linear-gradient(135deg, hsl(var(--clean-green) / 0.26), transparent 48%),
+      hsl(var(--card));
+    border: 1px solid hsl(var(--clean-green) / 0.24);
+    box-shadow: inset -28px -18px 44px rgb(0 0 0 / 0.34), 0 24px 70px rgb(0 0 0 / 0.28);
+  }
+
+  .clean-scan-atlas::before {
+    content: "";
+    position: absolute;
+    inset: 12%;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--clean-green) / 0.22);
+    background:
+      repeating-linear-gradient(90deg, transparent 0 1.15rem, hsl(var(--foreground) / 0.08) 1.2rem 1.25rem),
+      repeating-linear-gradient(0deg, transparent 0 1.15rem, hsl(var(--foreground) / 0.06) 1.2rem 1.25rem);
+    mask-image: radial-gradient(circle, black 58%, transparent 59%);
+  }
+
+  .clean-scan-atlas::after {
+    content: "";
+    position: absolute;
+    inset: -18%;
+    background: linear-gradient(90deg, transparent 0 45%, hsl(var(--clean-cyan) / 0.2) 50%, transparent 56%);
+    transform: translateX(-45%) rotate(12deg);
+  }
+  .clean-scan-atlas-active { animation: clean-scan-float 3.8s ease-in-out infinite; }
+  .clean-scan-atlas-active::after { animation: clean-scan-sweep 2.6s ease-in-out infinite; }
+  .clean-scan-atlas-idle { border-color: hsl(var(--clean-yellow) / 0.38); }
+  .clean-scan-atlas-sweep {
+    position: absolute;
+    inset: 0;
+    background: conic-gradient(from 110deg, transparent 0 74%, hsl(var(--clean-green) / 0.34), transparent 88% 100%);
+    opacity: 0.8;
+  }
+  .clean-scan-atlas-core {
+    position: absolute;
+    inset: 50%;
+    display: flex;
+    width: 4.75rem;
+    height: 4.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1.55rem;
+    color: hsl(var(--clean-green));
+    background: hsl(var(--background) / 0.74);
+    border: 1px solid hsl(var(--clean-green) / 0.28);
+    box-shadow: 0 0 28px hsl(var(--clean-green) / 0.18), inset 0 1px 0 hsl(var(--foreground) / 0.08);
+    transform: translate(-50%, -50%);
+  }
+  .clean-scan-atlas-complete {
+    border-color: hsl(var(--clean-green) / 0.45);
+  }
+  .clean-scan-atlas-error {
+    border-color: hsl(var(--destructive) / 0.5);
+    background:
+      radial-gradient(circle at 35% 34%, hsl(var(--destructive) / 0.28), transparent 0.55rem),
+      radial-gradient(circle at 62% 28%, hsl(var(--clean-yellow) / 0.22), transparent 0.42rem),
+      linear-gradient(135deg, hsl(var(--destructive) / 0.2), transparent 48%),
+      hsl(var(--card));
+  }
+  .clean-scan-atlas-logo {
+    width: 3.55rem;
+    height: 3.55rem;
+    border-radius: 1.15rem;
+    object-fit: contain;
+    filter: drop-shadow(0 10px 18px rgb(0 0 0 / 0.28));
+  }
+  .clean-scan-atlas-badge {
+    position: absolute;
+    right: 2.35rem;
+    bottom: 2.4rem;
+    display: flex;
+    width: 1.75rem;
+    height: 1.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 2px solid hsl(var(--card));
+    background: hsl(var(--clean-green));
+    color: hsl(var(--background));
+    box-shadow: 0 10px 26px rgb(0 0 0 / 0.32);
+  }
+  .clean-scan-atlas-badge-error {
+    background: hsl(var(--destructive));
+    color: hsl(var(--destructive-foreground));
+  }
+}
+
+@keyframes stow-indeterminate {
+  0% { transform: translateX(-125%); }
+  100% { transform: translateX(325%); }
+}
+@keyframes clean-scan-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-0.55rem); }
+}
+@keyframes clean-scan-sweep {
+  0% { transform: translateX(-52%) rotate(12deg); }
+  100% { transform: translateX(52%) rotate(12deg); }
+}
+
+@keyframes iqon-pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.55; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+.iqon-pulse {
+  animation: iqon-pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
 body {
   user-select: none;
   -webkit-user-select: none;
+  background: hsl(var(--background));
 }
 
-/* 滚动条样式 */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  @apply bg-muted;
-}
-
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  @apply bg-muted-foreground/30 rounded;
+  background: hsl(var(--border));
+  border-radius: 10px;
 }
-
-::-webkit-scrollbar-thumb:hover {
-  @apply bg-muted-foreground/50;
-}
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--iqon-border-soft)); }

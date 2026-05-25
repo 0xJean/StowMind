@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: {
+                        appBg: '#0b0c10', cardBg: '#14161c',
+                        textMain: '#ffffff', textMuted: '#8b949e',
+                        brandBlue: '#5c33ff', brandHover: '#4a24e6',
+                        borderLight: '#22252e',
+                        accentGreen: '#05cd99', accentYellow: '#ffce20', accentRed: '#ee5d50', accentCyan: '#39b8ff'
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 30px rgba(0, 0, 0, 0.4)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; font-family: 'Poppins', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+        .dark-card { background-color: #14161c; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); border: 1px solid #22252e; transition: transform 0.2s ease; }
+        .dark-card:hover { transform: translateY(-2px); border-color: #30363d; }
+    </style>
+</head>
+<body class="p-8 h-full overflow-y-auto">
+
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl font-bold text-white">Space Analyzer</h1>
+            <p class="text-sm text-[#8b949e]">Visual map of your disk usage</p>
+        </div>
+        <button class="px-5 py-2.5 bg-[#14161c] border border-[#22252e] shadow-soft text-white rounded-xl text-sm font-semibold hover:bg-[#1c1e26] transition-colors flex items-center gap-2">
+            <i data-lucide="refresh-cw" class="w-4 h-4 text-[#5c33ff]"></i> Rescan
+        </button>
+    </div>
+
+    <div class="grid grid-cols-12 gap-8">
+        <!-- Left: Folder Tree -->
+        <div class="col-span-8 dark-card p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-bold text-white">Macintosh HD</h3>
+                <div class="flex items-center gap-2 bg-[#5c33ff]/10 border border-[#5c33ff]/20 px-3 py-1.5 rounded-lg">
+                    <i data-lucide="hard-drive" class="w-4 h-4 text-[#5c33ff]"></i>
+                    <span class="text-sm font-semibold text-[#5c33ff]">494.38 GB</span>
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <!-- Item 1 -->
+                <div class="flex items-center justify-between p-3 hover:bg-[#1c1e26] rounded-xl cursor-pointer transition-colors group">
+                    <div class="flex items-center gap-4">
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-[#8b949e]"></i>
+                        <div class="w-10 h-10 rounded-xl bg-[#5c33ff]/10 border border-[#5c33ff]/20 text-[#5c33ff] flex items-center justify-center">
+                            <i data-lucide="folder" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold text-white">Users</h4>
+                            <p class="text-xs text-[#8b949e]">12 items</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="w-32 h-2 bg-[#22252e] rounded-full overflow-hidden">
+                            <div class="h-full bg-[#5c33ff] rounded-full" style="width: 60%"></div>
+                        </div>
+                        <span class="text-sm font-semibold text-white w-20 text-right">120.5 GB</span>
+                    </div>
+                </div>
+
+                <!-- Item 2 -->
+                <div class="flex items-center justify-between p-3 hover:bg-[#1c1e26] rounded-xl cursor-pointer transition-colors group">
+                    <div class="flex items-center gap-4">
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-[#8b949e]"></i>
+                        <div class="w-10 h-10 rounded-xl bg-[#05cd99]/10 border border-[#05cd99]/20 text-[#05cd99] flex items-center justify-center">
+                            <i data-lucide="folder" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold text-white">Applications</h4>
+                            <p class="text-xs text-[#8b949e]">142 items</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="w-32 h-2 bg-[#22252e] rounded-full overflow-hidden">
+                            <div class="h-full bg-[#05cd99] rounded-full" style="width: 25%"></div>
+                        </div>
+                        <span class="text-sm font-semibold text-white w-20 text-right">45.2 GB</span>
+                    </div>
+                </div>
+
+                <!-- Item 3 -->
+                <div class="flex items-center justify-between p-3 hover:bg-[#1c1e26] rounded-xl cursor-pointer transition-colors group">
+                    <div class="flex items-center gap-4">
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-[#8b949e]"></i>
+                        <div class="w-10 h-10 rounded-xl bg-[#ee5d50]/10 border border-[#ee5d50]/20 text-[#ee5d50] flex items-center justify-center">
+                            <i data-lucide="folder" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold text-white">System</h4>
+                            <p class="text-xs text-[#8b949e]">System files</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="w-32 h-2 bg-[#22252e] rounded-full overflow-hidden">
+                            <div class="h-full bg-[#ee5d50] rounded-full" style="width: 15%"></div>
+                        </div>
+                        <span class="text-sm font-semibold text-white w-20 text-right">22.5 GB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Visual Chart -->
+        <div class="col-span-4 dark-card p-6 flex flex-col items-center justify-center relative">
+            <h3 class="text-lg font-bold text-white absolute top-6 left-6">Distribution</h3>
+
+            <div class="relative w-56 h-56 mt-8">
+                <svg viewBox="0 0 100 100" class="w-full h-full transform -rotate-90">
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="#22252e" stroke-width="16" />
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="#5c33ff" stroke-width="16" stroke-dasharray="150 251.2" stroke-dashoffset="0" />
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="#05cd99" stroke-width="16" stroke-dasharray="60 251.2" stroke-dashoffset="-150" />
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="#ee5d50" stroke-width="16" stroke-dasharray="30 251.2" stroke-dashoffset="-210" />
+                </svg>
+                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <span class="text-3xl font-bold text-white">188<span class="text-lg text-[#8b949e]">GB</span></span>
+                    <span class="text-xs text-[#8b949e] mt-1">Used Space</span>
+                </div>
+            </div>
+
+            <div class="w-full mt-8 space-y-4">
+                <div class="flex justify-between items-center text-sm">
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-[#5c33ff]"></div><span class="text-[#8b949e] font-medium">Users</span></div>
+                    <span class="text-white font-bold">63%</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-[#05cd99]"></div><span class="text-[#8b949e] font-medium">Applications</span></div>
+                    <span class="text-white font-bold">24%</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-[#ee5d50]"></div><span class="text-[#8b949e] font-medium">System</span></div>
+                    <span class="text-white font-bold">13%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

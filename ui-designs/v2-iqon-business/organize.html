@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Satoshi', 'sans-serif'] },
+                    colors: {
+                        appBg: '#08080a', cardBg: '#111215', cardBorder: '#1c1d22',
+                        textMain: '#ffffff', textMuted: '#82838a',
+                        accentGreen: '#00e599', accentCyan: '#00d2ff', accentPurple: '#b14bff'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; }
+        .bento-card {
+            background-color: #111215; border: 1px solid #1c1d22; border-radius: 20px; transition: all 0.3s ease;
+        }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1c1d22; border-radius: 10px; }
+
+        /* Custom Toggle */
+        .toggle-switch {
+            width: 28px; height: 16px;
+            background-color: #27282d; border-radius: 100px;
+            position: relative; cursor: pointer; transition: background-color 0.2s;
+        }
+        .toggle-switch.active {
+            background-color: #00e599; box-shadow: 0 0 8px rgba(0, 229, 153, 0.4);
+        }
+        .toggle-switch::after {
+            content: ''; position: absolute; top: 2px; left: 2px;
+            width: 12px; height: 12px; background-color: #82838a; border-radius: 50%;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        .toggle-switch.active::after {
+            transform: translateX(12px); background-color: #ffffff;
+        }
+
+        .rule-line {
+            position: absolute; left: 23px; top: 40px; bottom: 40px;
+            width: 2px; background: #1c1d22; z-index: 0;
+        }
+    </style>
+</head>
+<body class="p-8 font-sans h-full flex flex-col overflow-hidden">
+
+    <div class="flex justify-between items-center mb-6 flex-shrink-0">
+        <div>
+            <p class="text-[#82838a] text-[10px] font-bold tracking-widest uppercase mb-0.5">Optimize</p>
+            <h1 class="text-2xl font-bold tracking-tight">Organize Files</h1>
+        </div>
+        <button class="px-4 py-2 bg-[#111215] border border-[#1c1d22] hover:bg-[#16171a] rounded-xl text-xs font-bold transition-colors flex items-center gap-2">
+            <i data-lucide="plus" class="w-3 h-3"></i> Create Rule
+        </button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0 overflow-y-auto pr-2">
+
+        <!-- Rule Card 1 -->
+        <div class="bento-card p-6 relative group flex flex-col">
+            <div class="flex justify-between items-start mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-[#00e599]/10 border border-[#00e599]/20 flex items-center justify-center">
+                        <i data-lucide="download" class="w-4 h-4 text-[#00e599]"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-sm text-white">Archive Old Downloads</h3>
+                        <p class="text-[9px] text-[#82838a] mt-0.5">Runs automatically</p>
+                    </div>
+                </div>
+                <div class="toggle-switch active"></div>
+            </div>
+
+            <div class="relative pl-12 space-y-5 text-xs z-10 flex-1">
+                <div class="rule-line"></div>
+
+                <div class="flex items-center gap-3 relative">
+                    <div class="w-2.5 h-2.5 rounded-full bg-[#111215] border-2 border-[#82838a] absolute -left-[27px] z-10"></div>
+                    <span class="text-[#82838a] font-bold uppercase tracking-wider text-[9px] w-8">IF in</span>
+                    <span class="font-mono bg-[#1c1d22] px-2 py-0.5 rounded border border-[#27282d] text-white text-[10px]">~/Downloads</span>
+                </div>
+
+                <div class="flex items-center gap-3 relative">
+                    <div class="w-2.5 h-2.5 rounded-full bg-[#111215] border-2 border-[#82838a] absolute -left-[27px] z-10"></div>
+                    <span class="text-[#82838a] font-bold uppercase tracking-wider text-[9px] w-8">AND</span>
+                    <span class="font-medium text-white text-[10px]">Older than 30 days</span>
+                </div>
+
+                <div class="flex items-center gap-3 relative">
+                    <div class="w-2.5 h-2.5 rounded-full bg-[#111215] border-2 border-[#00e599] absolute -left-[27px] z-10 shadow-[0_0_5px_#00e599]"></div>
+                    <span class="text-[#00e599] font-bold uppercase tracking-wider text-[9px] w-8">THEN</span>
+                    <span class="text-white font-medium text-[10px]">Move to</span>
+                    <span class="font-mono bg-[#1c1d22] px-2 py-0.5 rounded border border-[#27282d] text-white text-[10px]">~/Archive/Downloads</span>
+                </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-[#1c1d22] flex justify-between items-center">
+                <span class="text-[9px] text-[#82838a] font-medium">Last run: 2 hours ago</span>
+                <div class="flex gap-2">
+                    <button class="p-1.5 hover:bg-[#1c1d22] rounded-lg text-[#82838a] hover:text-white transition-colors"><i data-lucide="edit-2" class="w-3 h-3"></i></button>
+                    <button class="p-1.5 hover:bg-[#1c1d22] rounded-lg text-[#82838a] hover:text-white transition-colors"><i data-lucide="play" class="w-3 h-3"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rule Card 2 -->
+        <div class="bento-card p-6 relative group flex flex-col opacity-60 hover:opacity-100">
+            <div class="flex justify-between items-start mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-[#1c1d22] border border-[#27282d] flex items-center justify-center">
+                        <i data-lucide="image" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-sm text-white">Sort Screenshots</h3>
+                        <p class="text-[9px] text-[#82838a] mt-0.5">Disabled</p>
+                    </div>
+                </div>
+                <div class="toggle-switch"></div>
+            </div>
+
+            <div class="relative pl-12 space-y-5 text-xs z-10 flex-1">
+                <div class="rule-line"></div>
+
+                <div class="flex items-center gap-3 relative">
+                    <div class="w-2.5 h-2.5 rounded-full bg-[#111215] border-2 border-[#82838a] absolute -left-[27px] z-10"></div>
+                    <span class="text-[#82838a] font-bold uppercase tracking-wider text-[9px] w-8">IF in</span>
+                    <span class="font-mono bg-[#1c1d22] px-2 py-0.5 rounded border border-[#27282d] text-white text-[10px]">~/Desktop</span>
+                </div>
+
+                <div class="flex items-center gap-3 relative">
+                    <div class="w-2.5 h-2.5 rounded-full bg-[#111215] border-2 border-[#82838a] absolute -left-[27px] z-10"></div>
+                    <span class="text-[#82838a] font-bold uppercase tracking-wider text-[9px] w-8">AND</span>
+                    <span class="font-medium text-white text-[10px]">Name starts with "Screen Shot"</span>
+                </div>
+
+                <div class="flex items-center gap-3 relative">
+                    <div class="w-2.5 h-2.5 rounded-full bg-[#111215] border-2 border-white absolute -left-[27px] z-10"></div>
+                    <span class="text-white font-bold uppercase tracking-wider text-[9px] w-8">THEN</span>
+                    <span class="text-white font-medium text-[10px]">Move to</span>
+                    <span class="font-mono bg-[#1c1d22] px-2 py-0.5 rounded border border-[#27282d] text-white text-[10px]">~/Pictures/Screenshots</span>
+                </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-[#1c1d22] flex justify-between items-center">
+                <span class="text-[9px] text-[#82838a] font-medium">Never run</span>
+                <div class="flex gap-2">
+                    <button class="p-1.5 hover:bg-[#1c1d22] rounded-lg text-[#82838a] hover:text-white transition-colors"><i data-lucide="edit-2" class="w-3 h-3"></i></button>
+                    <button class="p-1.5 hover:bg-[#1c1d22] rounded-lg text-[#82838a] hover:text-white transition-colors"><i data-lucide="play" class="w-3 h-3"></i></button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        lucide.createIcons();
+        document.querySelectorAll('.toggle-switch').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                toggle.classList.toggle('active');
+            });
+        });
+    </script>
+</body>
+</html>

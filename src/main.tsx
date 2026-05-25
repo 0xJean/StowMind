@@ -8,6 +8,9 @@ import { ThemeProvider } from './hooks/useTheme'
 import { I18nProvider } from './i18n'
 import './index.css'
 
+// iqon design system is dark-only; lock it in before first paint.
+document.documentElement.classList.add('dark')
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>

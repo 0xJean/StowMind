@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use crate::organizer::{FileItem, Category};
+use crate::organizer::{Category, FileItem};
 use futures_util::StreamExt;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AIProvider {
@@ -66,7 +66,10 @@ pub async fn test_connection(provider: &AIProvider) -> bool {
         "ollama" => {
             let host = provider.host.as_deref().unwrap_or("http://localhost:11434");
             let url = format!("{}/api/tags", host);
-            reqwest::get(&url).await.map(|r| r.status().is_success()).unwrap_or(false)
+            reqwest::get(&url)
+                .await
+                .map(|r| r.status().is_success())
+                .unwrap_or(false)
         }
         "openai" => {
             if let Some(api_key) = &provider.api_key {
@@ -112,9 +115,9 @@ where
     F: FnMut(String) + Send,
 {
     let category_names: Vec<&str> = categories.iter().map(|c| c.name.as_str()).collect();
-    
+
     let system_prompt = "你是一个文件分类助手。根据文件名，将文件分类到最合适的类别中。只返回类别名称，不要其他内容。";
-    
+
     let user_prompt = format!(
         "请将文件 \"{}\" 分类到以下类别之一：{}\n只返回类别名称，不要解释。",
         file.name,
@@ -122,7 +125,9 @@ where
     );
 
     let response = match provider.provider_type.as_str() {
-        "ollama" => call_ollama_stream(provider, system_prompt, &user_prompt, &mut on_thinking).await?,
+        "ollama" => {
+            call_ollama_stream(provider, system_prompt, &user_prompt, &mut on_thinking).await?
+        }
         "openai" => call_openai(provider, system_prompt, &user_prompt).await?,
         "claude" => call_claude(provider, system_prompt, &user_prompt).await?,
         _ => return Err("不支持的 AI 提供商".into()),
@@ -169,11 +174,7 @@ where
     };
 
     let client = reqwest::Client::new();
-    let response = client
-        .post(&url)
-        .json(&request)
-        .send()
-        .await?;
+    let response = client.post(&url).json(&request).send().await?;
 
     let mut stream = response.bytes_stream();
     let mut full_content = String::new();
@@ -182,16 +183,16 @@ where
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
         buffer.push_str(&String::from_utf8_lossy(&chunk));
-        
+
         // 处理可能的多行 JSON
         while let Some(newline_pos) = buffer.find('\n') {
             let line = buffer[..newline_pos].to_string();
             buffer = buffer[newline_pos + 1..].to_string();
-            
+
             if line.trim().is_empty() {
                 continue;
             }
-            
+
             if let Ok(resp) = serde_json::from_str::<OllamaChatResponse>(&line) {
                 if let Some(msg) = resp.message {
                     // 输出 thinking 内容
@@ -205,7 +206,7 @@ where
                         full_content.push_str(&content);
                     }
                 }
-                
+
                 if resp.done == Some(true) {
                     break;
                 }
@@ -248,7 +249,9 @@ async fn call_openai(
         .json()
         .await?;
 
-    Ok(response.choices.first()
+    Ok(response
+        .choices
+        .first()
         .map(|c| c.message.content.clone())
         .unwrap_or_default())
 }

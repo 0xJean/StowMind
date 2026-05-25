@@ -1,17 +1,15 @@
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/i18n'
-import { formatFileSize, pathRoughlyEqual } from '@/lib/utils'
+import { cn, formatFileSize, pathRoughlyEqual } from '@/lib/utils'
 import { FileItem, FolderItem, MoveRecord, OrganizeOutcome, useAppStore } from '@/stores/app'
 import { open } from '@tauri-apps/api/dialog'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/tauri'
-import { Brain, Eye, Folder, FolderOpen, Keyboard, Loader2, Play, RotateCcw, Scan, Undo2 } from 'lucide-react'
+import { ArrowRight, Brain, Eye, Folder, FolderOpen, Keyboard, Loader2, Play, RotateCcw, Scan, Undo2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
@@ -42,7 +40,7 @@ export function OrganizePage() {
   const [organizing, setOrganizing] = useState(false)
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [thinkingText, setThinkingText] = useState('')
-  const [useAI, setUseAI] = useState(true)
+  const [useAI, setUseAI] = useState(false)
   const [organizeFolders, setOrganizeFolders] = useState(false)
   const [showTempFiles, setShowTempFiles] = useState(true)
   const [dragOver, setDragOver] = useState(false)
@@ -73,7 +71,7 @@ export function OrganizePage() {
     const unlisten = listen<ScanProgress>('scan-progress', (event) => {
       const data = event.payload
       setProgress(data)
-      
+
       if (data.status === 'thinking' && data.thinking) {
         setThinkingText(prev => prev + data.thinking)
       } else if (data.status === 'classified' || data.status === 'error') {
@@ -126,13 +124,13 @@ export function OrganizePage() {
 
   const scanDirectory = async () => {
     if (!directory) return
-    
+
     setScanning(true)
     setProgress(null)
     setThinkingText('')
     setFiles([])
     setFolders([])
-    
+
     try {
       const fileResult = await invoke<FileItem[]>('scan_directory', {
         directory,
@@ -145,7 +143,7 @@ export function OrganizePage() {
         excludePatterns: excludePatterns
       })
       setFiles(fileResult)
-      
+
       if (organizeFolders) {
         const folderResult = await invoke<FolderItem[]>('scan_folders_cmd', {
           directory,
@@ -439,35 +437,51 @@ export function OrganizePage() {
 
   return (
     <div
-      className="p-6 space-y-6 relative"
+      className="stow-page-wide relative"
       onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false) }}
       onDrop={(e) => { setDragOver(false); handleDrop(e) }}
     >
       {previewOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <Card className="w-full max-w-3xl max-h-[85vh] flex flex-col shadow-lg border-border">
-            <CardHeader className="shrink-0 space-y-1">
-              <CardTitle className="text-lg">{t('organize.previewTitle')}</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                {t('organize.previewHint', { n: previewMoves.length })}
-              </p>
-            </CardHeader>
-            <CardContent className="overflow-y-auto flex-1 min-h-0 space-y-3">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="iqon-card flex max-h-[85vh] w-full max-w-3xl flex-col">
+            <div className="shrink-0 space-y-1 border-b border-iqon-border p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="iqon-eyebrow">{t('organize.previewTitle')}</p>
+                  <h3 className="mt-1 text-base font-bold text-foreground">
+                    {t('organize.previewHint', { n: previewMoves.length })}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewOpen(false)}
+                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-iqon-row hover:text-foreground"
+                  aria-label={t('organize.previewClose')}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
               {previewMoves.length > 0 && (
-                <div className="rounded-md border border-border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50 sticky top-0">
+                <div className="overflow-hidden rounded-2xl border border-iqon-border">
+                  <table className="w-full">
+                    <thead className="sticky top-0 bg-iqon-row">
                       <tr>
-                        <th className="text-left p-2 font-medium w-[45%]">{t('organize.previewFrom')}</th>
-                        <th className="text-left p-2 font-medium w-[45%]">{t('organize.previewTo')}</th>
+                        <th className="w-[45%] p-3 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                          {t('organize.previewFrom')}
+                        </th>
+                        <th className="w-[45%] p-3 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                          {t('organize.previewTo')}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {previewMoves.map((m, i) => (
-                        <tr key={`${m.from}-${i}`} className="border-t border-border align-top">
-                          <td className="p-2 break-all font-mono text-xs">{m.from}</td>
-                          <td className="p-2 break-all font-mono text-xs">{m.to}</td>
+                        <tr key={`${m.from}-${i}`} className="border-t border-iqon-border align-top hover:bg-iqon-row">
+                          <td className="break-all p-3 font-mono text-[11px] text-muted-foreground">{m.from}</td>
+                          <td className="break-all p-3 font-mono text-[11px] text-foreground">{m.to}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -475,49 +489,48 @@ export function OrganizePage() {
                 </div>
               )}
               {previewErrors.length > 0 && (
-                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3">
-                  <p className="text-sm font-medium text-destructive mb-2">{t('organize.previewErrors')}</p>
-                  <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
+                <div className="iqon-card border-iqon-red/30 bg-iqon-red/5 p-3">
+                  <p className="text-xs font-bold text-iqon-red">{t('organize.previewErrors')}</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-muted-foreground">
                     {previewErrors.map((e, i) => (
-                      <li key={i}>{e}</li>
+                      <li key={i} className="break-words">{e}</li>
                     ))}
                   </ul>
                 </div>
               )}
-            </CardContent>
-            <div className="flex flex-wrap justify-end gap-2 p-4 border-t shrink-0">
-              <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+            </div>
+            <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-iqon-border p-4">
+              <Button variant="outline" size="sm" onClick={() => setPreviewOpen(false)}>
                 {t('organize.previewClose')}
               </Button>
-              <Button onClick={applyAfterPreview} disabled={previewMoves.length === 0}>
+              <Button size="sm" onClick={applyAfterPreview} disabled={previewMoves.length === 0}>
                 {t('organize.previewExecute')}
               </Button>
             </div>
-          </Card>
+          </div>
         </div>
       )}
 
       {dragOver && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-lg backdrop-blur-sm">
+        <div className="absolute inset-0 z-50 flex items-center justify-center rounded-2xl border-2 border-dashed border-iqon-green bg-iqon-green/10 backdrop-blur-sm">
           <div className="text-center">
-            <FolderOpen className="w-16 h-16 mx-auto text-primary mb-3" />
-            <p className="text-lg font-medium text-primary">{t('organize.dialogTitle')}</p>
+            <FolderOpen className="mx-auto mb-3 h-16 w-16 text-iqon-green" />
+            <p className="text-base font-bold text-iqon-green">{t('organize.dialogTitle')}</p>
           </div>
         </div>
       )}
       <div>
-        <h1 className="text-2xl font-bold">{t('organize.title')}</h1>
-        <p className="text-muted-foreground">{t('organize.subtitle')}</p>
+        <p className="iqon-eyebrow mb-1">{t('eyebrow.optimize')}</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t('organize.title')}</h1>
+        <p className="mt-1 text-xs text-muted-foreground">{t('organize.subtitle')}</p>
       </div>
 
       {showGuideCard && (
-        <Card className="bg-muted/30 border-dashed">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t('organize.guideTitle')}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-3">
+        <div className="iqon-card border-dashed bg-iqon-row p-5">
+          <h3 className="text-sm font-bold text-foreground">{t('organize.guideTitle')}</h3>
+          <div className="mt-3 space-y-3 text-xs text-muted-foreground">
             {!directory ? (
-              <ol className="list-decimal pl-5 space-y-1.5">
+              <ol className="list-decimal space-y-1.5 pl-5">
                 <li>{t('organize.guideStep1')}</li>
                 <li>{t('organize.guideStep2')}</li>
                 <li>{t('organize.guideStep3')}</li>
@@ -526,35 +539,35 @@ export function OrganizePage() {
             ) : (
               <p>{t('organize.guideAfterDir')}</p>
             )}
-            <p className="flex items-center gap-2 pt-1 text-xs border-t border-border/60">
-              <Keyboard className="w-4 h-4 shrink-0" aria-hidden />
+            <p className="flex items-center gap-2 border-t border-iqon-border pt-3 text-[11px]">
+              <Keyboard className="h-3.5 w-3.5 shrink-0" aria-hidden />
               {t('organize.shortcutHint')}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {showUndoBanner && lastOrganizeRecord && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm">
-            <p className="font-medium text-amber-900 dark:text-amber-100">
+        <div className="iqon-card flex flex-col gap-3 border-iqon-yellow/30 bg-iqon-yellow/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="flex items-center gap-2 text-sm font-bold text-iqon-yellow">
+              <Undo2 className="h-4 w-4" />
               {t('organize.undoBannerTitle')}
             </p>
-            <p className="text-muted-foreground mt-1">
+            <p className="mt-1 text-[11px] text-muted-foreground">
               {t('organize.undoBannerHint', { n: lastOrganizeRecord.moves.length })}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 shrink-0">
+          <div className="flex shrink-0 flex-wrap gap-2">
             <Button
-              variant="default"
               size="sm"
               disabled={undoingLast}
               onClick={() => void handleUndoLastOrganize()}
             >
               {undoingLast ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Undo2 className="w-4 h-4 mr-2" />
+                <Undo2 className="mr-2 h-4 w-4" />
               )}
               {t('organize.undoBannerBtn')}
             </Button>
@@ -565,182 +578,174 @@ export function OrganizePage() {
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('organize.selectDir')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-3">
+      <div className="iqon-card p-5">
+        <h3 className="mb-4 text-sm font-bold text-foreground">{t('organize.selectDir')}</h3>
+        <div className="space-y-4">
+          <div className="flex gap-2">
             <Input
               value={directory}
               onChange={(e) => setDirectory(e.target.value)}
               placeholder={t('organize.inputPlaceholder')}
-              className="flex-1"
+              className="flex-1 font-mono text-xs"
             />
             <Button variant="outline" onClick={selectDirectory}>
-              <FolderOpen className="w-4 h-4 mr-2" />
+              <FolderOpen className="mr-2 h-4 w-4" />
               {t('organize.browse')}
             </Button>
           </div>
-          
+
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <label className="iqon-row flex cursor-pointer items-center gap-2 px-3 py-2">
                 <Switch checked={useAI} onCheckedChange={setUseAI} />
-                <span className="text-sm">{t('organize.aiClassify')}</span>
-              </div>
-              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold">{t('organize.aiClassify')}</span>
+              </label>
+              <label className="iqon-row flex cursor-pointer items-center gap-2 px-3 py-2">
                 <Switch checked={organizeFolders} onCheckedChange={setOrganizeFolders} />
-                <span className="text-sm">{t('organize.subFolders')}</span>
-              </div>
-              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold">{t('organize.subFolders')}</span>
+              </label>
+              <label className="iqon-row flex cursor-pointer items-center gap-2 px-3 py-2">
                 <Switch checked={showTempFiles} onCheckedChange={setShowTempFiles} />
-                <span className="text-sm">{t('organize.showTemp')}</span>
-              </div>
-              <div className="flex items-start gap-2">
+                <span className="text-xs font-bold">{t('organize.showTemp')}</span>
+              </label>
+              <label className="iqon-row flex cursor-pointer items-start gap-2 px-3 py-2">
                 <Switch checked={scanRecursive} onCheckedChange={setScanRecursive} />
                 <div>
-                  <span className="text-sm">{t('organize.recursiveScan')}</span>
-                  <p className="text-xs text-muted-foreground max-w-[20rem]">
+                  <p className="text-xs font-bold">{t('organize.recursiveScan')}</p>
+                  <p className="max-w-[20rem] text-[10px] text-muted-foreground">
                     {t('organize.recursiveScanHint')}
                   </p>
                 </div>
-              </div>
+              </label>
             </div>
 
             <Button onClick={scanDirectory} disabled={!directory || scanning} className="shrink-0">
               {scanning ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Scan className="w-4 h-4 mr-2" />
+                <Scan className="mr-2 h-4 w-4" />
               )}
               {scanning ? t('organize.scanning') : t('organize.scanFiles')}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {scanning && progress && (
-        <Card className="border-primary/50">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                {useAI ? (
-                  <>
-                    <Brain className="w-5 h-5 text-primary animate-pulse" />
-                    {t('organize.aiAnalyzing')}
-                  </>
-                ) : (
-                  <>
-                    <Scan className="w-5 h-5 text-primary animate-pulse" />
-                    {t('organize.nowScanning')}
-                  </>
+        <div className="iqon-card border-iqon-cyan/30 bg-iqon-cyan/5 p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+              {useAI ? (
+                <>
+                  <Brain className="h-4 w-4 animate-pulse text-iqon-cyan" />
+                  {t('organize.aiAnalyzing')}
+                </>
+              ) : (
+                <>
+                  <Scan className="h-4 w-4 animate-pulse text-iqon-cyan" />
+                  {t('organize.nowScanning')}
+                </>
+              )}
+            </div>
+            <span className="iqon-pill border-iqon-cyan/40 text-iqon-cyan">
+              {progress.current} / {progress.total}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3 text-[11px]">
+              <span className="iqon-eyebrow shrink-0">{t('organize.currentFile')}</span>
+              <span className="max-w-md truncate font-mono text-foreground">{progress.file_name}</span>
+            </div>
+            <Progress value={progressPercent} className="h-1.5" />
+          </div>
+
+          <div className="mt-4 text-xs">
+            {progress.status === 'scanning' && (
+              <span className="flex items-center gap-2 text-iqon-cyan">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t('organize.readingInfo')}
+              </span>
+            )}
+
+            {progress.status === 'thinking' && useAI && (
+              <div className="space-y-2">
+                <span className="flex items-center gap-2 text-iqon-yellow">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {t('organize.aiThinking')}
+                </span>
+                {thinkingText && (
+                  <div className="iqon-row max-h-32 overflow-y-auto p-3">
+                    <p className="whitespace-pre-wrap font-mono text-[10px] text-muted-foreground">
+                      {thinkingText.slice(-500)}
+                    </p>
+                  </div>
                 )}
-              </CardTitle>
-              <Badge variant="outline">
-                {progress.current} / {progress.total}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{t('organize.currentFile')}</span>
-                <span className="font-medium truncate max-w-md">{progress.file_name}</span>
               </div>
-              <Progress value={progressPercent} className="h-2" />
-            </div>
-            
-            <div className="flex items-center gap-2 text-sm">
-              {progress.status === 'scanning' && (
-                <span className="text-blue-500 flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {t('organize.readingInfo')}
-                </span>
-              )}
-              
-              {progress.status === 'thinking' && useAI && (
-                <div className="space-y-2 w-full">
-                  <span className="text-yellow-500 flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('organize.aiThinking')}
-                  </span>
-                  {thinkingText && (
-                    <div className="bg-muted/50 rounded-lg p-3 max-h-32 overflow-y-auto">
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap font-mono">
-                        {thinkingText.slice(-500)}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {progress.status === 'classified' && progress.category && (
-                <span className="text-green-500 flex items-center gap-2">
-                  {t('organize.classifiedAs')} <Badge>{progress.category}</Badge>
-                </span>
-              )}
-              
-              {progress.status === 'grouping' && (
-                <span className="text-purple-500 flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {t('organize.analyzingSimilarity')}
-                </span>
-              )}
-              
-              {progress.status === 'error' && progress.thinking && (
-                <span className="text-red-500">{progress.thinking}</span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            )}
+
+            {progress.status === 'classified' && progress.category && (
+              <span className="flex items-center gap-2 text-iqon-green">
+                {t('organize.classifiedAs')}
+                <span className="iqon-pill border-iqon-green/40 text-iqon-green">{progress.category}</span>
+              </span>
+            )}
+
+            {progress.status === 'grouping' && (
+              <span className="flex items-center gap-2 text-iqon-purple">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t('organize.analyzingSimilarity')}
+              </span>
+            )}
+
+            {progress.status === 'error' && progress.thinking && (
+              <span className="text-iqon-red">{progress.thinking}</span>
+            )}
+          </div>
+        </div>
       )}
 
       {organizing && (
-        <Card className="border-primary/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              {t('organize.organizeProgressTitle')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {organizeProgress ? (
-              <>
-                <div className="flex justify-between text-xs text-muted-foreground gap-2">
-                  <span>
-                    {organizeProgress.phase === 'files'
-                      ? t('organize.organizePhaseFiles')
-                      : t('organize.organizePhaseFolders')}
-                  </span>
-                  <span className="shrink-0">
-                    {organizeProgress.current} / {organizeProgress.total}
-                  </span>
-                </div>
-                <Progress value={organizeProgressPercent} className="h-2" />
-                <p
-                  className="text-xs font-mono truncate text-muted-foreground"
-                  title={organizeProgress.path}
-                >
-                  {organizeProgress.path}
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t('organize.organizing')}</p>
-            )}
-          </CardContent>
-        </Card>
+        <div className="iqon-card border-iqon-green/30 bg-iqon-green/5 p-5">
+          <div className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
+            <Loader2 className="h-4 w-4 animate-spin text-iqon-green" />
+            {t('organize.organizeProgressTitle')}
+          </div>
+          {organizeProgress ? (
+            <div className="space-y-2">
+              <div className="flex justify-between gap-2 text-[11px]">
+                <span className="iqon-eyebrow">
+                  {organizeProgress.phase === 'files'
+                    ? t('organize.organizePhaseFiles')
+                    : t('organize.organizePhaseFolders')}
+                </span>
+                <span className="shrink-0 font-mono text-foreground">
+                  {organizeProgress.current} / {organizeProgress.total}
+                </span>
+              </div>
+              <Progress value={organizeProgressPercent} className="h-1.5" />
+              <p
+                className="truncate font-mono text-[10px] text-muted-foreground"
+                title={organizeProgress.path}
+              >
+                {organizeProgress.path}
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">{t('organize.organizing')}</p>
+          )}
+        </div>
       )}
 
       {(files.length > 0 || folders.length > 0) && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+        <div className="iqon-card p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <CardTitle>
+              <h3 className="text-sm font-bold text-foreground">
                 {t('organize.resultTitle')} ({t('organize.nFiles', { n: files.length })}
                 {folders.length > 0 ? `, ${t('organize.nFolders', { n: folders.length })}` : ''})
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
                 {t('organize.resultMoving', {
                   moving: movingCount,
                   total: files.length + folders.length
@@ -748,206 +753,214 @@ export function OrganizePage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => { setFiles([]); setFolders([]) }}>
-                <RotateCcw className="w-4 h-4 mr-2" />
+              <Button variant="outline" size="sm" onClick={() => { setFiles([]); setFolders([]) }}>
+                <RotateCcw className="mr-2 h-4 w-4" />
                 {t('organize.reset')}
               </Button>
               <Button
                 variant="outline"
+                size="sm"
                 onClick={runPreview}
                 disabled={organizing || scanning || movingCount === 0}
               >
                 {organizePhase === 'preview' && organizing ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <Eye className="w-4 h-4 mr-2" />
+                  <Eye className="mr-2 h-4 w-4" />
                 )}
                 {t('organize.preview')}
               </Button>
               <Button
+                size="sm"
                 onClick={organizeFiles}
                 disabled={organizing || scanning || movingCount === 0}
               >
                 {organizePhase === 'execute' && organizing ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <Play className="w-4 h-4 mr-2" />
+                  <Play className="mr-2 h-4 w-4" />
                 )}
                 {organizePhase === 'execute' && organizing ? t('organize.organizing') : t('organize.execute')}
               </Button>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {folders.length > 0 && (
-                <div className="space-y-2 pb-4 border-b">
-                  <h3 className="font-medium text-sm text-muted-foreground">{t('organize.subFolderLabel')}</h3>
-                  {Object.entries(
-                    folders.reduce((acc, folder) => {
-                      if (!acc[folder.category]) acc[folder.category] = []
-                      acc[folder.category].push(folder)
-                      return acc
-                    }, {} as Record<string, FolderItem[]>)
-                  ).map(([category, categoryFolders]) => {
-                    const cat = categories.find(c => c.name === category)
-                    return (
-                      <div key={category} className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">{cat?.icon || '📁'}</span>
-                          <span className="font-medium">{category}</span>
-                          <Badge variant="secondary">{categoryFolders.length}</Badge>
-                        </div>
-                        <div className="pl-8 space-y-1 max-h-32 overflow-y-auto">
-                          {categoryFolders.map((folder) => (
-                            <div
-                              key={folder.path}
-                              className={`flex flex-wrap items-center gap-2 p-2 rounded bg-muted/50 text-sm ${
-                                folder.skip ? 'opacity-60' : ''
-                              }`}
-                            >
-                              <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(folder.skip)}
-                                  onChange={(e) => setFolderSkip(folder.path, e.target.checked)}
-                                  className="h-4 w-4 rounded border border-input"
-                                  aria-label={t('organize.skipThisRun')}
-                                />
-                                <span className="sr-only">{t('organize.skipThisRun')}</span>
-                              </label>
-                              <div className="flex items-center gap-2 min-w-0 flex-1 basis-[10rem]">
-                                <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
-                                <span className="truncate max-w-md">{folder.name}</span>
-                              </div>
-                              <div className="w-[min(100%,10rem)] sm:w-40 shrink-0">
-                                <Select
-                                  value={folder.category}
-                                  onValueChange={(v) => setFolderCategory(folder.path, v)}
-                                >
-                                  <SelectTrigger className="h-8 text-xs" aria-label={t('organize.categoryColumn')}>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {categories.map((c) => (
-                                      <SelectItem key={c.name} value={c.name}>
-                                        <span className="mr-1">{c.icon}</span>
-                                        {c.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="flex items-center gap-3 text-muted-foreground shrink-0 ml-auto">
-                                <span>{t('organize.nFiles', { n: folder.fileCount })}</span>
-                                <span>{formatFileSize(folder.totalSize)}</span>
-                              </div>
+          </div>
+
+          <div className="mt-5 space-y-5">
+            {folders.length > 0 && (
+              <div className="space-y-3 border-b border-iqon-border pb-5">
+                <p className="iqon-eyebrow">{t('organize.subFolderLabel')}</p>
+                {Object.entries(
+                  folders.reduce((acc, folder) => {
+                    if (!acc[folder.category]) acc[folder.category] = []
+                    acc[folder.category].push(folder)
+                    return acc
+                  }, {} as Record<string, FolderItem[]>)
+                ).map(([category, categoryFolders]) => {
+                  const cat = categories.find(c => c.name === category)
+                  return (
+                    <div key={category} className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-iqon-cyan/30 bg-iqon-cyan/10 text-iqon-cyan">
+                          {cat?.icon || <Folder className="h-4 w-4" />}
+                        </span>
+                        <span className="text-sm font-bold text-foreground">{category}</span>
+                        <span className="iqon-pill border-iqon-cyan/40 text-iqon-cyan">{categoryFolders.length}</span>
+                      </div>
+                      <div className="max-h-32 space-y-1.5 overflow-y-auto pl-2">
+                        {categoryFolders.map((folder) => (
+                          <div
+                            key={folder.path}
+                            className={cn(
+                              'iqon-row iqon-row-hover flex flex-wrap items-center gap-2 px-3 py-2 text-xs',
+                              folder.skip && 'opacity-60'
+                            )}
+                          >
+                            <label className="flex shrink-0 cursor-pointer items-center gap-1.5">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(folder.skip)}
+                                onChange={(e) => setFolderSkip(folder.path, e.target.checked)}
+                                className="iqon-checkbox"
+                                aria-label={t('organize.skipThisRun')}
+                              />
+                              <span className="sr-only">{t('organize.skipThisRun')}</span>
+                            </label>
+                            <div className="flex min-w-0 flex-1 basis-[10rem] items-center gap-2">
+                              <Folder className="h-4 w-4 shrink-0 text-iqon-cyan" />
+                              <span className="max-w-md truncate font-bold text-foreground">{folder.name}</span>
                             </div>
-                          ))}
+                            <div className="w-[min(100%,10rem)] shrink-0 sm:w-40">
+                              <Select
+                                value={folder.category}
+                                onValueChange={(v) => setFolderCategory(folder.path, v)}
+                              >
+                                <SelectTrigger className="h-8 text-xs" aria-label={t('organize.categoryColumn')}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {categories.map((c) => (
+                                    <SelectItem key={c.name} value={c.name}>
+                                      <span className="mr-1">{c.icon}</span>
+                                      {c.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="ml-auto flex shrink-0 items-center gap-3 font-mono text-[10px] text-muted-foreground">
+                              <span>{t('organize.nFiles', { n: folder.fileCount })}</span>
+                              <span className="font-bold text-foreground">{formatFileSize(folder.totalSize)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {Object.entries(groupedFiles).map(([category, categoryFiles]) => {
+              const cat = categories.find(c => c.name === category)
+
+              const bySubFolder = categoryFiles.reduce((acc, file) => {
+                const key = file.subFolder || '_root'
+                if (!acc[key]) acc[key] = []
+                acc[key].push(file)
+                return acc
+              }, {} as Record<string, FileItem[]>)
+
+              return (
+                <div key={category} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-iqon-green/30 bg-iqon-green/10 text-iqon-green">
+                      {cat?.icon || <Folder className="h-4 w-4" />}
+                    </span>
+                    <span className="text-sm font-bold text-foreground">{category}</span>
+                    <span className="iqon-pill border-iqon-green/40 text-iqon-green">{categoryFiles.length}</span>
+                  </div>
+
+                  <div className="space-y-3 pl-2">
+                    {Object.entries(bySubFolder).map(([subFolder, subFiles]) => (
+                      <div key={subFolder} className="space-y-1">
+                        {subFolder !== '_root' && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <FolderOpen className="h-3.5 w-3.5" />
+                            <span className="font-bold">{subFolder}</span>
+                            <span className="iqon-pill text-[9px]">
+                              {t('organize.nSimilar', { n: subFiles.length })}
+                            </span>
+                          </div>
+                        )}
+                        <div className={cn('max-h-48 space-y-1.5 overflow-y-auto', subFolder !== '_root' && 'pl-5')}>
+                          {subFiles.map((file) => {
+                            const dest = [file.category, subFolder !== '_root' ? subFolder : null, file.name]
+                              .filter(Boolean)
+                              .join('/')
+                            return (
+                              <div
+                                key={file.path}
+                                className={cn(
+                                  'iqon-row iqon-row-hover flex flex-wrap items-center gap-2 px-3 py-2 text-xs',
+                                  file.skip && 'opacity-60'
+                                )}
+                              >
+                                <label className="flex shrink-0 cursor-pointer items-center gap-1.5">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(file.skip)}
+                                    onChange={(e) => setFileSkip(file.path, e.target.checked)}
+                                    className="iqon-checkbox"
+                                    aria-label={t('organize.skipThisRun')}
+                                  />
+                                  <span className="sr-only">{t('organize.skipThisRun')}</span>
+                                </label>
+                                <div className="min-w-0 flex-1 basis-[12rem]">
+                                  <span className="block max-w-md truncate font-bold text-foreground">{file.name}</span>
+                                  <span className="block max-w-md truncate font-mono text-[10px] text-muted-foreground">
+                                    <ArrowRight className="mr-1 inline h-3 w-3" />
+                                    {dest}
+                                  </span>
+                                </div>
+                                <div className="w-[min(100%,10rem)] shrink-0 sm:w-40">
+                                  <Select
+                                    value={file.category}
+                                    onValueChange={(v) => setFileCategory(file.path, v)}
+                                  >
+                                    <SelectTrigger className="h-8 text-xs" aria-label={t('organize.categoryColumn')}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {categories.map((c) => (
+                                        <SelectItem key={c.name} value={c.name}>
+                                          <span className="mr-1">{c.icon}</span>
+                                          {c.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="ml-auto flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
+                                  <span className="font-mono font-bold text-foreground">{formatFileSize(file.size)}</span>
+                                  <span className={cn(
+                                    'iqon-pill text-[9px]',
+                                    file.method === 'ai' ? 'border-iqon-purple/40 text-iqon-purple' : ''
+                                  )}>
+                                    {methodLabel(file.method)}
+                                  </span>
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              )}
-              
-              {Object.entries(groupedFiles).map(([category, categoryFiles]) => {
-                const cat = categories.find(c => c.name === category)
-                
-                const bySubFolder = categoryFiles.reduce((acc, file) => {
-                  const key = file.subFolder || '_root'
-                  if (!acc[key]) acc[key] = []
-                  acc[key].push(file)
-                  return acc
-                }, {} as Record<string, FileItem[]>)
-                
-                return (
-                  <div key={category} className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">{cat?.icon || '📁'}</span>
-                      <span className="font-medium">{category}</span>
-                      <Badge variant="secondary">{categoryFiles.length}</Badge>
-                    </div>
-                    
-                    <div className="pl-8 space-y-3">
-                      {Object.entries(bySubFolder).map(([subFolder, subFiles]) => (
-                        <div key={subFolder} className="space-y-1">
-                          {subFolder !== '_root' && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <span>📂</span>
-                              <span>{subFolder}</span>
-                              <Badge variant="outline" className="text-xs">
-                                {t('organize.nSimilar', { n: subFiles.length })}
-                              </Badge>
-                            </div>
-                          )}
-                          <div className={`space-y-1 max-h-48 overflow-y-auto ${subFolder !== '_root' ? 'pl-6' : ''}`}>
-                            {subFiles.map((file) => {
-                              const dest = [file.category, subFolder !== '_root' ? subFolder : null, file.name]
-                                .filter(Boolean)
-                                .join('/')
-                              return (
-                                <div
-                                  key={file.path}
-                                  className={`flex flex-wrap items-center gap-2 p-2 rounded bg-muted/50 text-sm ${
-                                    file.skip ? 'opacity-60' : ''
-                                  }`}
-                                >
-                                  <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(file.skip)}
-                                      onChange={(e) => setFileSkip(file.path, e.target.checked)}
-                                      className="h-4 w-4 rounded border border-input"
-                                      aria-label={t('organize.skipThisRun')}
-                                    />
-                                    <span className="sr-only">{t('organize.skipThisRun')}</span>
-                                  </label>
-                                  <div className="min-w-0 flex-1 basis-[12rem]">
-                                    <span className="truncate block max-w-md">{file.name}</span>
-                                    <span className="text-xs text-muted-foreground truncate block max-w-md">
-                                      → {dest}
-                                    </span>
-                                  </div>
-                                  <div className="w-[min(100%,10rem)] sm:w-40 shrink-0">
-                                    <Select
-                                      value={file.category}
-                                      onValueChange={(v) => setFileCategory(file.path, v)}
-                                    >
-                                      <SelectTrigger className="h-8 text-xs" aria-label={t('organize.categoryColumn')}>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {categories.map((c) => (
-                                          <SelectItem key={c.name} value={c.name}>
-                                            <span className="mr-1">{c.icon}</span>
-                                            {c.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="flex items-center gap-3 text-muted-foreground shrink-0 ml-auto">
-                                    <span>{formatFileSize(file.size)}</span>
-                                    <Badge
-                                      variant={file.method === 'ai' ? 'default' : 'outline'}
-                                      className="text-xs"
-                                    >
-                                      {methodLabel(file.method)}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    ))}
                   </div>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       )}
     </div>
   )

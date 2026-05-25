@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Satoshi', 'sans-serif'] },
+                    colors: {
+                        appBg: '#09090b', cardBg: '#131418', cardHover: '#1a1b20',
+                        borderLight: 'rgba(255, 255, 255, 0.06)',
+                        accentGreen: '#00e599', accentBlue: '#00d2ff', textMuted: '#8a8b94'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; }
+        .bento-card {
+            background-color: #131418;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 24px;
+        }
+
+        /* Table styling */
+        th { text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.1em; color: #8a8b94; font-weight: 700; }
+        tr { border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+        tr:last-child { border-bottom: none; }
+
+        /* Custom Checkbox */
+        .custom-checkbox {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            background-color: transparent;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+        .custom-checkbox:checked {
+            background-color: #00e599;
+            border-color: #00e599;
+            box-shadow: 0 0 10px rgba(0, 229, 153, 0.3);
+        }
+        .custom-checkbox:checked::after {
+            content: '';
+            position: absolute;
+            left: 5px;
+            top: 1px;
+            width: 4px;
+            height: 9px;
+            border: solid #09090b;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+    </style>
+</head>
+<body class="p-8 font-sans h-full overflow-y-auto">
+
+    <div class="flex justify-between items-end mb-8">
+        <div>
+            <p class="text-textMuted text-xs font-semibold tracking-widest uppercase mb-1">Optimize</p>
+            <h1 class="text-3xl font-bold tracking-tight">App Uninstaller</h1>
+        </div>
+
+        <div class="relative">
+            <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-textMuted"></i>
+            <input type="text" placeholder="Search apps..." class="w-64 bg-[rgba(255,255,255,0.03)] border border-borderLight rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-[rgba(255,255,255,0.2)] transition-colors placeholder-textMuted text-white">
+        </div>
+    </div>
+
+    <div class="bento-card overflow-hidden">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-[rgba(255,255,255,0.02)]">
+                    <th class="py-4 px-6 w-12"><input type="checkbox" class="custom-checkbox"></th>
+                    <th class="py-4 px-4">Application</th>
+                    <th class="py-4 px-6 text-right">Size</th>
+                    <th class="py-4 px-6 text-right">Last Used</th>
+                    <th class="py-4 px-6 text-right">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="hover:bg-[rgba(255,255,255,0.02)] transition-colors group">
+                    <td class="py-4 px-6"><input type="checkbox" class="custom-checkbox"></td>
+                    <td class="py-4 px-4 flex items-center gap-4">
+                        <div class="w-10 h-10 bg-[rgba(255,255,255,0.05)] rounded-xl flex items-center justify-center border border-borderLight">
+                            <i data-lucide="figma" class="w-5 h-5 text-white"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm">Figma</div>
+                            <div class="text-xs text-textMuted mt-0.5">Version 116.15.4</div>
+                        </div>
+                    </td>
+                    <td class="py-4 px-6 text-right font-mono text-sm font-bold">845 MB</td>
+                    <td class="py-4 px-6 text-right text-sm text-textMuted font-medium">Today</td>
+                    <td class="py-4 px-6 text-right">
+                        <button class="opacity-0 group-hover:opacity-100 px-4 py-1.5 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg text-xs font-bold transition-all border border-red-500/20">Uninstall</button>
+                    </td>
+                </tr>
+
+                <tr class="hover:bg-[rgba(255,255,255,0.02)] transition-colors group">
+                    <td class="py-4 px-6"><input type="checkbox" class="custom-checkbox"></td>
+                    <td class="py-4 px-4 flex items-center gap-4">
+                        <div class="w-10 h-10 bg-[rgba(255,255,255,0.05)] rounded-xl flex items-center justify-center border border-borderLight">
+                            <i data-lucide="slack" class="w-5 h-5 text-white"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm">Slack</div>
+                            <div class="text-xs text-textMuted mt-0.5">Version 4.36.136</div>
+                        </div>
+                    </td>
+                    <td class="py-4 px-6 text-right font-mono text-sm font-bold">512 MB</td>
+                    <td class="py-4 px-6 text-right text-sm text-textMuted font-medium">2 weeks ago</td>
+                    <td class="py-4 px-6 text-right">
+                        <button class="opacity-0 group-hover:opacity-100 px-4 py-1.5 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg text-xs font-bold transition-all border border-red-500/20">Uninstall</button>
+                    </td>
+                </tr>
+
+                <tr class="hover:bg-[rgba(255,255,255,0.02)] transition-colors group">
+                    <td class="py-4 px-6"><input type="checkbox" class="custom-checkbox"></td>
+                    <td class="py-4 px-4 flex items-center gap-4">
+                        <div class="w-10 h-10 bg-[rgba(255,255,255,0.05)] rounded-xl flex items-center justify-center border border-borderLight">
+                            <i data-lucide="box" class="w-5 h-5 text-white"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm">Docker</div>
+                            <div class="text-xs text-textMuted mt-0.5">Version 4.27.1</div>
+                        </div>
+                    </td>
+                    <td class="py-4 px-6 text-right font-mono text-sm font-bold">1.4 GB</td>
+                    <td class="py-4 px-6 text-right text-sm text-textMuted font-medium">Yesterday</td>
+                    <td class="py-4 px-6 text-right">
+                        <button class="opacity-0 group-hover:opacity-100 px-4 py-1.5 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg text-xs font-bold transition-all border border-red-500/20">Uninstall</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>

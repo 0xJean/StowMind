@@ -1,4 +1,6 @@
 import { Button } from '@/components/ui/button'
+import { useI18n } from '@/i18n'
+import { loadResultSnapshot, resultCacheKeys, saveResultSnapshot } from '@/lib/resultCache'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/tauri'
 import { FitAddon } from '@xterm/addon-fit'
@@ -8,9 +10,7 @@ import { Terminal } from 'xterm'
 import 'xterm/css/xterm.css'
 
 interface TerminalPanelProps {
-  /** Command to execute, e.g. "mo" or "mo clean" */
   command: string
-  /** Callback when the terminal is closed */
   onClose: () => void
 }
 
@@ -24,6 +24,14 @@ interface PtyExitEvent {
   code: number | null
 }
 
+interface TerminalOutputSnapshot {
+  command: string
+  output: string
+  exitCode: number | null
+}
+
+const MAX_TERMINAL_CACHE_LENGTH = 24_000
+
 function base64ToUint8Array(base64: string): Uint8Array {
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
@@ -31,11 +39,61 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return bytes
 }
 
-export function TerminalPanel({ command, onClose }: TerminalPanelProps) {
+function splitCommand(command: string) {
+  const parts: string[] = []
+  let current = ''
+  let quote: '"' | "'" | null = null
+  let escaping = false
+
+  for (const char of command.trim()) {
+    if (escaping) {
+      current += char
+      escaping = false
+      continue
+    }
+
+    if (char === '\\') {
+      escaping = true
+      continue
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null
+      } else {
+        current += char
+      }
+      continue
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+
+    if (/\s/.test(char)) {
+      if (current) {
+        parts.push(current)
+        current = ''
+      }
+      continue
+    }
+
+    current += char
+  }
+
+  if (escaping) current += '\\'
+  if (current) parts.push(current)
+  return parts
+}
+
+export function TerminalPanel({ command }: TerminalPanelProps) {
+  const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const sessionIdRef = useRef<number | null>(null)
+  const outputRef = useRef('')
   const [spawning, setSpawning] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -43,7 +101,7 @@ export function TerminalPanel({ command, onClose }: TerminalPanelProps) {
     setSpawning(true)
     setError(null)
 
-    const parts = command.trim().split(/\s+/)
+    const parts = splitCommand(command)
     const cmd = parts[0]
     const args = parts.slice(1)
 
@@ -112,11 +170,19 @@ export function TerminalPanel({ command, onClose }: TerminalPanelProps) {
 
     // Set up event listeners and spawn session
     const setup = async () => {
+      const snapshot = await loadResultSnapshot<TerminalOutputSnapshot>(resultCacheKeys.moleConsole(command))
+      if (snapshot?.payload.output) {
+        term.write(`\x1b[90m[${t('deepclean.cachedOutput')}]\x1b[0m\r\n`)
+        term.write(snapshot.payload.output.slice(-MAX_TERMINAL_CACHE_LENGTH))
+        term.write(`\r\n\x1b[90m[${t('deepclean.startingSession')}]\x1b[0m\r\n`)
+      }
+
       // Listen for PTY output
       const unlistenOutput = await listen<PtyOutputEvent>('pty-output', (event) => {
         if (event.payload.id === sessionIdRef.current) {
           const bytes = base64ToUint8Array(event.payload.data)
           term.write(bytes)
+          outputRef.current = `${outputRef.current}${new TextDecoder().decode(bytes)}`.slice(-MAX_TERMINAL_CACHE_LENGTH)
         }
       })
       unlisteners.push(unlistenOutput)
@@ -125,7 +191,15 @@ export function TerminalPanel({ command, onClose }: TerminalPanelProps) {
       const unlistenExit = await listen<PtyExitEvent>('pty-exit', (event) => {
         if (event.payload.id === sessionIdRef.current) {
           const code = event.payload.code
-          term.write(`\r\n\x1b[90m[Process exited${code != null ? ` with code ${code}` : ''}]\x1b[0m\r\n`)
+          const message = code != null
+            ? t('deepclean.processExitedWithCode', { code })
+            : t('deepclean.processExited')
+          term.write(`\r\n\x1b[90m[${message}]\x1b[0m\r\n`)
+          void saveResultSnapshot<TerminalOutputSnapshot>(resultCacheKeys.moleConsole(command), {
+            command,
+            output: outputRef.current,
+            exitCode: code,
+          })
         }
       })
       unlisteners.push(unlistenExit)
@@ -184,8 +258,7 @@ export function TerminalPanel({ command, onClose }: TerminalPanelProps) {
       // Dispose terminal
       term.dispose()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [command, t])
 
   const handleRetry = () => {
     if (terminalRef.current) {
@@ -200,7 +273,7 @@ export function TerminalPanel({ command, onClose }: TerminalPanelProps) {
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0d1117]">
           <div className="flex items-center gap-2 text-[#8b949e]">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span className="font-mono text-sm">Starting terminal...</span>
+            <span className="font-mono text-sm">{t('deepclean.startingTerminal')}</span>
           </div>
         </div>
       )}
@@ -208,7 +281,7 @@ export function TerminalPanel({ command, onClose }: TerminalPanelProps) {
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0d1117] gap-3">
           <p className="text-red-400 text-sm font-mono">{error}</p>
           <Button variant="outline" size="sm" onClick={handleRetry}>
-            Retry
+            {t('deepclean.retryTerminal')}
           </Button>
         </div>
       )}

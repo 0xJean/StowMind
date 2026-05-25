@@ -4,9 +4,9 @@
 
 # StowMind
 
-**AI file organizer · 智能文件整理**
+**Smart cleanup and AI file organization · 智能清理与整理**
 
-*一款注重速度与隐私的桌面应用：先规则、后 AI，可预览再整理，支持撤销；部分失败时成功项仍会保留。*
+*一款注重隐私的桌面应用：以清理空间和系统维护为主线，同时保留规则优先、AI 辅助的文件整理能力。*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-indigo.svg)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-1.5-24C8D8?logo=tauri&logoColor=white)](https://tauri.app/)
@@ -38,7 +38,11 @@
 
 ## 为什么选择 StowMind
 
-下载目录、项目目录里文件一多就难以维护。StowMind 先**扫描**目录，支持逐条**调整分类**，可选**预览移动**（不落盘），再**执行整理**；整理后可在历史或整理页**一键撤销**，跨卷时在无法 `rename` 时用**复制+删除**安全完成移动。
+磁盘空间通常被多个来源一起占用：系统缓存、构建产物、安装包残留、重复文件，以及越来越乱的下载目录和项目目录。StowMind 正在升级为以**清理**为核心的桌面工具，同时把 AI 文件整理保留为特色能力：该由 Mole 清理的交给 Mole，不该删除的用户文件帮助归档和移动。
+
+清理能力的边界很明确：StowMind 的核心清理功能基于 Mole 的真实命令或脚本函数实现；StowMind 负责原生 UI、预览解析、确认、历史和统计，不自研一套清理/删除器。重复文件是辅助检查工具，用于找出相同内容副本，不属于 Mole 清理，也不计入核心清理能力。
+
+现有 AI 整理流程继续保留：StowMind 先**扫描**目录，支持逐条**调整分类**，可选**预览移动**（不落盘），再**执行整理**；整理后可在历史或整理页**一键撤销**，跨卷时在无法 `rename` 时用**复制+删除**安全完成移动。
 
 **部分成功不回滚**：有失败项时，已成功移动的文件会保留，失败原因会记录，而不是整批撤销。分类以**规则优先**（扩展名、文件名关键词、父目录名提示）为主，日常文件不必调用大模型。开启 **「AI 仅用于疑难文件」**（默认开启）可在保证效果的同时显著节省时间与 API 成本。
 
@@ -48,6 +52,12 @@
 
 | 模块 | 说明 |
 |------|------|
+| **系统清理** | StowMind 原生页面，真实调用 `mo clean --dry-run` 预览系统缓存、日志、浏览器缓存和开发工具缓存 |
+| **磁盘分析** | StowMind 原生页面，真实调用 `mo analyze -json <path>` 输出 |
+| **构建产物** | 复用 Mole purge 逻辑，对用户选择的项目目录做 dry-run 预览，并通过 Mole purge 执行清理 |
+| **安装包清理** | 复用 Mole installer 的真实扫描与清理函数，处理 `.dmg`、`.pkg`、`.iso`、`.xip` 和安装型 `.zip` |
+| **Mole Console** | 高级入口继续保留，支持运行 `mo`、`mo clean`、`mo uninstall`、`mo optimize`、`mo analyze`、`mo status`、`mo purge`、`mo installer` |
+| **重复文件辅助检查** | 先按大小分组，再用 SHA-256 全文件哈希找出相同内容副本；只检查，不执行清理 |
 | **分类** | 扩展名 + 关键词 + 目录提示规则；可选 Ollama / OpenAI / Claude |
 | **成本与速度** | 默认「疑难才问 AI」：规则能命中则不请求模型 |
 | **一致性** | 相似文件名分组；多数投票可统一同组分类 |
@@ -57,7 +67,6 @@
 | **体验** | 整理页拖拽文件夹；浅色 / 深色 / 跟随系统；**中英文**界面 |
 | **规则编辑** | 可折叠分类卡片、关键词编辑、排序、一键恢复默认规则 |
 | **数据洞察** | 历史搜索与筛选；统计与近 7 日趋势 |
-| **深度清理** | 集成 [Mole](https://github.com/tw93/Mole) 实现系统缓存清理、构建产物清除、磁盘空间分析（支持 macOS 与 [Windows](https://github.com/tw93/Mole/tree/windows)） |
 
 ---
 
@@ -168,6 +177,10 @@ pnpm tauri build
 4. 使用 **测试连接** 验证。
 5. 建议保持 **AI 仅用于疑难文件** 开启，以减少调用次数。
 
+### Mole 系统设置
+
+**设置 → Mole 系统设置** 会集中展示 Mole 的系统级入口：随系统启动、Full Disk Access、Delete mode、License activation 和 Planet landing。部分项会直接打开系统设置；高风险动作仍回退到 Mole Console。
+
 ### 界面语言
 
 **设置 → 语言**：可选 **中文** 或 **English**。偏好保存在本地存储键 `stowmind-locale`；若曾使用旧版，数据会从 `ai-file-organizer` 自动迁移。
@@ -189,6 +202,29 @@ pnpm tauri build
 1. 选择文件夹并 **扫描**（需要子目录文件时打开 **递归扫描文件**）。
 2. 调整 **分类**，或对不需要移动的项勾选 **本次不移动**。
 3. 使用 **预览移动** 查看计划，再 **执行整理**（也可在确认对话框后直接执行）。
+
+### 系统清理与 Mole Console
+
+StowMind 集成 [Mole](https://github.com/tw93/Mole) — 由 [@tw93](https://github.com/tw93) 开发的开源（MIT）macOS/Windows 深度清理工具 — 作为系统级清理和维护能力来源。
+
+在侧边栏进入 **系统清理**，StowMind 会真实调用 `mo clean --dry-run`，把 Mole 的分组预览、可释放空间、条目数和原始输出展示为原生页面。该页目前只读预览，执行仍通过 Mole Console 中的 `mo clean` 完成。
+
+进入 **构建产物** 或 **安装包**，StowMind 会复用 Mole `purge.sh` / `installer.sh` 的真实扫描与清理函数。预览由 Mole dry-run 或扫描函数产生；执行时仍调用 Mole 自己的 purge / installer 清理逻辑，StowMind 不直接删除文件。安装包执行前会重新运行 Mole installer 扫描，只清理 Mole 仍能识别的安装包路径。
+
+在侧边栏进入 **Mole Console**，可继续使用现有 Mole Console 命令：
+
+| 入口 | Mole 命令 | 说明 |
+|-----|-------------|--------------|
+| 交互菜单 | `mo` | 打开 Mole 交互式主菜单 |
+| 系统清理 | `mo clean` | 清理系统缓存、应用日志、浏览器残留、开发工具缓存 |
+| 应用卸载 | `mo uninstall` | 卸载应用并扫描相关残留 |
+| 系统优化 | `mo optimize` | 执行缓存重建、诊断日志清理等维护任务 |
+| 磁盘分析 | `mo analyze` | 分析目录空间占用并定位大文件 |
+| 系统状态 | `mo status` | 查看 CPU、内存、磁盘、网络等状态 |
+| 构建产物 | `mo purge` | 清理 `node_modules`、`target`、`.build` 等构建产物 |
+| 安装包清理 | `mo installer` | 查找 `.dmg`、`.pkg` 等安装包文件 |
+
+控制台式集成会继续保留，作为执行入口、高级入口、兼容入口和排障入口。所有核心清理路径都必须对接 Mole 的真实能力；若 Mole 没有对应能力，例如重复文件删除，StowMind 只提供辅助检查，不把它包装成核心清理。
 
 ---
 

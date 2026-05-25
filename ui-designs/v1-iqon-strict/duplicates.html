@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Satoshi', 'sans-serif'] },
+                    colors: {
+                        appBg: '#09090b', cardBg: '#131418', cardHover: '#1a1b20',
+                        borderLight: 'rgba(255, 255, 255, 0.06)',
+                        accentGreen: '#00e599', accentBlue: '#00d2ff', textMuted: '#8a8b94'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; }
+        .bento-card {
+            background-color: #131418;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 24px;
+        }
+        .scan-pulse {
+            animation: pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="p-8 font-sans h-full flex flex-col overflow-hidden">
+
+    <div class="flex justify-between items-end mb-8 flex-shrink-0">
+        <div>
+            <p class="text-textMuted text-xs font-semibold tracking-widest uppercase mb-1">Optimize</p>
+            <h1 class="text-3xl font-bold tracking-tight">Find Duplicates</h1>
+        </div>
+    </div>
+
+    <div class="flex-1 bento-card flex flex-col items-center justify-center text-center p-12 relative overflow-hidden">
+
+        <!-- Background abstract mesh -->
+        <div class="absolute inset-0 opacity-30" style="background: radial-gradient(circle at center, rgba(0, 210, 255, 0.15) 0%, transparent 60%);"></div>
+
+        <!-- Decorative rings -->
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] border border-[rgba(255,255,255,0.02)] rounded-full"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[450px] h-[450px] border border-[rgba(255,255,255,0.02)] rounded-full"></div>
+
+        <div class="relative mb-10">
+            <div class="absolute inset-0 bg-accentBlue rounded-full scan-pulse"></div>
+            <div class="w-24 h-24 bg-cardBg border border-borderLight rounded-full flex items-center justify-center relative z-10 shadow-[0_0_30px_rgba(0,210,255,0.2)]">
+                <i data-lucide="copy" class="w-10 h-10 text-accentBlue"></i>
+            </div>
+        </div>
+
+        <h2 class="text-3xl font-bold mb-4 relative z-10">Scan for duplicates</h2>
+        <p class="text-textMuted max-w-md mb-10 relative z-10 text-sm leading-relaxed">Select a directory to scan. We'll analyze file contents with SHA-256 checksums to find true duplicates safely, even if they have different names.</p>
+
+        <div class="flex gap-4 relative z-10">
+            <button class="px-6 py-3 bg-[rgba(255,255,255,0.05)] border border-borderLight hover:bg-[rgba(255,255,255,0.1)] rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
+                <i data-lucide="folder" class="w-4 h-4"></i> Choose Folder
+            </button>
+            <button class="px-8 py-3 bg-accentBlue text-black hover:bg-[#00bfff] rounded-xl text-sm font-bold transition-colors shadow-[0_0_15px_rgba(0,210,255,0.3)]">
+                Start Scan
+            </button>
+        </div>
+
+        <div class="mt-12 text-xs text-textMuted relative z-10 flex items-center gap-2 bg-[rgba(255,255,255,0.03)] px-4 py-2 rounded-lg border border-borderLight">
+            <div class="w-2 h-2 rounded-full bg-accentGreen shadow-[0_0_8px_#00e599]"></div>
+            System files are automatically excluded from the scan.
+        </div>
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>

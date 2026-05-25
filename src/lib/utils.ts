@@ -8,9 +8,14 @@ export function cn(...inputs: ClassValue[]) {
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1)
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+export function formatDecimal(value: number, digits = 1): string {
+  if (!Number.isFinite(value)) return '—'
+  return value.toFixed(digits)
 }
 
 /** 比较两条路径是否指向同一位置（忽略 / 与 \\、大小写） */

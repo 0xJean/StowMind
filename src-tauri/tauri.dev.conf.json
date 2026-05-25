@@ -1,0 +1,22 @@
+{
+  "build": {
+    "beforeDevCommand": "pnpm exec vite --host 127.0.0.1 --port 1422 --strictPort true",
+    "devPath": "http://127.0.0.1:1422"
+  },
+  "package": {
+    "productName": "StowMind Dev"
+  },
+  "tauri": {
+    "bundle": {
+      "identifier": "com.stowmind.dev"
+    },
+    "systemTray": {
+      "title": "StowMind Dev"
+    },
+    "windows": [
+      {
+        "title": "StowMind Dev"
+      }
+    ]
+  }
+}

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Satoshi', 'sans-serif'] },
+                    colors: {
+                        appBg: '#09090b', cardBg: '#131418', cardHover: '#1a1b20',
+                        borderLight: 'rgba(255, 255, 255, 0.06)',
+                        accentGreen: '#00e599', accentBlue: '#00d2ff', textMuted: '#8a8b94'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; }
+        .bento-card {
+            background-color: #131418;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 24px;
+            transition: all 0.3s ease;
+        }
+        .bento-card:hover {
+            background-color: #16171b;
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+        .status-dot { box-shadow: 0 0 8px currentColor; }
+
+        /* Sunburst placeholder */
+        .sunburst-placeholder {
+            background: radial-gradient(circle at center, transparent 20%, rgba(255, 255, 255, 0.05) 21%, rgba(255, 255, 255, 0.05) 40%, transparent 41%, transparent 45%, rgba(0, 210, 255, 0.1) 46%, rgba(0, 210, 255, 0.1) 70%, transparent 71%, transparent 75%, rgba(0, 229, 153, 0.1) 76%, rgba(0, 229, 153, 0.1) 100%);
+            border-radius: 50%;
+            position: relative;
+        }
+        .sunburst-placeholder::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: conic-gradient(from 0deg, transparent 0deg 80deg, #131418 80deg 82deg, transparent 82deg 160deg, #131418 160deg 162deg, transparent 162deg 240deg, #131418 240deg 242deg, transparent 242deg 320deg, #131418 320deg 322deg, transparent 322deg 360deg);
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body class="p-8 font-sans h-full flex flex-col overflow-hidden">
+
+    <div class="flex justify-between items-end mb-6 flex-shrink-0">
+        <div>
+            <p class="text-textMuted text-xs font-semibold tracking-widest uppercase mb-1">Optimize</p>
+            <h1 class="text-3xl font-bold tracking-tight">Analyze Space</h1>
+        </div>
+        <div class="flex bg-[rgba(255,255,255,0.05)] border border-borderLight rounded-xl p-1">
+            <button class="px-4 py-1.5 bg-[rgba(255,255,255,0.1)] text-white rounded-lg text-sm font-bold shadow-sm">Sunburst</button>
+            <button class="px-4 py-1.5 text-textMuted hover:text-white rounded-lg text-sm font-medium transition-colors">Treemap</button>
+        </div>
+    </div>
+
+    <div class="flex gap-6 flex-1 min-h-0">
+        <!-- Visualization Area -->
+        <div class="flex-1 bento-card flex items-center justify-center relative overflow-hidden">
+            <!-- Breadcrumb overlay -->
+            <div class="absolute top-6 left-6 flex items-center gap-2 text-sm font-medium bg-[rgba(0,0,0,0.5)] backdrop-blur-md px-4 py-2 rounded-xl border border-borderLight z-10">
+                <i data-lucide="hard-drive" class="w-4 h-4 text-textMuted"></i>
+                <span class="text-textMuted">Macintosh HD</span>
+                <i data-lucide="chevron-right" class="w-3 h-3 text-textMuted"></i>
+                <span>Users</span>
+                <i data-lucide="chevron-right" class="w-3 h-3 text-textMuted"></i>
+                <span class="text-accentBlue">jean</span>
+            </div>
+
+            <!-- Fake Sunburst Chart -->
+            <div class="w-[400px] h-[400px] sunburst-placeholder flex items-center justify-center cursor-pointer hover:scale-[1.02] transition-transform duration-500">
+                <div class="w-28 h-28 bg-cardBg rounded-full z-10 flex flex-col items-center justify-center border border-borderLight shadow-2xl">
+                    <span class="text-xs text-textMuted font-medium uppercase tracking-wider mb-1">/jean</span>
+                    <span class="text-xl font-bold text-white">142 GB</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar List -->
+        <div class="w-80 flex flex-col gap-4 flex-shrink-0">
+            <div class="bento-card p-5 flex-1 flex flex-col overflow-hidden">
+                <h3 class="text-sm font-bold uppercase tracking-widest text-textMuted mb-4">Largest Items</h3>
+
+                <div class="flex-1 overflow-y-auto pr-2 space-y-2">
+                    <!-- Item -->
+                    <div class="p-3 rounded-xl flex items-center gap-3 hover:bg-[rgba(255,255,255,0.03)] transition-colors cursor-pointer group border border-transparent hover:border-borderLight">
+                        <div class="w-10 h-10 rounded-xl bg-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="folder" class="w-5 h-5 text-accentBlue"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-bold truncate text-white">Library</div>
+                            <div class="text-xs text-textMuted mt-0.5">42,105 items</div>
+                        </div>
+                        <div class="text-sm font-mono font-bold text-white">68 GB</div>
+                    </div>
+
+                    <!-- Item -->
+                    <div class="p-3 rounded-xl flex items-center gap-3 hover:bg-[rgba(255,255,255,0.03)] transition-colors cursor-pointer group border border-transparent hover:border-borderLight">
+                        <div class="w-10 h-10 rounded-xl bg-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="folder" class="w-5 h-5 text-accentGreen"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-bold truncate text-white">Downloads</div>
+                            <div class="text-xs text-textMuted mt-0.5">1,204 items</div>
+                        </div>
+                        <div class="text-sm font-mono font-bold text-white">34 GB</div>
+                    </div>
+
+                    <!-- Item -->
+                    <div class="p-3 rounded-xl flex items-center gap-3 hover:bg-[rgba(255,255,255,0.03)] transition-colors cursor-pointer group border border-transparent hover:border-borderLight">
+                        <div class="w-10 h-10 rounded-xl bg-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="folder" class="w-5 h-5 text-white"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-bold truncate text-white">Documents</div>
+                            <div class="text-xs text-textMuted mt-0.5">8,432 items</div>
+                        </div>
+                        <div class="text-sm font-mono font-bold text-white">22 GB</div>
+                    </div>
+
+                    <!-- Item -->
+                    <div class="p-3 rounded-xl flex items-center gap-3 hover:bg-[rgba(255,255,255,0.03)] transition-colors cursor-pointer group border border-transparent hover:border-borderLight">
+                        <div class="w-10 h-10 rounded-xl bg-[rgba(255,255,255,0.05)] flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="file-video" class="w-5 h-5 text-white"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-bold truncate text-white">screen_rec.mp4</div>
+                            <div class="text-xs text-textMuted mt-0.5">Modified yesterday</div>
+                        </div>
+                        <div class="text-sm font-mono font-bold text-white">8.4 GB</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>

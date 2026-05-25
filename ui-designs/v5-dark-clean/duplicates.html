@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: {
+                        appBg: '#0b0c10', cardBg: '#14161c',
+                        textMain: '#ffffff', textMuted: '#8b949e',
+                        brandBlue: '#5c33ff', brandHover: '#4a24e6',
+                        borderLight: '#22252e'
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 30px rgba(0, 0, 0, 0.4)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; font-family: 'Poppins', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+        .dark-card { background-color: #14161c; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); border: 1px solid #22252e; }
+    </style>
+</head>
+<body class="p-8 h-full overflow-y-auto">
+
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl font-bold text-white">Find Duplicates</h1>
+            <p class="text-sm text-[#8b949e]">Locate and remove identical files</p>
+        </div>
+    </div>
+
+    <!-- Dropzone Area -->
+    <div class="border-2 border-dashed border-[#30363d] bg-[#5c33ff]/5 rounded-3xl p-16 flex flex-col items-center justify-center text-center mb-10 hover:bg-[#5c33ff]/10 transition-colors cursor-pointer relative overflow-hidden">
+        <div class="w-20 h-20 rounded-full bg-[#14161c] border border-[#22252e] flex items-center justify-center mb-6 shadow-soft relative z-10">
+            <i data-lucide="copy" class="w-10 h-10 text-[#5c33ff]"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-2 relative z-10">Drag & drop a folder here</h3>
+        <p class="text-sm text-[#8b949e] font-medium mb-8 relative z-10">or click to browse your computer</p>
+        <button class="px-8 py-3 bg-[#14161c] text-[#5c33ff] rounded-xl text-sm font-bold transition-colors shadow-soft border border-[#22252e] hover:border-[#30363d] relative z-10">
+            Select Folder
+        </button>
+
+        <!-- Decorative background circles -->
+        <div class="absolute -left-10 -bottom-10 w-40 h-40 bg-[#5c33ff]/10 rounded-full blur-2xl"></div>
+        <div class="absolute right-10 top-10 w-32 h-32 bg-[#5c33ff]/10 rounded-full blur-2xl"></div>
+    </div>
+
+    <!-- Results Area -->
+    <div>
+        <h3 class="text-lg font-bold text-white mb-4">Recent Scans</h3>
+        <div class="space-y-4">
+            <div class="dark-card p-5 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-[#0b0c10] border border-[#22252e] flex items-center justify-center">
+                        <i data-lucide="folder" class="w-6 h-6 text-[#5c33ff]"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-base font-bold text-white">~/Downloads</h4>
+                        <p class="text-xs text-[#8b949e] font-medium">Scanned 2 days ago • 1.2 GB duplicates found</p>
+                    </div>
+                </div>
+                <button class="text-sm text-[#5c33ff] hover:text-[#4a24e6] font-bold bg-[#5c33ff]/10 border border-[#5c33ff]/20 px-4 py-2 rounded-lg">Review Results</button>
+            </div>
+
+            <div class="dark-card p-5 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-[#0b0c10] border border-[#22252e] flex items-center justify-center">
+                        <i data-lucide="folder" class="w-6 h-6 text-[#8b949e]"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-base font-bold text-white">~/Pictures</h4>
+                        <p class="text-xs text-[#8b949e] font-medium">Scanned last week • No duplicates found</p>
+                    </div>
+                </div>
+                <button class="text-sm text-[#8b949e] hover:text-white font-bold">Scan Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

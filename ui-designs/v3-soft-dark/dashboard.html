@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        mainBg: '#181818',
+                        cardBg: '#222222',
+                        cardHover: '#2a2a2a',
+                        borderLight: '#2e2e2e',
+                        textMain: '#f3f4f6',
+                        textMuted: '#9ca3af',
+                        // Accent colors from reference
+                        accentYellow: '#f59e0b',
+                        accentOrange: '#f97316',
+                        accentBlue: '#3b82f6',
+                        accentGreen: '#10b981',
+                        accentRed: '#ef4444',
+                        accentPurple: '#a855f7'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #f3f4f6; font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+
+        .soft-card {
+            background-color: #222222;
+            border-radius: 16px;
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+        }
+        .soft-card:hover {
+            background-color: #2a2a2a;
+            border-color: #3f3f46;
+        }
+
+        .icon-box {
+            width: 40px; height: 40px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* Segmented Bar */
+        .segment { height: 100%; transition: width 1s ease-in-out; }
+    </style>
+</head>
+<body class="p-8 h-full overflow-y-auto">
+
+    <!-- Top Header -->
+    <div class="flex justify-between items-start mb-10">
+        <div>
+            <h1 class="text-3xl font-semibold text-white mb-2">Welcome to StowMind !</h1>
+            <p class="text-[#9ca3af] text-sm flex items-center gap-2">
+                <span>👋</span> System / Overview Dashboard
+            </p>
+        </div>
+
+        <div class="flex items-start gap-8">
+            <!-- Storage Bar -->
+            <div class="w-[400px]">
+                <div class="flex justify-between text-xs mb-2">
+                    <span class="font-medium text-white">Macintosh HD</span>
+                    <span class="text-[#9ca3af]">145.94 GB of 494.38 GB used</span>
+                </div>
+                <div class="h-2.5 w-full bg-[#2a2a2a] rounded-full overflow-hidden flex gap-0.5 mb-3">
+                    <div class="segment bg-[#f59e0b] rounded-l-full" style="width: 15%"></div>
+                    <div class="segment bg-[#f97316]" style="width: 25%"></div>
+                    <div class="segment bg-[#3b82f6]" style="width: 10%"></div>
+                    <div class="segment bg-[#10b981]" style="width: 5%"></div>
+                    <div class="segment bg-transparent" style="width: 45%"></div>
+                </div>
+                <div class="flex gap-4 text-[10px] text-[#9ca3af]">
+                    <div class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-[#f59e0b]"></div>Applications</div>
+                    <div class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-[#f97316]"></div>System Data</div>
+                    <div class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-[#3b82f6]"></div>Documents</div>
+                    <div class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full bg-[#10b981]"></div>Media</div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-3">
+                <button class="w-10 h-10 rounded-full bg-[#222222] hover:bg-[#2a2a2a] flex items-center justify-center transition-colors relative">
+                    <i data-lucide="bell" class="w-5 h-5 text-white"></i>
+                    <span class="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-[#222222]"></span>
+                </button>
+                <button class="w-10 h-10 rounded-full bg-[#222222] hover:bg-[#2a2a2a] flex items-center justify-center transition-colors">
+                    <i data-lucide="more-vertical" class="w-5 h-5 text-white"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 1: Categories -->
+    <div class="mb-8">
+        <div class="flex justify-between items-center mb-5">
+            <div class="flex items-center gap-3">
+                <h2 class="text-lg font-medium text-white">Disk Breakdown</h2>
+                <div class="flex gap-1 text-[#6b7280]">
+                    <i data-lucide="chevron-left" class="w-4 h-4 cursor-pointer hover:text-white"></i>
+                    <i data-lucide="chevron-right" class="w-4 h-4 cursor-pointer hover:text-white"></i>
+                </div>
+                <span class="text-sm text-[#6b7280] ml-2">Macintosh HD - Local</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 text-[#6b7280] absolute left-3 top-1/2 -translate-y-1/2"></i>
+                    <input type="text" placeholder="Search files..." class="bg-[#222222] text-sm text-white rounded-full pl-9 pr-4 py-2 w-64 focus:outline-none focus:ring-1 focus:ring-[#3f3f46] border border-transparent placeholder-[#6b7280]">
+                </div>
+                <i data-lucide="info" class="w-5 h-5 text-[#6b7280] cursor-pointer hover:text-white"></i>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4">
+            <!-- Card 1 -->
+            <div class="soft-card p-4 flex items-center justify-between cursor-pointer">
+                <div class="flex items-center gap-4">
+                    <div class="icon-box bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500">
+                        <i data-lucide="image" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-white">Photos</h3>
+                        <p class="text-xs text-[#6b7280] mt-0.5">8,745 items • 13.9 GB</p>
+                    </div>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-[#6b7280]"></i>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="soft-card p-4 flex items-center justify-between cursor-pointer">
+                <div class="flex items-center gap-4">
+                    <div class="icon-box bg-blue-600">
+                        <i data-lucide="play-circle" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-white">Videos file</h3>
+                        <p class="text-xs text-[#6b7280] mt-0.5">240 videos • 16.9 GB</p>
+                    </div>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-[#6b7280]"></i>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="soft-card p-4 flex items-center justify-between cursor-pointer">
+                <div class="flex items-center gap-4">
+                    <div class="icon-box bg-cyan-500">
+                        <i data-lucide="hard-drive" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-white">System Data</h3>
+                        <p class="text-xs text-[#6b7280] mt-0.5">OS & Caches • 22.5 GB</p>
+                    </div>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-[#6b7280]"></i>
+            </div>
+
+            <!-- Card 4 -->
+            <div class="soft-card p-4 flex items-center justify-between cursor-pointer">
+                <div class="flex items-center gap-4">
+                    <div class="icon-box bg-red-500">
+                        <i data-lucide="compass" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-white">Applications</h3>
+                        <p class="text-xs text-[#6b7280] mt-0.5">142 apps • 45.2 GB</p>
+                    </div>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-[#6b7280]"></i>
+            </div>
+
+            <!-- Card 5 -->
+            <div class="soft-card p-4 flex items-center justify-between cursor-pointer">
+                <div class="flex items-center gap-4">
+                    <div class="icon-box bg-yellow-500">
+                        <i data-lucide="file-text" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-white">Documents</h3>
+                        <p class="text-xs text-[#6b7280] mt-0.5">12k files • 8.4 GB</p>
+                    </div>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-[#6b7280]"></i>
+            </div>
+
+            <!-- Card 6 -->
+            <div class="soft-card p-4 flex items-center justify-between cursor-pointer">
+                <div class="flex items-center gap-4">
+                    <div class="icon-box bg-purple-600">
+                        <i data-lucide="trash-2" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-white">Trash & Junk</h3>
+                        <p class="text-xs text-[#6b7280] mt-0.5">Ready to clean • 4.2 GB</p>
+                    </div>
+                </div>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-[#6b7280]"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 2: Split Layout -->
+    <div class="grid grid-cols-12 gap-6">
+
+        <!-- Left: Largest Files List -->
+        <div class="col-span-7 soft-card p-6">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center">
+                        <i data-lucide="file-search" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-medium text-white">Largest Files</h3>
+                        <p class="text-xs text-[#6b7280]">Taking up the most space</p>
+                    </div>
+                </div>
+                <i data-lucide="x" class="w-4 h-4 text-[#6b7280] cursor-pointer hover:text-white"></i>
+            </div>
+
+            <div class="space-y-2">
+                <!-- List Item 1 -->
+                <div class="flex items-center justify-between p-3 hover:bg-[#2a2a2a] rounded-xl cursor-pointer transition-colors group">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center">
+                            <i data-lucide="video" class="w-5 h-5 text-emerald-400"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-white">Screen Recording 2024...</h4>
+                            <p class="text-xs text-[#6b7280]">Last used: Today</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm text-[#9ca3af]">36.07 GB</span>
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-[#6b7280] group-hover:text-white"></i>
+                    </div>
+                </div>
+
+                <!-- List Item 2 -->
+                <div class="flex items-center justify-between p-3 hover:bg-[#2a2a2a] rounded-xl cursor-pointer transition-colors group">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center">
+                            <i data-lucide="archive" class="w-5 h-5 text-purple-400"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-white">Project_Backup_v2.zip</h4>
+                            <p class="text-xs text-[#6b7280]">Last used: 8/11/24</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm text-[#9ca3af]">5.14 GB</span>
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-[#6b7280] group-hover:text-white"></i>
+                    </div>
+                </div>
+
+                <!-- List Item 3 -->
+                <div class="flex items-center justify-between p-3 hover:bg-[#2a2a2a] rounded-xl cursor-pointer transition-colors group">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center">
+                            <i data-lucide="database" class="w-5 h-5 text-blue-400"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-white">Docker.raw</h4>
+                            <p class="text-xs text-[#6b7280]">Last used: Yesterday</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm text-[#9ca3af]">3.87 GB</span>
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-[#6b7280] group-hover:text-white"></i>
+                    </div>
+                </div>
+
+                <!-- List Item 4 -->
+                <div class="flex items-center justify-between p-3 hover:bg-[#2a2a2a] rounded-xl cursor-pointer transition-colors group">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center">
+                            <i data-lucide="file" class="w-5 h-5 text-yellow-400"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-white">Figma Cache</h4>
+                            <p class="text-xs text-[#6b7280]">Last used: Yesterday</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm text-[#9ca3af]">3.64 GB</span>
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-[#6b7280] group-hover:text-white"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Smart Scan Area -->
+        <div class="col-span-5 soft-card p-6 flex flex-col">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center">
+                        <i data-lucide="shield-check" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-medium text-white">Smart Scan</h3>
+                        <p class="text-xs text-[#6b7280]">Analyze system health</p>
+                    </div>
+                </div>
+                <i data-lucide="x" class="w-4 h-4 text-[#6b7280] cursor-pointer hover:text-white"></i>
+            </div>
+
+            <!-- Dropzone / Scan Button -->
+            <div class="border-2 border-dashed border-[#3f3f46] rounded-2xl p-8 flex flex-col items-center justify-center text-center mb-6 hover:bg-[#2a2a2a] transition-colors cursor-pointer flex-1 min-h-[200px]">
+                <div class="w-12 h-12 rounded-full bg-[#2a2a2a] flex items-center justify-center mb-4 shadow-lg">
+                    <i data-lucide="search" class="w-6 h-6 text-[#a855f7]"></i>
+                </div>
+                <h4 class="text-sm font-medium text-white mb-1">Click to start Smart Scan</h4>
+                <p class="text-xs text-[#6b7280]">Finds junk, duplicates, and large files</p>
+            </div>
+
+            <!-- Active Tasks (Mimicking Upload Progress) -->
+            <div class="space-y-3">
+                <!-- Task 1 -->
+                <div class="bg-[#1c1c1c] p-3 rounded-xl border border-[#2e2e2e]">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="trash-2" class="w-4 h-4 text-white"></i>
+                            <div>
+                                <h5 class="text-xs font-medium text-white">Cleaning System Cache</h5>
+                                <p class="text-[10px] text-[#6b7280] flex items-center gap-1 mt-0.5">
+                                    60 MB of 120 MB <span class="text-emerald-400 flex items-center gap-0.5"><i data-lucide="check-circle" class="w-3 h-3"></i> Cleaning</span>
+                                </p>
+                            </div>
+                        </div>
+                        <i data-lucide="x" class="w-3 h-3 text-[#6b7280] cursor-pointer hover:text-white"></i>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="flex-1 h-1 bg-[#2a2a2a] rounded-full overflow-hidden">
+                            <div class="h-full bg-red-500 rounded-full" style="width: 50%"></div>
+                        </div>
+                        <span class="text-[10px] text-[#6b7280]">50%</span>
+                    </div>
+                </div>
+
+                <!-- Task 2 -->
+                <div class="bg-[#1c1c1c] p-3 rounded-xl border border-[#2e2e2e]">
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="copy" class="w-4 h-4 text-white"></i>
+                            <div>
+                                <h5 class="text-xs font-medium text-white">Duplicate Scan Paused</h5>
+                                <p class="text-[10px] text-[#6b7280] flex items-center gap-1 mt-0.5">
+                                    1.2 GB scanned <span class="text-blue-400 flex items-center gap-0.5"><i data-lucide="play" class="w-3 h-3"></i> Resume</span>
+                                </p>
+                            </div>
+                        </div>
+                        <i data-lucide="x" class="w-3 h-3 text-[#6b7280] cursor-pointer hover:text-white"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

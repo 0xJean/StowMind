@@ -1,47 +1,29 @@
-import { Badge } from '@/components/ui/badge'
+import React from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useI18n, type Locale } from '@/i18n'
 import { parseCategoriesImport, serializeCategories } from '@/lib/categoryRules'
-import { AIProvider, Category, defaultCategories, useAppStore } from '@/stores/app'
+import { defaultCategories, useAppStore, type AIProvider, type Category } from '@/stores/app'
 import { open, save } from '@tauri-apps/api/dialog'
 import { readTextFile, writeTextFile } from '@tauri-apps/api/fs'
 import { invoke } from '@tauri-apps/api/tauri'
-import {
-  Archive,
-  Eye,
-  ArrowDown,
-  ArrowUp,
-  ChevronDown,
-  ChevronRight,
-  Download,
-  Globe,
-  Moon,
-  Plus,
-  RefreshCw,
-  RotateCcw,
-  Save,
-  Sun,
-  Trash2,
-  Upload,
-} from 'lucide-react'
+import { Archive, Eye, Globe, Moon, RefreshCw, Save, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import { CategoryRulesSection } from './settings/CategoryRulesSection'
+import { MoleSystemSettingsSection } from './settings/MoleSystemSettingsSection'
 
 export function SettingsPage() {
   const location = useLocation()
   const { t, locale, setLocale } = useI18n()
   const { theme, setTheme } = useTheme()
+
   const aiProvider = useAppStore((s) => s.aiProvider)
   const setAIProvider = useAppStore((s) => s.setAIProvider)
-  const categories = useAppStore((s) => s.categories)
-  const setCategories = useAppStore((s) => s.setCategories)
-  const setOllamaOnline = useAppStore((s) => s.setOllamaOnline)
   const aiOnlyHardCases = useAppStore((s) => s.aiOnlyHardCases)
   const setAIOnlyHardCases = useAppStore((s) => s.setAIOnlyHardCases)
   const excludePatterns = useAppStore((s) => s.excludePatterns)
@@ -54,15 +36,23 @@ export function SettingsPage() {
   const setWatchFolderEnabled = useAppStore((s) => s.setWatchFolderEnabled)
   const watchFolderPathsText = useAppStore((s) => s.watchFolderPathsText)
   const setWatchFolderPathsText = useAppStore((s) => s.setWatchFolderPathsText)
-  const [excludeDraft, setExcludeDraft] = useState(() => excludePatterns.join('\n'))
+  const categories = useAppStore((s) => s.categories)
+  const setCategories = useAppStore((s) => s.setCategories)
+  const setOllamaOnline = useAppStore((s) => s.setOllamaOnline)
 
+  const [excludeDraft, setExcludeDraft] = useState(() => excludePatterns.join('\n'))
   useEffect(() => {
     setExcludeDraft(excludePatterns.join('\n'))
-  }, [location.pathname])
+  }, [location.pathname, excludePatterns])
 
   const [localProvider, setLocalProvider] = useState<AIProvider>(aiProvider)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null)
+  useEffect(() => {
+    setLocalProvider(aiProvider)
+  }, [aiProvider])
+
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
 
   const handleProviderChange = (type: AIProvider['type']) => {
     const defaults: Record<AIProvider['type'], Partial<AIProvider>> = {
@@ -73,25 +63,29 @@ export function SettingsPage() {
     setLocalProvider({ ...localProvider, type, ...defaults[type] })
   }
 
-  const saveProvider = () => {
-    setAIProvider(localProvider)
+  const saveProvider = () => setAIProvider(localProvider)
+
+  const pickBackupDirectory = async () => {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: t('settings.organizeBackupDialogTitle'),
+    })
+    if (selected && typeof selected === 'string') {
+      setBackupDirectory(selected)
+    }
   }
 
   const testConnection = async () => {
     setTesting(true)
     setTestResult(null)
-    
     try {
       if (localProvider.type === 'ollama') {
-        const online = await invoke<boolean>('check_ollama', { 
-          host: localProvider.host 
-        })
+        const online = await invoke<boolean>('check_ollama', { host: localProvider.host })
         setTestResult(online ? 'success' : 'error')
         setOllamaOnline(online)
       } else {
-        const result = await invoke<boolean>('test_api_connection', {
-          provider: localProvider
-        })
+        const result = await invoke<boolean>('test_api_connection', { provider: localProvider })
         setTestResult(result ? 'success' : 'error')
       }
     } catch {
@@ -101,21 +95,16 @@ export function SettingsPage() {
     }
   }
 
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
-
   const addCategory = () => {
-    const newCats = [
-      ...categories,
-      { name: t('settings.newCategory'), icon: '📁', extensions: [], keywords: [] }
-    ]
+    const newCats = [...categories, { name: t('settings.newCategory'), icon: '📁', extensions: [], keywords: [] }]
     setCategories(newCats)
     setExpandedIdx(newCats.length - 1)
   }
 
   const updateCategory = (index: number, updates: Partial<Category>) => {
-    const newCategories = [...categories]
-    newCategories[index] = { ...newCategories[index], ...updates }
-    setCategories(newCategories)
+    const next = [...categories]
+    next[index] = { ...next[index], ...updates }
+    setCategories(next)
   }
 
   const removeCategory = (index: number) => {
@@ -126,9 +115,9 @@ export function SettingsPage() {
   const moveCategory = (index: number, direction: -1 | 1) => {
     const target = index + direction
     if (target < 0 || target >= categories.length) return
-    const newCats = [...categories]
-    ;[newCats[index], newCats[target]] = [newCats[target], newCats[index]]
-    setCategories(newCats)
+    const next = [...categories]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    setCategories(next)
     setExpandedIdx(target)
   }
 
@@ -154,17 +143,6 @@ export function SettingsPage() {
     }
   }
 
-  const pickBackupDirectory = async () => {
-    const selected = await open({
-      directory: true,
-      multiple: false,
-      title: t('settings.organizeBackupDialogTitle'),
-    })
-    if (selected && typeof selected === 'string') {
-      setBackupDirectory(selected)
-    }
-  }
-
   const importCategoryRules = async () => {
     try {
       const path = await open({
@@ -181,13 +159,9 @@ export function SettingsPage() {
       toast.success(t('settings.rulesImportSuccess', { n: next.length }))
     } catch (e) {
       if (e instanceof Error) {
-        if (e.message === 'json') {
-          toast.error(t('settings.rulesImportInvalidJson'))
-        } else if (e.message === 'shape' || e.message === 'empty' || e.message === 'none') {
-          toast.error(t('settings.rulesImportInvalidShape'))
-        } else {
-          toast.error(t('settings.rulesImportFail', { error: e.message }))
-        }
+        if (e.message === 'json') toast.error(t('settings.rulesImportInvalidJson'))
+        else if (e.message === 'shape' || e.message === 'empty' || e.message === 'none') toast.error(t('settings.rulesImportInvalidShape'))
+        else toast.error(t('settings.rulesImportFail', { error: e.message }))
       } else {
         toast.error(t('settings.rulesImportFail', { error: String(e) }))
       }
@@ -195,140 +169,72 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
-        <p className="text-muted-foreground">{t('settings.subtitle')}</p>
+    <div className="stow-page">
+      <div className="stow-page-header">
+        <div>
+          <p className="iqon-eyebrow mb-1">{t('eyebrow.system')}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t('settings.title')}</h1>
+          <p className="mt-1 text-xs text-muted-foreground">{t('settings.subtitle')}</p>
+        </div>
       </div>
 
-      {/* Brand */}
-      <Card>
-        <CardHeader>
-          <CardTitle>StowMind</CardTitle>
-          <CardDescription>StowMind — AI file organizer</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3">
-            <img
-              src="/icon.svg"
-              alt="StowMind"
-              className="w-10 h-10 rounded-2xl"
-              draggable={false}
-            />
-            <div className="text-sm text-muted-foreground">
-              {t('settings.brandSubtitle')}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <SettingsCard title="StowMind" description={t('settings.brandSubtitle')}>
+        <div className="flex items-center gap-3">
+          <img src="/icon.svg" alt="StowMind" className="h-10 w-10 rounded-2xl" draggable={false} />
+          <div className="text-sm text-muted-foreground">{t('settings.brandSubtitle')}</div>
+        </div>
+      </SettingsCard>
 
-      {/* Language */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="w-5 h-5" />
-            {t('settings.language')}
-          </CardTitle>
-          <CardDescription>{t('settings.languageDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="zh">中文</SelectItem>
-              <SelectItem value="en">English</SelectItem>
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
+      <SettingsCard icon={<Globe className="h-4 w-4" />} title={t('settings.language')} description={t('settings.languageDesc')}>
+        <Select value={locale} onValueChange={(v) => setLocale(v as Locale)}>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="zh">中文</SelectItem>
+            <SelectItem value="en">English</SelectItem>
+          </SelectContent>
+        </Select>
+      </SettingsCard>
 
-      {/* Scan exclusions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('settings.scanExclude')}</CardTitle>
-          <CardDescription>{t('settings.scanExcludeDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <textarea
-            className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
-            value={excludeDraft}
-            onChange={(e) => {
-              const v = e.target.value
-              setExcludeDraft(v)
-              setExcludePatterns(
-                v
-                  .split('\n')
-                  .map((s) => s.trim())
-                  .filter((s) => s.length > 0)
-              )
-            }}
-            placeholder={t('settings.scanExcludePlaceholder')}
-            spellCheck={false}
-          />
-        </CardContent>
-      </Card>
+      <SettingsCard title={t('settings.scanExclude')} description={t('settings.scanExcludeDesc')}>
+        <textarea
+          className="flex min-h-[120px] w-full rounded-2xl border border-input bg-iqon-row px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
+          value={excludeDraft}
+          onChange={(e) => {
+            const value = e.target.value
+            setExcludeDraft(value)
+            setExcludePatterns(value.split('\n').map((s) => s.trim()).filter(Boolean))
+          }}
+          placeholder={t('settings.scanExcludePlaceholder')}
+          spellCheck={false}
+        />
+      </SettingsCard>
 
-      {/* Backup before organize */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Archive className="w-5 h-5" />
-            {t('settings.organizeBackup')}
-          </CardTitle>
-          <CardDescription>{t('settings.organizeBackupDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
-            <div>
-              <div className="text-sm font-medium">{t('settings.organizeBackupEnable')}</div>
-              <div className="text-xs text-muted-foreground">
-                {t('settings.organizeBackupEnableDesc')}
-              </div>
-            </div>
+      <SettingsCard icon={<Archive className="h-4 w-4" />} title={t('settings.organizeBackup')} description={t('settings.organizeBackupDesc')}>
+        <div className="space-y-4">
+          <SettingsRow label={t('settings.organizeBackupEnable')} description={t('settings.organizeBackupEnableDesc')}>
             <Switch checked={backupBeforeOrganize} onCheckedChange={setBackupBeforeOrganize} />
-          </div>
+          </SettingsRow>
           <div className="space-y-2">
-            <label className="text-sm font-medium">{t('settings.organizeBackupPath')}</label>
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('settings.organizeBackupPath')}</label>
             <div className="flex gap-2">
-              <Input
-                value={backupDirectory}
-                onChange={(e) => setBackupDirectory(e.target.value)}
-                placeholder={t('settings.organizeBackupPathPlaceholder')}
-                className="font-mono text-sm"
-              />
-              <Button type="button" variant="secondary" onClick={() => void pickBackupDirectory()}>
-                {t('settings.organizeBackupBrowse')}
-              </Button>
+              <Input value={backupDirectory} onChange={(e) => setBackupDirectory(e.target.value)} placeholder={t('settings.organizeBackupPathPlaceholder')} className="font-mono text-sm" />
+              <Button type="button" variant="secondary" onClick={() => void pickBackupDirectory()}>{t('settings.organizeBackupBrowse')}</Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SettingsCard>
 
-      {/* Watch folders */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Eye className="w-5 h-5" />
-            {t('settings.watchFolder')}
-          </CardTitle>
-          <CardDescription>{t('settings.watchFolderDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
-            <div>
-              <div className="text-sm font-medium">{t('settings.watchFolderEnable')}</div>
-              <div className="text-xs text-muted-foreground">
-                {t('settings.watchFolderEnableDesc')}
-              </div>
-            </div>
+      <SettingsCard icon={<Eye className="h-4 w-4" />} title={t('settings.watchFolder')} description={t('settings.watchFolderDesc')}>
+        <div className="space-y-4">
+          <SettingsRow label={t('settings.watchFolderEnable')} description={t('settings.watchFolderEnableDesc')}>
             <Switch checked={watchFolderEnabled} onCheckedChange={setWatchFolderEnabled} />
-          </div>
+          </SettingsRow>
           <div className="space-y-2">
-            <label className="text-sm font-medium">{t('settings.watchFolderPaths')}</label>
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('settings.watchFolderPaths')}</label>
             <textarea
-              className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+              className="flex min-h-[100px] w-full rounded-2xl border border-input bg-iqon-row px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
               value={watchFolderPathsText}
               onChange={(e) => setWatchFolderPathsText(e.target.value)}
               placeholder={t('settings.watchFolderPathsPlaceholder')}
@@ -336,67 +242,43 @@ export function SettingsPage() {
             />
             <p className="text-xs text-muted-foreground">{t('settings.watchFolderHint')}</p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SettingsCard>
 
-      {/* Theme */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sun className="w-5 h-5" />
-            {t('settings.theme')}
-          </CardTitle>
-          <CardDescription>{t('settings.themeDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
-            {([
-              { value: 'light' as Theme, label: t('settings.themeLight'), icon: <Sun className="w-4 h-4" /> },
-              { value: 'dark' as Theme, label: t('settings.themeDark'), icon: <Moon className="w-4 h-4" /> },
-              { value: 'system' as Theme, label: t('settings.themeSystem'), icon: null },
-            ]).map((opt) => (
-              <Button
-                key={opt.value}
-                variant={theme === opt.value ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setTheme(opt.value)}
-                className="gap-2"
-              >
-                {opt.icon}
-                {opt.label}
-              </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <SettingsCard icon={<Sun className="h-4 w-4" />} title={t('settings.theme')} description={t('settings.themeDesc')}>
+        <div className="flex gap-2">
+          {([
+            { value: 'light' as Theme, label: t('settings.themeLight'), icon: <Sun className="h-4 w-4" /> },
+            { value: 'dark' as Theme, label: t('settings.themeDark'), icon: <Moon className="h-4 w-4" /> },
+            { value: 'system' as Theme, label: t('settings.themeSystem'), icon: null },
+          ] as const).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setTheme(opt.value)}
+              className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold transition-colors ${
+                theme === opt.value
+                  ? 'border-iqon-green bg-iqon-green/10 text-iqon-green'
+                  : 'border-iqon-border bg-iqon-card text-muted-foreground hover:border-iqon-borderSoft hover:text-foreground'
+              }`}
+            >
+              {opt.icon}
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </SettingsCard>
 
-      {/* AI Config */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('settings.aiConfig')}</CardTitle>
-          <CardDescription>{t('settings.aiConfigDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-4 py-3">
-            <div>
-              <div className="text-sm font-medium">{t('settings.aiHardOnly')}</div>
-              <div className="text-xs text-muted-foreground">
-                {t('settings.aiHardOnlyDesc')}
-              </div>
-            </div>
+      <SettingsCard title={t('settings.aiConfig')} description={t('settings.aiConfigDesc')}>
+        <div className="space-y-4">
+          <SettingsRow label={t('settings.aiHardOnly')} description={t('settings.aiHardOnlyDesc')}>
             <Switch checked={aiOnlyHardCases} onCheckedChange={setAIOnlyHardCases} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          </SettingsRow>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t('settings.aiProvider')}</label>
-              <Select
-                value={localProvider.type}
-                onValueChange={(v) => handleProviderChange(v as AIProvider['type'])}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('settings.aiProvider')}</label>
+              <Select value={localProvider.type} onValueChange={(v) => handleProviderChange(v as AIProvider['type'])}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ollama">{t('settings.ollamaLocal')}</SelectItem>
                   <SelectItem value="openai">OpenAI</SelectItem>
@@ -404,188 +286,97 @@ export function SettingsPage() {
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t('settings.model')}</label>
-              <Input
-                value={localProvider.model}
-                onChange={(e) => setLocalProvider({ ...localProvider, model: e.target.value })}
-                placeholder={t('settings.modelPlaceholder')}
-              />
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('settings.model')}</label>
+              <Input value={localProvider.model} onChange={(e) => setLocalProvider({ ...localProvider, model: e.target.value })} placeholder={t('settings.modelPlaceholder')} />
             </div>
           </div>
-
           {localProvider.type === 'ollama' && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t('settings.ollamaHost')}</label>
-              <Input
-                value={localProvider.host}
-                onChange={(e) => setLocalProvider({ ...localProvider, host: e.target.value })}
-                placeholder="http://localhost:11434"
-              />
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('settings.ollamaHost')}</label>
+              <Input value={localProvider.host} onChange={(e) => setLocalProvider({ ...localProvider, host: e.target.value })} placeholder="http://localhost:11434" />
             </div>
           )}
-
           {(localProvider.type === 'openai' || localProvider.type === 'claude') && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">API Key</label>
-              <Input
-                type="password"
-                value={localProvider.apiKey || ''}
-                onChange={(e) => setLocalProvider({ ...localProvider, apiKey: e.target.value })}
-                placeholder={t('settings.apiKeyPlaceholder')}
-              />
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">API Key</label>
+              <Input type="password" value={localProvider.apiKey || ''} onChange={(e) => setLocalProvider({ ...localProvider, apiKey: e.target.value })} placeholder={t('settings.apiKeyPlaceholder')} />
             </div>
           )}
-
-          <div className="flex items-center gap-3">
-            <Button onClick={saveProvider}>
-              <Save className="w-4 h-4 mr-2" />
-              {t('settings.save')}
-            </Button>
-            <Button variant="outline" onClick={testConnection} disabled={testing}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${testing ? 'animate-spin' : ''}`} />
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={saveProvider}><Save className="mr-2 h-4 w-4" />{t('settings.save')}</Button>
+            <Button variant="outline" onClick={() => void testConnection()} disabled={testing}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${testing ? 'animate-spin' : ''}`} />
               {t('settings.testConnection')}
             </Button>
             {testResult && (
-              <Badge variant={testResult === 'success' ? 'success' : 'destructive'}>
+              <span className={`text-xs font-bold ${testResult === 'success' ? 'text-iqon-green' : 'text-iqon-red'}`}>
                 {testResult === 'success' ? t('settings.connectSuccess') : t('settings.connectFail')}
-              </Badge>
+              </span>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SettingsCard>
 
-      {/* Category Rules */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>{t('settings.categoryRules')}</CardTitle>
-            <CardDescription>{t('settings.categoryRulesDesc')}</CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2 justify-end">
-            <Button variant="outline" size="sm" onClick={() => void exportCategoryRules()}>
-              <Download className="w-4 h-4 mr-2" />
-              {t('settings.rulesExport')}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => void importCategoryRules()}>
-              <Upload className="w-4 h-4 mr-2" />
-              {t('settings.rulesImport')}
-            </Button>
-            <Button variant="outline" size="sm" onClick={resetCategories}>
-              <RotateCcw className="w-4 h-4 mr-2" />
-              {t('settings.resetDefaults')}
-            </Button>
-            <Button variant="outline" size="sm" onClick={addCategory}>
-              <Plus className="w-4 h-4 mr-2" />
-              {t('settings.addCategory')}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {categories.map((cat, index) => {
-              const isExpanded = expandedIdx === index
-              return (
-                <div
-                  key={index}
-                  className="rounded-lg border bg-muted/30 overflow-hidden"
-                >
-                  {/* Collapsed header row */}
-                  <div
-                    className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => setExpandedIdx(isExpanded ? null : index)}
-                  >
-                    {isExpanded ? (
-                      <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                    )}
-                    <span className="text-lg">{cat.icon}</span>
-                    <span className="font-medium flex-1">{cat.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {t('settings.nExtensions', { n: cat.extensions.length })}
-                      {' · '}
-                      {t('settings.nKeywords', { n: cat.keywords.length })}
-                    </span>
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => moveCategory(index, -1)}
-                        disabled={index === 0}
-                        title={t('settings.moveUp')}
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => moveCategory(index, 1)}
-                        disabled={index === categories.length - 1}
-                        title={t('settings.moveDown')}
-                      >
-                        <ArrowDown className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => removeCategory(index)}
-                        disabled={cat.name === '其他'}
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
+      <MoleSystemSettingsSection />
 
-                  {/* Expanded detail */}
-                  {isExpanded && (
-                    <div className="px-4 pb-4 pt-1 space-y-3 border-t">
-                      <div className="grid grid-cols-[4rem_1fr] gap-3 items-center">
-                        <Input
-                          value={cat.icon}
-                          onChange={(e) => updateCategory(index, { icon: e.target.value })}
-                          className="text-center"
-                        />
-                        <Input
-                          value={cat.name}
-                          onChange={(e) => updateCategory(index, { name: e.target.value })}
-                          placeholder={t('settings.categoryName')}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">{t('settings.extensionsPlaceholder')}</label>
-                        <Input
-                          value={cat.extensions.join(', ')}
-                          onChange={(e) => updateCategory(index, { 
-                            extensions: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                          })}
-                          placeholder={t('settings.extensionsPlaceholder')}
-                          className="text-sm font-mono"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground">{t('settings.keywordsLabel')}</label>
-                        <Input
-                          value={cat.keywords.join(', ')}
-                          onChange={(e) => updateCategory(index, {
-                            keywords: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                          })}
-                          placeholder={t('settings.keywordsPlaceholder')}
-                          className="text-sm"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
+      <CategoryRulesSection
+        categories={categories}
+        expandedIdx={expandedIdx}
+        onExpandedIdxChange={setExpandedIdx}
+        onAddCategory={addCategory}
+        onUpdateCategory={updateCategory}
+        onRemoveCategory={removeCategory}
+        onMoveCategory={moveCategory}
+        onResetCategories={resetCategories}
+        onExportCategoryRules={() => void exportCategoryRules()}
+        onImportCategoryRules={() => void importCategoryRules()}
+      />
+    </div>
+  )
+}
+
+function SettingsCard({
+  icon,
+  title,
+  description,
+  children,
+}: {
+  icon?: React.ReactNode
+  title: string
+  description?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="iqon-card p-6">
+      <div className="mb-4">
+        <div className="flex items-center gap-2">
+          {icon && <span className="text-muted-foreground">{icon}</span>}
+          <h3 className="text-sm font-bold text-foreground">{title}</h3>
+        </div>
+        {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function SettingsRow({
+  label,
+  description,
+  children,
+}: {
+  label: string
+  description?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-iqon-border bg-iqon-row px-4 py-3">
+      <div>
+        <div className="text-xs font-bold text-foreground">{label}</div>
+        {description && <div className="mt-0.5 text-[10px] text-muted-foreground">{description}</div>}
+      </div>
+      {children}
     </div>
   )
 }

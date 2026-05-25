@@ -103,7 +103,10 @@ pub async fn pty_spawn(
 
     // Store session (writer + child + master for resize)
     {
-        let mut sessions = state.sessions.lock().map_err(|e| format!("Lock error: {e}"))?;
+        let mut sessions = state
+            .sessions
+            .lock()
+            .map_err(|e| format!("Lock error: {e}"))?;
         sessions.insert(
             id,
             PtySession {
@@ -144,11 +147,7 @@ pub async fn pty_spawn(
                 }
             };
             if let Some(session) = sessions.get_mut(&id) {
-                session
-                    .child
-                    .wait()
-                    .ok()
-                    .map(|status| status.exit_code())
+                session.child.wait().ok().map(|status| status.exit_code())
             } else {
                 None
             }
@@ -162,11 +161,7 @@ pub async fn pty_spawn(
 
 /// Write raw data to a PTY session's stdin.
 #[tauri::command]
-pub async fn pty_write(
-    id: u32,
-    data: String,
-    state: State<'_, PtyManager>,
-) -> Result<(), String> {
+pub async fn pty_write(id: u32, data: String, state: State<'_, PtyManager>) -> Result<(), String> {
     let mut sessions = state
         .sessions
         .lock()
@@ -214,10 +209,7 @@ pub async fn pty_resize(
 
 /// Kill a PTY session: remove from map, terminate child process.
 #[tauri::command]
-pub async fn pty_kill(
-    id: u32,
-    state: State<'_, PtyManager>,
-) -> Result<(), String> {
+pub async fn pty_kill(id: u32, state: State<'_, PtyManager>) -> Result<(), String> {
     let mut sessions = state
         .sessions
         .lock()

@@ -4,9 +4,9 @@
 
 # StowMind
 
-**AI file organizer · 智能文件整理**
+**Smart cleanup and AI file organization · 智能清理与整理**
 
-*A fast, privacy-friendly desktop app that classifies and moves files into tidy folders — rules first, AI when it matters.*
+*A privacy-friendly desktop app for cleaning space, finding duplicates, running system maintenance tools, and organizing files with rules-first AI help.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-indigo.svg)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-1.5-24C8D8?logo=tauri&logoColor=white)](https://tauri.app/)
@@ -30,7 +30,7 @@
 - [Development](#development)
 - [Build & release](#build--release)
 - [Configuration](#configuration)
-- [Deep Clean (powered by Mole)](#deep-clean-powered-by-mole)
+- [System Clean & Mole Console](#system-clean--mole-console)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
 - [License](#license)
@@ -39,7 +39,11 @@
 
 ## Why StowMind
 
-Messy download folders and project dumps are universal. StowMind helps you **scan** a folder, **adjust** categories per file, optionally **preview** moves (dry-run), then **execute** — with **undo** from History and **cross-volume** safe moves when `rename` is not enough.
+Storage pressure usually comes from several places at once: system caches, build artifacts, installer leftovers, duplicate files, and messy user folders. StowMind is being repositioned around **cleanup first**, while keeping AI file organization as a distinctive workflow for files that should be moved or archived rather than deleted.
+
+The cleanup boundary is explicit: core cleanup features are backed by real Mole commands or Mole script functions. StowMind provides the native UI, preview parsing, confirmation, history, and statistics; it does not ship a separate self-written cleanup/delete engine. Duplicate detection is an auxiliary file inspection tool, not Mole cleanup.
+
+The existing AI organizer remains intact: StowMind helps you **scan** a folder, **adjust** categories per file, optionally **preview** moves (dry-run), then **execute** — with **undo** from History and **cross-volume** safe moves when `rename` is not enough.
 
 Successful moves are **kept** if some items fail (no all-or-nothing rollback). Classification is **rule-first** (extensions, filename keywords, parent-folder hints) so everyday files never hit an API. Turn on **AI only for hard cases** to save time and tokens while still handling ambiguous files.
 
@@ -49,6 +53,12 @@ Successful moves are **kept** if some items fail (no all-or-nothing rollback). C
 
 | Area | What you get |
 |------|----------------|
+| **System clean** | Native StowMind view powered by real `mo clean --dry-run` output for system caches, logs, browser caches, and dev tool caches |
+| **Disk analysis** | Native StowMind view powered by real `mo analyze -json <path>` output |
+| **Build artifacts** | Mole purge preview and execution for a selected project directory |
+| **Installer cleanup** | Mole installer scan and cleanup functions for `.dmg`, `.pkg`, `.iso`, `.xip`, and installer-like `.zip` files |
+| **Mole Console** | Advanced terminal-based access to `mo`, `mo clean`, `mo uninstall`, `mo optimize`, `mo analyze`, `mo status`, `mo purge`, and `mo installer` remains available |
+| **Duplicate file helper** | Size grouping + SHA-256 full-file matching to find identical copies; inspection only, not cleanup |
 | **Classification** | Extension + keyword + directory-hint rules; optional Ollama / OpenAI / Claude |
 | **Cost & speed** | “AI for hard cases only” (default): rules hit first, AI for edge cases |
 | **Consistency** | Similar filenames grouped; majority vote can align categories |
@@ -58,7 +68,6 @@ Successful moves are **kept** if some items fail (no all-or-nothing rollback). C
 | **UX** | Drag a folder onto Organize; light / dark / system theme; **English & 中文** UI |
 | **Rules editor** | Collapsible categories, keywords, reorder, reset to defaults |
 | **Insights** | History search & filters; statistics & 7-day trend |
-| **Deep Clean** | Integrated [Mole](https://github.com/tw93/Mole) for system cache cleanup, build artifact purging, and disk space analysis (macOS & [Windows](https://github.com/tw93/Mole/tree/windows)) |
 
 ---
 
@@ -169,6 +178,10 @@ Artifacts land under `src-tauri/target/release/bundle/`. For multi-platform CI b
 4. Use **Test connection** to verify.
 5. Toggle **AI for hard cases only** to minimize API usage (recommended).
 
+### Mole system settings
+
+**Settings → Mole system settings** collects Mole’s system-level entry points in one place: launch at login, full disk access, delete mode, license activation, and planet landing. Some items open the OS settings page directly; high-risk actions still fall back to Mole Console.
+
 ### Language (UI)
 
 Settings → **Language**: **English** or **中文**. Preference is stored in the browser local storage key `stowmind-locale` (legacy `ai-file-organizer` is migrated automatically).
@@ -193,19 +206,28 @@ Edit extensions and keywords per category, reorder categories, or **Reset defaul
 
 ---
 
-### Deep Clean (powered by Mole)
+### System Clean & Mole Console
 
-StowMind integrates [Mole](https://github.com/tw93/Mole) — an open-source (MIT) macOS/Windows deep cleaning tool by [@tw93](https://github.com/tw93) — to provide system-level cleanup without reinventing the wheel.
+StowMind integrates [Mole](https://github.com/tw93/Mole) — an open-source (MIT) macOS/Windows deep cleaning tool by [@tw93](https://github.com/tw93) — as a source of system-level cleanup and maintenance capabilities.
 
-Navigate to **Deep Clean** in the sidebar to access three capabilities:
+Navigate to **System Clean** in the sidebar to run a real `mo clean --dry-run` preview. StowMind renders Mole's grouped preview, potential space, item count, categories, and raw output as a native page. This page is currently preview-only; execution still goes through `mo clean` in Mole Console.
 
-| Tab | Mole command | What it does |
+Navigate to **Build Artifacts** or **Installers** to reuse Mole `purge.sh` / `installer.sh` scanning and cleanup functions. Preview results come from Mole dry-run or scan functions; execution still calls Mole's own purge / installer cleanup logic. StowMind does not delete those files directly. Installer execution scans with Mole again and only cleans installer paths Mole still recognizes.
+
+Navigate to **Mole Console** in the sidebar to access the existing Mole Console commands:
+
+| Entry | Mole command | What it does |
 |-----|-------------|--------------|
+| Interactive menu | `mo` | Opens Mole's interactive command menu |
 | System Clean | `mo clean` | Removes system caches, app logs, browser leftovers, dev tool caches |
-| Build Artifacts | `mo purge` | Cleans `node_modules`, `target`, `.build`, and other project build artifacts |
+| App Uninstaller | `mo uninstall` | Uninstalls apps and scans related leftovers |
+| System Optimize | `mo optimize` | Runs maintenance tasks such as cache rebuilds and diagnostics cleanup |
 | Disk Analysis | `mo analyze` | Visualizes directory space usage and locates large files |
+| System Status | `mo status` | Shows CPU, memory, disk, network, and other status metrics |
+| Build Artifacts | `mo purge` | Cleans `node_modules`, `target`, `.build`, and other project build artifacts |
+| Installer Cleanup | `mo installer` | Finds installer files such as `.dmg` and `.pkg` |
 
-All operations use **dry-run preview first** — nothing is deleted until you explicitly confirm.
+The console integration remains available as an execution path, advanced entry, compatibility fallback, and troubleshooting surface. Every core cleanup path must map to real Mole capabilities. If Mole has no matching feature, such as duplicate deletion, StowMind keeps it as auxiliary inspection instead of presenting it as core cleanup.
 
 **Requirements:**
 

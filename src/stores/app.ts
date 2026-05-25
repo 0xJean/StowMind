@@ -56,7 +56,18 @@ export interface DuplicateGroup {
   paths: string[]
 }
 
+export type HistoryRecordType = 'organize' | 'duplicates' | 'clean' | 'purge' | 'installer' | 'uninstall' | 'optimize'
+
+export interface CleanupSummary {
+  itemCount?: number
+  totalSize?: number
+  action?: 'execute' | 'preview'
+  errors?: string[]
+}
+
 export interface HistoryRecord {
+  /** 旧记录没有 type，按 organize 处理 */
+  type?: HistoryRecordType
   id: string
   timestamp: string
   directory: string
@@ -64,6 +75,7 @@ export interface HistoryRecord {
   categories: Record<string, number>
   executed: boolean
   moves: MoveRecord[]
+  cleanupSummary?: CleanupSummary
   /** 整理时部分失败的原因（成功项仍会保留） */
   organizeErrors?: string[]
   undone?: boolean
@@ -74,6 +86,10 @@ export interface Statistics {
   totalSizeOrganized: number
   categoryCounts: Record<string, number>
   lastOrganized?: string
+  cleanItemsRemoved?: number
+  cleanSizeFreed?: number
+  cleanOperationCount?: number
+  lastCleaned?: string
 }
 
 interface AppState {
@@ -82,11 +98,11 @@ interface AppState {
   setAIProvider: (provider: AIProvider) => void
   aiOnlyHardCases: boolean
   setAIOnlyHardCases: (value: boolean) => void
-  
+
   // 分类设置
   categories: Category[]
   setCategories: (categories: Category[]) => void
-  
+
   // 历史记录
   history: HistoryRecord[]
   addHistory: (record: HistoryRecord) => void
@@ -96,11 +112,11 @@ interface AppState {
   /** 最近一次成功整理（含部分成功）的记录 id，用于整理页一键撤销提示 */
   lastOrganizeRecordId: string | null
   setLastOrganizeRecordId: (id: string | null) => void
-  
+
   // 统计
   statistics: Statistics
   updateStatistics: (stats: Partial<Statistics>) => void
-  
+
   // Ollama 状态
   ollamaOnline: boolean
   setOllamaOnline: (online: boolean) => void
@@ -127,53 +143,53 @@ interface AppState {
 }
 
 export const defaultCategories: Category[] = [
-  { 
-    name: '文档', 
-    icon: '📄', 
+  {
+    name: '文档',
+    icon: '📄',
     extensions: [
       '.pdf', '.doc', '.docx', '.txt', '.md', '.rtf', '.odt', '.pages',
       '.xps', '.epub', '.mobi', '.azw', '.djvu', '.tex', '.latex',
       // Office / iWork / notes
       '.ppt', '.pptx', '.pptm', '.key', '.one',
       '.dot', '.dotx', '.docm'
-    ], 
-    keywords: ['文档', '报告', '笔记', '论文', '手册', '合同', '发票', '简历', 'resume', 'invoice', 'report', 'manual', 'notes'] 
+    ],
+    keywords: ['文档', '报告', '笔记', '论文', '手册', '合同', '发票', '简历', 'resume', 'invoice', 'report', 'manual', 'notes']
   },
-  { 
-    name: '图片', 
-    icon: '🖼️', 
+  {
+    name: '图片',
+    icon: '🖼️',
     extensions: [
       '.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico',
       '.tiff', '.tif', '.raw', '.cr2', '.nef', '.arw', '.dng', '.heic', '.heif',
       '.psd', '.ai', '.eps', '.sketch', '.fig', '.xd',
       // modern web / camera
       '.avif', '.jfif'
-    ], 
-    keywords: ['图片', '照片', '截图', '设计', '素材', '壁纸', 'screenshot', 'screen shot', 'wallpaper'] 
+    ],
+    keywords: ['图片', '照片', '截图', '设计', '素材', '壁纸', 'screenshot', 'screen shot', 'wallpaper']
   },
-  { 
-    name: '视频', 
-    icon: '🎬', 
+  {
+    name: '视频',
+    icon: '🎬',
     extensions: [
       '.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v',
       '.mpeg', '.mpg', '.3gp', '.rm', '.rmvb', '.vob', '.ts', '.mts',
       '.m2ts', '.m3u8'
-    ], 
-    keywords: ['视频', '电影', '录像', '剪辑', '录屏', 'screenrecord', 'screen recording'] 
+    ],
+    keywords: ['视频', '电影', '录像', '剪辑', '录屏', 'screenrecord', 'screen recording']
   },
-  { 
-    name: '音频', 
-    icon: '🎵', 
+  {
+    name: '音频',
+    icon: '🎵',
     extensions: [
       '.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg', '.wma', '.ape',
       '.alac', '.aiff', '.mid', '.midi', '.opus',
       '.aif', '.aifc'
-    ], 
-    keywords: ['音频', '音乐', '播客', '录音', 'voice', 'meeting', 'podcast'] 
+    ],
+    keywords: ['音频', '音乐', '播客', '录音', 'voice', 'meeting', 'podcast']
   },
-  { 
-    name: '代码', 
-    icon: '💻', 
+  {
+    name: '代码',
+    icon: '💻',
     extensions: [
       // Web
       '.html', '.htm', '.css', '.scss', '.sass', '.less', '.js', '.jsx', '.ts', '.tsx', '.vue', '.svelte',
@@ -197,46 +213,46 @@ export const defaultCategories: Category[] = [
       '.dockerfile', '.tf', '.hcl',
       // misc
       '.lock', '.editorconfig'
-    ], 
-    keywords: ['代码', '脚本', '程序', '源码', '开发'] 
+    ],
+    keywords: ['代码', '脚本', '程序', '源码', '开发']
   },
-  { 
-    name: '压缩包', 
-    icon: '📦', 
+  {
+    name: '压缩包',
+    icon: '📦',
     extensions: [
       '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.lz', '.lzma',
       '.tgz', '.tbz2', '.cab', '.iso', '.dmg', '.pkg', '.deb', '.rpm',
       '.zst', '.img', '.qcow2'
-    ], 
-    keywords: ['压缩', '归档', '打包', '素材包', 'archive', 'backup'] 
+    ],
+    keywords: ['压缩', '归档', '打包', '素材包', 'archive', 'backup']
   },
-  { 
-    name: '数据', 
-    icon: '📊', 
+  {
+    name: '数据',
+    icon: '📊',
     extensions: [
       '.xlsx', '.xls', '.csv', '.tsv', '.ods', '.numbers',
       '.db', '.sqlite', '.sqlite3', '.mdb', '.accdb',
       '.parquet', '.avro', '.orc'
-    ], 
-    keywords: ['数据', '表格', '数据库', '统计', 'excel', 'spreadsheet'] 
+    ],
+    keywords: ['数据', '表格', '数据库', '统计', 'excel', 'spreadsheet']
   },
-  { 
-    name: '字体', 
-    icon: '🔤', 
-    extensions: ['.ttf', '.otf', '.woff', '.woff2', '.eot', '.fon'], 
-    keywords: ['字体', 'font'] 
+  {
+    name: '字体',
+    icon: '🔤',
+    extensions: ['.ttf', '.otf', '.woff', '.woff2', '.eot', '.fon'],
+    keywords: ['字体', 'font']
   },
-  { 
-    name: '可执行', 
-    icon: '⚙️', 
-    extensions: ['.exe', '.msi', '.app', '.apk', '.ipa', '.jar', '.war', '.dll', '.so', '.dylib'], 
-    keywords: ['程序', '安装包', '应用'] 
+  {
+    name: '可执行',
+    icon: '⚙️',
+    extensions: ['.exe', '.msi', '.app', '.apk', '.ipa', '.jar', '.war', '.dll', '.so', '.dylib'],
+    keywords: ['程序', '安装包', '应用']
   },
-  { 
-    name: '其他', 
-    icon: '📁', 
-    extensions: [], 
-    keywords: [] 
+  {
+    name: '其他',
+    icon: '📁',
+    extensions: [],
+    keywords: []
   },
 ]
 
@@ -262,14 +278,14 @@ export const useAppStore = create<AppState>()(
       setAIProvider: (provider) => set({ aiProvider: provider }),
       aiOnlyHardCases: true,
       setAIOnlyHardCases: (value) => set({ aiOnlyHardCases: value }),
-      
+
       categories: defaultCategories,
       setCategories: (categories) => set({ categories }),
-      
+
       history: [],
       lastOrganizeRecordId: null,
-      addHistory: (record) => set((state) => ({ 
-        history: [record, ...state.history].slice(0, 100) 
+      addHistory: (record) => set((state) => ({
+        history: [record, ...state.history].slice(0, 100)
       })),
       setLastOrganizeRecordId: (id) => set({ lastOrganizeRecordId: id }),
       markUndone: (id) => set((state) => ({
@@ -283,16 +299,19 @@ export const useAppStore = create<AppState>()(
         lastOrganizeRecordId: state.lastOrganizeRecordId === id ? null : state.lastOrganizeRecordId,
       })),
       clearHistory: () => set({ history: [], lastOrganizeRecordId: null }),
-      
+
       statistics: {
         totalFilesOrganized: 0,
         totalSizeOrganized: 0,
         categoryCounts: {},
+        cleanItemsRemoved: 0,
+        cleanSizeFreed: 0,
+        cleanOperationCount: 0,
       },
       updateStatistics: (stats) => set((state) => ({
         statistics: { ...state.statistics, ...stats }
       })),
-      
+
       ollamaOnline: false,
       setOllamaOnline: (online) => set({ ollamaOnline: online }),
 

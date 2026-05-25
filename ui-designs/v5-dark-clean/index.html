@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StowMind - Dark Clean</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: {
+                        appBg: '#0b0c10',       /* Deep dark background */
+                        sidebarBg: '#14161c',   /* Dark card background */
+                        cardBg: '#14161c',      /* Card background */
+                        textMain: '#ffffff',    /* White text */
+                        textMuted: '#8b949e',   /* Muted gray text */
+                        brandBlue: '#5c33ff',   /* Vibrant purple-blue */
+                        brandHover: '#4a24e6',
+                        borderLight: '#22252e'  /* Subtle dark borders */
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 30px rgba(0, 0, 0, 0.5)',
+                        'blue': '0 10px 20px rgba(92, 51, 255, 0.3)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0b0c10; color: #ffffff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .app-container {
+            width: 100%; max-width: 1400px; height: 90vh; min-height: 700px;
+            background-color: #0b0c10; border-radius: 30px; overflow: hidden;
+            display: flex; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid #22252e;
+        }
+
+        /* Sidebar styling */
+        aside { width: 260px; background-color: #14161c; display: flex; flex-direction: column; padding: 32px 24px; border-right: 1px solid #22252e; z-index: 10; }
+
+        .nav-section { margin-bottom: 32px; }
+        .nav-title { font-size: 12px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; padding-left: 12px; }
+
+        .nav-item {
+            display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 16px;
+            color: #8b949e; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease;
+            text-decoration: none; margin-bottom: 4px; border: 1px solid transparent;
+        }
+        .nav-item:hover { color: #ffffff; background-color: #1c1e26; border-color: #22252e; }
+        .nav-item.active { background-color: #5c33ff; color: #ffffff; box-shadow: 0 4px 12px rgba(92, 51, 255, 0.3); border-color: #5c33ff; }
+        .nav-item.active i { color: #ffffff; }
+
+        /* Main content area */
+        main { flex: 1; background-color: #0b0c10; position: relative; overflow: hidden; }
+
+        /* Custom scrollbar for iframe */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside>
+            <!-- Logo -->
+            <div class="flex items-center gap-3 px-2 mb-12 cursor-pointer">
+                <div class="w-10 h-10 rounded-xl bg-[#5c33ff] flex items-center justify-center shadow-blue">
+                    <i data-lucide="command" class="w-5 h-5 text-white"></i>
+                </div>
+                <span class="text-xl font-bold text-white tracking-tight">StowMind</span>
+            </div>
+
+            <!-- Navigation Sections -->
+            <div class="flex-1 overflow-y-auto pr-2">
+                <div class="nav-section">
+                    <div class="nav-title">Dashboard</div>
+                    <a href="dashboard.html" target="content-frame" class="nav-item active" onclick="setActive(this)">
+                        <i data-lucide="layout-grid" class="w-5 h-5"></i> Overview
+                    </a>
+                    <a href="analyze.html" target="content-frame" class="nav-item" onclick="setActive(this)">
+                        <i data-lucide="pie-chart" class="w-5 h-5"></i> Space Analyzer
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">Tools</div>
+                    <a href="clean.html" target="content-frame" class="nav-item" onclick="setActive(this)">
+                        <i data-lucide="sparkles" class="w-5 h-5"></i> Deep Clean
+                    </a>
+                    <a href="duplicates.html" target="content-frame" class="nav-item" onclick="setActive(this)">
+                        <i data-lucide="copy" class="w-5 h-5"></i> Duplicates
+                    </a>
+                    <a href="apps.html" target="content-frame" class="nav-item" onclick="setActive(this)">
+                        <i data-lucide="trash-2" class="w-5 h-5"></i> Uninstaller
+                    </a>
+                    <a href="organize.html" target="content-frame" class="nav-item" onclick="setActive(this)">
+                        <i data-lucide="folder-tree" class="w-5 h-5"></i> Organizer
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-title">System</div>
+                    <a href="history.html" target="content-frame" class="nav-item" onclick="setActive(this)">
+                        <i data-lucide="clock" class="w-5 h-5"></i> History
+                    </a>
+                </div>
+            </div>
+
+            <!-- Upgrade CTA -->
+            <div class="mt-auto pt-6">
+                <div class="bg-gradient-to-br from-[#5c33ff] to-[#8664ff] rounded-2xl p-5 text-white shadow-blue relative overflow-hidden">
+                    <div class="relative z-10">
+                        <h4 class="font-semibold text-sm mb-1">StowMind Pro</h4>
+                        <p class="text-xs text-white/80 mb-3">Unlock all features</p>
+                        <button class="w-full py-2 bg-white text-[#5c33ff] rounded-xl text-xs font-bold hover:bg-gray-100 transition-colors">
+                            Upgrade Now
+                        </button>
+                    </div>
+                    <!-- Decorative circles -->
+                    <div class="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
+                    <div class="absolute -bottom-8 -left-8 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main>
+            <iframe name="content-frame" src="dashboard.html" class="absolute inset-0 w-full h-full border-none"></iframe>
+        </main>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        function setActive(element) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+        }
+    </script>
+</body>
+</html>

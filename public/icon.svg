@@ -1,9 +1,93 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-  <rect x="0" y="0" width="24" height="24" rx="5" fill="#6366F1"></rect>
-  <g transform="translate(3.84 3.84) scale(0.68)" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path>
-    <path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path>
-    <path d="M3 5a2 2 0 0 0 2 2h3"></path>
-    <path d="M3 3v13a2 2 0 0 0 2 2h3"></path>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="StowMind app icon">
+  <defs>
+    <linearGradient id="bg" x1="132" y1="110" x2="878" y2="916" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#171327"/>
+      <stop offset=".2" stop-color="#3326b9"/>
+      <stop offset=".48" stop-color="#8d35ff"/>
+      <stop offset=".72" stop-color="#46ddff"/>
+      <stop offset="1" stop-color="#9cff66"/>
+    </linearGradient>
+    <radialGradient id="topGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(330 220) rotate(42) scale(370 260)">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".46"/>
+      <stop offset=".42" stop-color="#b98cff" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#2e1f94" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="mintGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(740 710) rotate(36) scale(360 250)">
+      <stop offset="0" stop-color="#b9ffe5" stop-opacity=".5"/>
+      <stop offset=".55" stop-color="#57efff" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#57efff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bodyFill" x1="324" y1="274" x2="690" y2="774" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".55" stop-color="#f7fbff"/>
+      <stop offset="1" stop-color="#dfeaff"/>
+    </linearGradient>
+    <linearGradient id="lidFill" x1="346" y1="236" x2="680" y2="498" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".5" stop-color="#fbfbff"/>
+      <stop offset="1" stop-color="#eef4ff"/>
+    </linearGradient>
+    <linearGradient id="slotFill" x1="344" y1="555" x2="678" y2="675" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#181420"/>
+      <stop offset="1" stop-color="#07070d"/>
+    </linearGradient>
+    <filter id="tileShadow" x="-12%" y="-10%" width="124%" height="126%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity=".42"/>
+    </filter>
+    <filter id="mascotShadow" x="-18%" y="-18%" width="136%" height="136%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="20" stdDeviation="13" flood-color="#05020f" flood-opacity=".58"/>
+      <feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#05020f" flood-opacity=".35"/>
+    </filter>
+    <filter id="softBlur" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <clipPath id="tileClip">
+      <rect x="64" y="64" width="896" height="896" rx="184"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#05050a"/>
+  <g filter="url(#tileShadow)">
+    <rect x="64" y="64" width="896" height="896" rx="184" fill="url(#bg)"/>
+    <g clip-path="url(#tileClip)">
+      <rect x="64" y="64" width="896" height="896" rx="184" fill="url(#topGlow)"/>
+      <rect x="64" y="64" width="896" height="896" rx="184" fill="url(#mintGlow)"/>
+      <path d="M64 698c142-38 250-29 360 18 130 55 280 40 536-92v336H64Z" fill="#020207" opacity=".36"/>
+      <path d="M118 104h788v260C681 270 452 276 118 394Z" fill="#ffffff" opacity=".09"/>
+      <g opacity=".22">
+        <path d="M160 160h704M160 288h704M160 416h704M160 544h704M160 672h704M160 800h704" stroke="#ffffff" stroke-width="3"/>
+        <path d="M224 112v800M352 112v800M480 112v800M608 112v800M736 112v800" stroke="#ffffff" stroke-width="3"/>
+      </g>
+      <circle cx="790" cy="230" r="66" fill="#77f2ff" opacity=".22" filter="url(#softBlur)"/>
+      <circle cx="248" cy="762" r="82" fill="#e04cff" opacity=".23" filter="url(#softBlur)"/>
+    </g>
+    <rect x="82" y="82" width="860" height="860" rx="166" fill="none" stroke="#ffffff" stroke-opacity=".24" stroke-width="8"/>
+    <rect x="72" y="72" width="880" height="880" rx="176" fill="none" stroke="#05030a" stroke-opacity=".45" stroke-width="16"/>
+  </g>
+
+  <g filter="url(#mascotShadow)">
+    <path d="M350 378c-53-58-25-152 52-171 41-11 82 3 110 32 28-29 70-43 111-32 78 20 105 114 52 172 63 7 111 60 111 126v165c0 86-70 156-156 156H394c-86 0-156-70-156-156V505c0-66 49-120 112-127Z" fill="#080710"/>
+    <path d="M371 399c-45-47-24-125 38-143 38-11 78 6 101 38l2 3 2-3c23-32 64-49 102-38 62 18 83 96 38 143 54 2 97 46 97 100v164c0 69-56 125-125 125H398c-69 0-125-56-125-125V499c0-54 43-98 98-100Z" fill="url(#bodyFill)"/>
+    <path d="M384 413c-36-35-21-96 27-110 34-10 69 10 82 45l19 51 19-51c13-35 49-55 83-45 48 14 63 75 27 110l-57 56H441Z" fill="url(#lidFill)"/>
+    <path d="M332 552c0-27 22-49 49-49h262c27 0 49 22 49 49v80c0 27-22 49-49 49H381c-27 0-49-22-49-49Z" fill="url(#slotFill)"/>
+    <path d="M372 566c0-18 15-33 33-33h214c18 0 33 15 33 33v11c0 18-15 33-33 33H405c-18 0-33-15-33-33Z" fill="#ffffff" opacity=".12"/>
+    <path d="M356 705c54 32 259 32 312 0 17-10 31 10 17 25-40 41-306 41-346 0-14-15 0-35 17-25Z" fill="#ffffff" opacity=".45"/>
+    <path d="M338 502c0-62 50-112 112-112h124c62 0 112 50 112 112v15c-59-20-117-30-174-30s-115 10-174 30Z" fill="#ffffff" opacity=".22"/>
+  </g>
+
+  <g>
+    <ellipse cx="456" cy="439" rx="50" ry="62" fill="#080710"/>
+    <ellipse cx="573" cy="439" rx="50" ry="62" fill="#080710"/>
+    <circle cx="472" cy="417" r="15" fill="#ffffff"/>
+    <circle cx="557" cy="417" r="15" fill="#ffffff"/>
+    <circle cx="486" cy="452" r="7" fill="#ffffff" opacity=".55"/>
+    <circle cx="543" cy="452" r="7" fill="#ffffff" opacity=".55"/>
+  </g>
+
+  <g opacity=".9">
+    <path d="M186 258h26v26h-26zM212 232h26v26h-26zM238 258h26v26h-26zM212 284h26v26h-26z" fill="#ffffff"/>
+    <path d="M790 688h22v22h-22zM812 666h22v22h-22zM834 688h22v22h-22zM812 710h22v22h-22z" fill="#ffffff" opacity=".86"/>
+    <path d="M188 748h18v18h-18zM206 730h18v18h-18zM224 748h18v18h-18zM206 766h18v18h-18z" fill="#a0ffff" opacity=".9"/>
+    <path d="M732 288h14v14h-14zM746 274h14v14h-14zM760 288h14v14h-14zM746 302h14v14h-14z" fill="#f8ff8a" opacity=".9"/>
   </g>
 </svg>

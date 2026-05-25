@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: {
+                        appBg: '#0b0c10', cardBg: '#14161c',
+                        textMain: '#ffffff', textMuted: '#8b949e',
+                        brandBlue: '#5c33ff', brandHover: '#4a24e6',
+                        borderLight: '#22252e'
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 30px rgba(0, 0, 0, 0.4)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; font-family: 'Poppins', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+        .dark-card { background-color: #14161c; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); border: 1px solid #22252e; }
+
+        .custom-checkbox {
+            appearance: none; width: 20px; height: 20px; border: 2px solid #30363d; border-radius: 6px;
+            background-color: #0b0c10; cursor: pointer; position: relative; transition: all 0.2s;
+        }
+        .custom-checkbox:checked { background-color: #5c33ff; border-color: #5c33ff; }
+        .custom-checkbox:checked::after {
+            content: ''; position: absolute; left: 5px; top: 1px; width: 6px; height: 11px;
+            border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg);
+        }
+    </style>
+</head>
+<body class="p-8 h-full overflow-y-auto">
+
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl font-bold text-white">App Uninstaller</h1>
+            <p class="text-sm text-[#8b949e]">Completely remove apps and their leftovers</p>
+        </div>
+        <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 text-[#8b949e] absolute left-4 top-1/2 -translate-y-1/2"></i>
+            <input type="text" placeholder="Search apps..." class="bg-[#14161c] text-sm text-white rounded-full pl-10 pr-4 py-2.5 w-64 focus:outline-none focus:ring-2 focus:ring-[#5c33ff]/50 shadow-soft border border-[#22252e] placeholder-[#8b949e]">
+        </div>
+    </div>
+
+    <div class="grid grid-cols-12 gap-8">
+        <!-- Left Nav -->
+        <div class="col-span-3 space-y-2">
+            <div class="px-4 py-3 bg-[#14161c] shadow-sm rounded-xl text-[#5c33ff] text-sm font-bold flex justify-between cursor-pointer border border-[#5c33ff]/20">
+                <span>All Applications</span>
+                <span class="bg-[#5c33ff]/10 px-2 py-0.5 rounded-md">142</span>
+            </div>
+            <div class="px-4 py-3 hover:bg-[#14161c] rounded-xl text-[#8b949e] hover:text-white text-sm font-bold flex justify-between cursor-pointer transition-colors">
+                <span>Unused Apps</span>
+                <span class="text-[#ee5d50]">5</span>
+            </div>
+            <div class="px-4 py-3 hover:bg-[#14161c] rounded-xl text-[#8b949e] hover:text-white text-sm font-bold flex justify-between cursor-pointer transition-colors">
+                <span>Large Apps</span>
+                <span>12</span>
+            </div>
+            <div class="px-4 py-3 hover:bg-[#14161c] rounded-xl text-[#8b949e] hover:text-white text-sm font-bold flex justify-between cursor-pointer transition-colors">
+                <span>Leftovers</span>
+                <span class="text-red-400">2</span>
+            </div>
+        </div>
+
+        <!-- Right List -->
+        <div class="col-span-9 dark-card overflow-hidden flex flex-col h-[500px]">
+            <!-- Table Header -->
+            <div class="grid grid-cols-12 gap-4 p-5 border-b border-[#22252e] text-xs font-bold text-[#8b949e] uppercase tracking-wider bg-[#0b0c10]">
+                <div class="col-span-6 flex items-center gap-4">
+                    <input type="checkbox" class="custom-checkbox">
+                    <span>Name</span>
+                </div>
+                <div class="col-span-3">Last Used</div>
+                <div class="col-span-3 text-right">Size</div>
+            </div>
+
+            <!-- Table Body -->
+            <div class="flex-1 overflow-y-auto p-3 space-y-2">
+                <!-- App 1 -->
+                <label class="grid grid-cols-12 gap-4 p-3 hover:bg-[#1c1e26] rounded-xl cursor-pointer transition-colors items-center group">
+                    <div class="col-span-6 flex items-center gap-4">
+                        <input type="checkbox" class="custom-checkbox">
+                        <div class="w-10 h-10 rounded-xl bg-[#0b0c10] border border-[#22252e] flex items-center justify-center">
+                            <i data-lucide="figma" class="w-5 h-5 text-pink-400"></i>
+                        </div>
+                        <span class="text-sm font-bold text-white">Figma</span>
+                    </div>
+                    <div class="col-span-3 text-xs font-medium text-[#8b949e]">Today</div>
+                    <div class="col-span-3 text-xs font-bold text-white text-right">1.2 GB</div>
+                </label>
+
+                <!-- App 2 (Unused) -->
+                <label class="grid grid-cols-12 gap-4 p-3 hover:bg-[#1c1e26] rounded-xl cursor-pointer transition-colors items-center group">
+                    <div class="col-span-6 flex items-center gap-4">
+                        <input type="checkbox" class="custom-checkbox" checked>
+                        <div class="w-10 h-10 rounded-xl bg-[#0b0c10] border border-[#22252e] flex items-center justify-center">
+                            <i data-lucide="box" class="w-5 h-5 text-blue-400"></i>
+                        </div>
+                        <span class="text-sm font-bold text-white">Docker</span>
+                    </div>
+                    <div class="col-span-3 text-xs font-medium text-[#ee5d50]">3 months ago</div>
+                    <div class="col-span-3 text-xs font-bold text-white text-right">3.4 GB</div>
+                </label>
+
+                <!-- App 3 -->
+                <label class="grid grid-cols-12 gap-4 p-3 hover:bg-[#1c1e26] rounded-xl cursor-pointer transition-colors items-center group">
+                    <div class="col-span-6 flex items-center gap-4">
+                        <input type="checkbox" class="custom-checkbox">
+                        <div class="w-10 h-10 rounded-xl bg-[#0b0c10] border border-[#22252e] flex items-center justify-center">
+                            <i data-lucide="slack" class="w-5 h-5 text-purple-400"></i>
+                        </div>
+                        <span class="text-sm font-bold text-white">Slack</span>
+                    </div>
+                    <div class="col-span-3 text-xs font-medium text-[#8b949e]">Yesterday</div>
+                    <div class="col-span-3 text-xs font-bold text-white text-right">850 MB</div>
+                </label>
+            </div>
+
+            <!-- Bottom Action Bar -->
+            <div class="p-5 border-t border-[#22252e] bg-[#0b0c10] flex justify-between items-center">
+                <span class="text-sm font-bold text-[#8b949e]">1 app selected (3.4 GB)</span>
+                <button class="px-6 py-2.5 bg-[#ee5d50] hover:bg-[#dc2626] text-white rounded-xl text-sm font-bold transition-colors shadow-[0_4px_14px_rgba(239,68,68,0.25)] border border-[#f87171]">
+                    Uninstall Selected
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

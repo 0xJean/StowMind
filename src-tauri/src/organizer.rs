@@ -35,7 +35,8 @@ fn path_is_within(base: &Path, path: &Path) -> bool {
 fn path_component_eq(a: &std::path::Component<'_>, b: &std::path::Component<'_>) -> bool {
     #[cfg(windows)]
     {
-        a.as_os_str().to_string_lossy().to_lowercase() == b.as_os_str().to_string_lossy().to_lowercase()
+        a.as_os_str().to_string_lossy().to_lowercase()
+            == b.as_os_str().to_string_lossy().to_lowercase()
     }
     #[cfg(not(windows))]
     {
@@ -64,8 +65,8 @@ fn sanitize_segment(raw: &str) -> Option<String> {
     }
     let upper: String = out.chars().map(|c| c.to_ascii_uppercase()).collect();
     const RESERVED: &[&str] = &[
-        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
-        "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
     ];
     if RESERVED.iter().any(|r| upper == *r) {
         return Some(format!("_{}", out));
@@ -98,9 +99,13 @@ fn safe_move(from: &Path, to: &Path) -> Result<(), std::io::Error> {
 fn is_cross_device(e: &std::io::Error) -> bool {
     if let Some(code) = e.raw_os_error() {
         #[cfg(unix)]
-        { return code == 18; } // EXDEV
+        {
+            return code == 18;
+        } // EXDEV
         #[cfg(windows)]
-        { return code == 17; } // ERROR_NOT_SAME_DEVICE
+        {
+            return code == 17;
+        } // ERROR_NOT_SAME_DEVICE
     }
     false
 }
@@ -196,10 +201,18 @@ fn sanitize_backup_session_id(s: &str) -> String {
 }
 
 /// 将 `source`（须在 `base` 下）复制到 `backup_root/<session>/相对路径`（文件或整个文件夹）。
-fn copy_to_backup(base: &Path, source: &Path, backup_root: &Path, session: &str) -> Result<(), std::io::Error> {
+fn copy_to_backup(
+    base: &Path,
+    source: &Path,
+    backup_root: &Path,
+    session: &str,
+) -> Result<(), std::io::Error> {
     let sid = sanitize_backup_session_id(session);
     let rel = source.strip_prefix(base).map_err(|_| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path not under base directory")
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "path not under base directory",
+        )
     })?;
     let dest = backup_root.join(&sid).join(rel);
     if let Some(parent) = dest.parent() {
@@ -362,33 +375,37 @@ pub fn scan_files(
 /// 判断是否为临时/缓存文件
 fn is_temporary_file(name: &str) -> bool {
     let name_lower = name.to_lowercase();
-    
+
     // Office 临时文件
     if name.starts_with(".~") || name.starts_with("~$") || name.starts_with("._") {
         return true;
     }
-    
+
     // 常见临时文件扩展名
-    if name_lower.ends_with(".tmp") || 
-       name_lower.ends_with(".temp") ||
-       name_lower.ends_with(".bak") ||
-       name_lower.ends_with(".swp") ||
-       name_lower.ends_with(".swo") ||
-       name_lower.ends_with(".cache") ||
-       name_lower.ends_with(".log") {
+    if name_lower.ends_with(".tmp")
+        || name_lower.ends_with(".temp")
+        || name_lower.ends_with(".bak")
+        || name_lower.ends_with(".swp")
+        || name_lower.ends_with(".swo")
+        || name_lower.ends_with(".cache")
+        || name_lower.ends_with(".log")
+    {
         return true;
     }
-    
+
     // macOS 临时文件
     if name == ".localized" || name.starts_with("._") {
         return true;
     }
-    
+
     false
 }
 
 /// 扫描子文件夹并分类
-pub fn scan_folders(directory: &str, categories: &[Category]) -> Result<Vec<FolderItem>, std::io::Error> {
+pub fn scan_folders(
+    directory: &str,
+    categories: &[Category],
+) -> Result<Vec<FolderItem>, std::io::Error> {
     let mut folders = Vec::new();
     let path = Path::new(directory);
 
@@ -399,9 +416,13 @@ pub fn scan_folders(directory: &str, categories: &[Category]) -> Result<Vec<Fold
         ));
     }
 
-    for entry in WalkDir::new(path).max_depth(1).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(path)
+        .max_depth(1)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         let entry_path = entry.path();
-        
+
         if entry_path == path {
             continue;
         }
@@ -419,7 +440,7 @@ pub fn scan_folders(directory: &str, categories: &[Category]) -> Result<Vec<Fold
 
             // 统计文件夹内容
             let (file_count, total_size, extensions) = analyze_folder_contents(entry_path);
-            
+
             // 根据内容分类文件夹
             let category = classify_folder(&name, &extensions, categories);
 
@@ -459,9 +480,13 @@ fn analyze_folder_contents(folder_path: &Path) -> (usize, u64, HashMap<String, u
 }
 
 /// 根据文件夹名称和内容分类
-fn classify_folder(name: &str, extensions: &HashMap<String, usize>, categories: &[Category]) -> String {
+fn classify_folder(
+    name: &str,
+    extensions: &HashMap<String, usize>,
+    categories: &[Category],
+) -> String {
     let name_lower = name.to_lowercase();
-    
+
     // 首先检查文件夹名称是否匹配关键词
     for cat in categories {
         for keyword in &cat.keywords {
@@ -470,11 +495,11 @@ fn classify_folder(name: &str, extensions: &HashMap<String, usize>, categories: 
             }
         }
     }
-    
+
     // 然后根据内容中最多的扩展名类型分类
     if !extensions.is_empty() {
         let mut category_counts: HashMap<String, usize> = HashMap::new();
-        
+
         for (ext, count) in extensions {
             for cat in categories {
                 if cat.extensions.iter().any(|e| e.to_lowercase() == *ext) {
@@ -483,13 +508,13 @@ fn classify_folder(name: &str, extensions: &HashMap<String, usize>, categories: 
                 }
             }
         }
-        
+
         // 找出文件数最多的分类
         if let Some((category, _)) = category_counts.into_iter().max_by_key(|(_, count)| *count) {
             return category;
         }
     }
-    
+
     "其他".to_string()
 }
 
@@ -640,7 +665,7 @@ pub fn extract_base_name(filename: &str) -> String {
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| filename.to_string());
-    
+
     // 移除常见的数字后缀模式
     let patterns = [
         // 日期时间模式
@@ -658,23 +683,27 @@ pub fn extract_base_name(filename: &str) -> String {
         // UUID 部分
         r"[-_]?[a-f0-9]{8}(-[a-f0-9]{4}){0,3}",
     ];
-    
+
     let mut result = name_without_ext.to_lowercase();
-    
+
     for pattern in patterns {
         if let Ok(re) = regex::Regex::new(pattern) {
             result = re.replace_all(&result, "").to_string();
         }
     }
-    
+
     // 清理多余的分隔符
     let result = result.trim_matches(|c| c == '-' || c == '_' || c == ' ');
-    
+
     // 如果结果太短，返回原始名称的前缀
     if result.len() < 2 {
-        return name_without_ext.chars().take(10).collect::<String>().to_lowercase();
+        return name_without_ext
+            .chars()
+            .take(10)
+            .collect::<String>()
+            .to_lowercase();
     }
-    
+
     result.to_string()
 }
 
@@ -686,29 +715,29 @@ pub fn similarity(s1: &str, s2: &str) -> f64 {
     if s1.is_empty() || s2.is_empty() {
         return 0.0;
     }
-    
+
     let s1_lower = s1.to_lowercase();
     let s2_lower = s2.to_lowercase();
-    
+
     // 检查是否有共同前缀
     let common_prefix_len = s1_lower
         .chars()
         .zip(s2_lower.chars())
         .take_while(|(a, b)| a == b)
         .count();
-    
+
     let max_len = s1.len().max(s2.len());
     let prefix_ratio = common_prefix_len as f64 / max_len as f64;
-    
+
     // 如果共同前缀超过 50%，认为相似
     if prefix_ratio > 0.5 {
         return prefix_ratio;
     }
-    
+
     // 使用 Levenshtein 距离的简化版本
     let distance = levenshtein_distance(&s1_lower, &s2_lower);
     let max_len = s1.len().max(s2.len()) as f64;
-    
+
     1.0 - (distance as f64 / max_len)
 }
 
@@ -718,24 +747,36 @@ fn levenshtein_distance(s1: &str, s2: &str) -> usize {
     let s2_chars: Vec<char> = s2.chars().collect();
     let len1 = s1_chars.len();
     let len2 = s2_chars.len();
-    
-    if len1 == 0 { return len2; }
-    if len2 == 0 { return len1; }
-    
+
+    if len1 == 0 {
+        return len2;
+    }
+    if len2 == 0 {
+        return len1;
+    }
+
     let mut matrix = vec![vec![0usize; len2 + 1]; len1 + 1];
-    
-    for i in 0..=len1 { matrix[i][0] = i; }
-    for j in 0..=len2 { matrix[0][j] = j; }
-    
+
+    for i in 0..=len1 {
+        matrix[i][0] = i;
+    }
+    for j in 0..=len2 {
+        matrix[0][j] = j;
+    }
+
     for i in 1..=len1 {
         for j in 1..=len2 {
-            let cost = if s1_chars[i-1] == s2_chars[j-1] { 0 } else { 1 };
-            matrix[i][j] = (matrix[i-1][j] + 1)
-                .min(matrix[i][j-1] + 1)
-                .min(matrix[i-1][j-1] + cost);
+            let cost = if s1_chars[i - 1] == s2_chars[j - 1] {
+                0
+            } else {
+                1
+            };
+            matrix[i][j] = (matrix[i - 1][j] + 1)
+                .min(matrix[i][j - 1] + 1)
+                .min(matrix[i - 1][j - 1] + cost);
         }
     }
-    
+
     matrix[len1][len2]
 }
 
@@ -743,15 +784,18 @@ fn levenshtein_distance(s1: &str, s2: &str) -> usize {
 pub fn group_similar_files(files: &[(String, String)]) -> HashMap<String, Option<String>> {
     // files: Vec<(file_path, category)>
     // 返回: HashMap<file_path, Option<sub_folder>>
-    
+
     let mut result: HashMap<String, Option<String>> = HashMap::new();
-    
+
     // 按分类分组
     let mut by_category: HashMap<String, Vec<String>> = HashMap::new();
     for (path, category) in files {
-        by_category.entry(category.clone()).or_default().push(path.clone());
+        by_category
+            .entry(category.clone())
+            .or_default()
+            .push(path.clone());
     }
-    
+
     // 对每个分类内的文件进行相似度分组
     for (_category, paths) in by_category {
         if paths.len() < 3 {
@@ -761,7 +805,7 @@ pub fn group_similar_files(files: &[(String, String)]) -> HashMap<String, Option
             }
             continue;
         }
-        
+
         // 提取基础名称
         let base_names: Vec<(String, String)> = paths
             .iter()
@@ -773,24 +817,24 @@ pub fn group_similar_files(files: &[(String, String)]) -> HashMap<String, Option
                 (p.clone(), extract_base_name(&filename))
             })
             .collect();
-        
+
         // 分组：相似的文件放在一起
         let mut groups: Vec<Vec<String>> = Vec::new();
         let mut assigned: Vec<bool> = vec![false; base_names.len()];
-        
+
         for i in 0..base_names.len() {
             if assigned[i] {
                 continue;
             }
-            
+
             let mut group = vec![base_names[i].0.clone()];
             assigned[i] = true;
-            
+
             for j in (i + 1)..base_names.len() {
                 if assigned[j] {
                     continue;
                 }
-                
+
                 // 检查相似度
                 let sim = similarity(&base_names[i].1, &base_names[j].1);
                 if sim > 0.6 {
@@ -798,10 +842,10 @@ pub fn group_similar_files(files: &[(String, String)]) -> HashMap<String, Option
                     assigned[j] = true;
                 }
             }
-            
+
             groups.push(group);
         }
-        
+
         // 为每个组分配子文件夹名称
         for group in groups {
             if group.len() >= 3 {
@@ -811,7 +855,7 @@ pub fn group_similar_files(files: &[(String, String)]) -> HashMap<String, Option
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or_default();
                 let base = extract_base_name(&first_file);
-                
+
                 // 生成子文件夹名称
                 let sub_folder = if base.chars().count() > 20 {
                     let short_base: String = base.chars().take(20).collect();
@@ -821,7 +865,7 @@ pub fn group_similar_files(files: &[(String, String)]) -> HashMap<String, Option
                 } else {
                     format!("{}_系列", base)
                 };
-                
+
                 for path in group {
                     result.insert(path, Some(sub_folder.clone()));
                 }
@@ -833,7 +877,7 @@ pub fn group_similar_files(files: &[(String, String)]) -> HashMap<String, Option
             }
         }
     }
-    
+
     result
 }
 

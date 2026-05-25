@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: {
+                        appBg: '#0b0c10', cardBg: '#14161c',
+                        textMain: '#ffffff', textMuted: '#8b949e',
+                        brandBlue: '#5c33ff', brandHover: '#4a24e6',
+                        borderLight: '#22252e'
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 30px rgba(0, 0, 0, 0.4)',
+                        'blue': '0 10px 20px rgba(92, 51, 255, 0.3)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; font-family: 'Poppins', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+        .dark-card { background-color: #14161c; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); border: 1px solid #22252e; }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            width: 40px; height: 24px; background-color: #22252e; border-radius: 100px;
+            position: relative; cursor: pointer; transition: all 0.3s; border: 1px solid #30363d;
+        }
+        .toggle-switch.active { background-color: #5c33ff; border-color: #6b47ff; }
+        .toggle-switch::after {
+            content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+            background-color: #8b949e; border-radius: 50%; transition: all 0.3s;
+        }
+        .toggle-switch.active::after { transform: translateX(16px); background-color: #ffffff; }
+    </style>
+</head>
+<body class="p-8 h-full overflow-y-auto">
+
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl font-bold text-white">File Organizer</h1>
+            <p class="text-sm text-[#8b949e]">Automate your file management</p>
+        </div>
+        <button class="px-5 py-2.5 bg-[#5c33ff] hover:bg-[#4a24e6] text-white rounded-xl text-sm font-bold transition-colors flex items-center gap-2 shadow-blue border border-[#6b47ff]">
+            <i data-lucide="plus" class="w-4 h-4"></i> Create Rule
+        </button>
+    </div>
+
+    <div class="grid grid-cols-2 gap-8">
+        <!-- Rule Card 1 -->
+        <div class="dark-card p-6">
+            <div class="flex justify-between items-start mb-6">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-[#5c33ff]/10 border border-[#5c33ff]/20 text-[#5c33ff] flex items-center justify-center">
+                        <i data-lucide="image" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-white">Sort Images</h3>
+                        <p class="text-xs text-[#8b949e] font-medium">Last run: 2 hours ago</p>
+                    </div>
+                </div>
+                <div class="toggle-switch active" onclick="this.classList.toggle('active')"></div>
+            </div>
+
+            <div class="bg-[#0b0c10] border border-[#22252e] rounded-xl p-5 space-y-3">
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="text-[#8b949e] font-bold w-12">IF</span>
+                    <span class="text-white font-medium bg-[#14161c] px-3 py-1.5 rounded-lg border border-[#22252e]">File type is Image</span>
+                </div>
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="text-[#8b949e] font-bold w-12">AND</span>
+                    <span class="text-white font-medium bg-[#14161c] px-3 py-1.5 rounded-lg border border-[#22252e]">In ~/Downloads</span>
+                </div>
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="text-[#5c33ff] font-bold w-12">THEN</span>
+                    <span class="text-[#5c33ff] font-medium bg-[#5c33ff]/10 px-3 py-1.5 rounded-lg border border-[#5c33ff]/30">Move to ~/Pictures</span>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button class="p-2 text-[#8b949e] hover:text-[#5c33ff] hover:bg-[#5c33ff]/10 rounded-lg transition-colors"><i data-lucide="edit-2" class="w-5 h-5"></i></button>
+                <button class="p-2 text-[#8b949e] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+            </div>
+        </div>
+
+        <!-- Rule Card 2 -->
+        <div class="dark-card p-6">
+            <div class="flex justify-between items-start mb-6">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-[#ee5d50]/10 border border-[#ee5d50]/20 text-[#ee5d50] flex items-center justify-center">
+                        <i data-lucide="archive" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-white">Archive Old Projects</h3>
+                        <p class="text-xs text-[#8b949e] font-medium">Last run: Yesterday</p>
+                    </div>
+                </div>
+                <div class="toggle-switch" onclick="this.classList.toggle('active')"></div>
+            </div>
+
+            <div class="bg-[#0b0c10] border border-[#22252e] rounded-xl p-5 space-y-3 opacity-60">
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="text-[#8b949e] font-bold w-12">IF</span>
+                    <span class="text-white font-medium bg-[#14161c] px-3 py-1.5 rounded-lg border border-[#22252e]">Older than 30 days</span>
+                </div>
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="text-[#8b949e] font-bold w-12">AND</span>
+                    <span class="text-white font-medium bg-[#14161c] px-3 py-1.5 rounded-lg border border-[#22252e]">In ~/Projects</span>
+                </div>
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="text-[#5c33ff] font-bold w-12">THEN</span>
+                    <span class="text-[#5c33ff] font-medium bg-[#5c33ff]/10 px-3 py-1.5 rounded-lg border border-[#5c33ff]/30">Compress to .zip</span>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button class="p-2 text-[#8b949e] hover:text-[#5c33ff] hover:bg-[#5c33ff]/10 rounded-lg transition-colors"><i data-lucide="edit-2" class="w-5 h-5"></i></button>
+                <button class="p-2 text-[#8b949e] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

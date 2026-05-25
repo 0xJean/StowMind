@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Satoshi', 'sans-serif'] },
+                    colors: {
+                        appBg: '#09090b', cardBg: '#131418', cardHover: '#1a1b20',
+                        borderLight: 'rgba(255, 255, 255, 0.06)',
+                        accentGreen: '#00e599', accentBlue: '#00d2ff', textMuted: '#8a8b94'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; }
+        .bento-card {
+            background-color: #131418;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 24px;
+            transition: all 0.3s ease;
+        }
+        .bento-card:hover {
+            background-color: #16171b;
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+        .status-dot { box-shadow: 0 0 8px currentColor; }
+
+        .rule-line {
+            position: absolute;
+            left: 23px;
+            top: 48px;
+            bottom: 48px;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.05);
+            z-index: 0;
+        }
+    </style>
+</head>
+<body class="p-8 font-sans h-full overflow-y-auto">
+
+    <div class="flex justify-between items-end mb-8">
+        <div>
+            <p class="text-textMuted text-xs font-semibold tracking-widest uppercase mb-1">Optimize</p>
+            <h1 class="text-3xl font-bold tracking-tight">Organize Files</h1>
+        </div>
+        <button class="px-5 py-2.5 bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] border border-borderLight rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
+            <i data-lucide="plus" class="w-4 h-4"></i> Create Rule
+        </button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Rule Card 1 -->
+        <div class="bento-card p-6 relative group">
+            <div class="flex justify-between items-start mb-8">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-[rgba(0,229,153,0.1)] flex items-center justify-center border border-[rgba(0,229,153,0.2)]">
+                        <i data-lucide="download" class="w-5 h-5 text-accentGreen"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg">Archive Old Downloads</h3>
+                        <div class="flex items-center gap-2 mt-1">
+                            <div class="w-1.5 h-1.5 rounded-full bg-accentGreen status-dot text-accentGreen"></div>
+                            <span class="text-xs text-textMuted font-medium">Active</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Toggle -->
+                <div class="w-10 h-6 bg-accentGreen rounded-full relative cursor-pointer shadow-[0_0_10px_rgba(0,229,153,0.3)]">
+                    <div class="w-4 h-4 bg-black rounded-full absolute right-1 top-1"></div>
+                </div>
+            </div>
+
+            <div class="relative pl-12 space-y-6 text-sm z-10">
+                <div class="rule-line"></div>
+
+                <div class="flex items-center gap-4 relative">
+                    <div class="w-3 h-3 rounded-full bg-cardBg border-2 border-textMuted absolute -left-[29px] z-10"></div>
+                    <span class="text-textMuted font-bold uppercase tracking-wider text-xs w-12">IF in</span>
+                    <span class="font-mono bg-[rgba(255,255,255,0.05)] px-3 py-1 rounded-lg border border-borderLight text-white">~/Downloads</span>
+                </div>
+
+                <div class="flex items-center gap-4 relative">
+                    <div class="w-3 h-3 rounded-full bg-cardBg border-2 border-textMuted absolute -left-[29px] z-10"></div>
+                    <span class="text-textMuted font-bold uppercase tracking-wider text-xs w-12">AND is</span>
+                    <span class="font-medium text-white">Older than 30 days</span>
+                </div>
+
+                <div class="flex items-center gap-4 relative">
+                    <div class="w-3 h-3 rounded-full bg-cardBg border-2 border-accentGreen absolute -left-[29px] z-10 shadow-[0_0_8px_rgba(0,229,153,0.5)]"></div>
+                    <span class="text-accentGreen font-bold uppercase tracking-wider text-xs w-12">THEN</span>
+                    <span class="text-white font-medium">Move to</span>
+                    <span class="font-mono bg-[rgba(255,255,255,0.05)] px-3 py-1 rounded-lg border border-borderLight text-white">~/Archive/Downloads</span>
+                </div>
+            </div>
+
+            <div class="mt-8 pt-5 border-t border-borderLight flex justify-between items-center">
+                <span class="text-xs text-textMuted font-medium">Last run: 2 hours ago</span>
+                <div class="flex gap-2">
+                    <button class="p-2 hover:bg-[rgba(255,255,255,0.05)] rounded-lg text-textMuted hover:text-white transition-colors"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                    <button class="p-2 hover:bg-[rgba(255,255,255,0.05)] rounded-lg text-textMuted hover:text-white transition-colors"><i data-lucide="play" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rule Card 2 -->
+        <div class="bento-card p-6 relative group">
+            <div class="flex justify-between items-start mb-8">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-[rgba(255,255,255,0.03)] flex items-center justify-center border border-borderLight">
+                        <i data-lucide="image" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg text-textMuted">Sort Screenshots</h3>
+                        <div class="flex items-center gap-2 mt-1">
+                            <div class="w-1.5 h-1.5 rounded-full bg-textMuted"></div>
+                            <span class="text-xs text-textMuted font-medium">Disabled</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Toggle -->
+                <div class="w-10 h-6 bg-[rgba(255,255,255,0.1)] rounded-full relative cursor-pointer">
+                    <div class="w-4 h-4 bg-textMuted rounded-full absolute left-1 top-1"></div>
+                </div>
+            </div>
+
+            <div class="relative pl-12 space-y-6 text-sm z-10 opacity-50">
+                <div class="rule-line"></div>
+
+                <div class="flex items-center gap-4 relative">
+                    <div class="w-3 h-3 rounded-full bg-cardBg border-2 border-textMuted absolute -left-[29px] z-10"></div>
+                    <span class="text-textMuted font-bold uppercase tracking-wider text-xs w-12">IF in</span>
+                    <span class="font-mono bg-[rgba(255,255,255,0.05)] px-3 py-1 rounded-lg border border-borderLight text-white">~/Desktop</span>
+                </div>
+
+                <div class="flex items-center gap-4 relative">
+                    <div class="w-3 h-3 rounded-full bg-cardBg border-2 border-textMuted absolute -left-[29px] z-10"></div>
+                    <span class="text-textMuted font-bold uppercase tracking-wider text-xs w-12">AND</span>
+                    <span class="font-medium text-white">Name starts with "Screen Shot"</span>
+                </div>
+
+                <div class="flex items-center gap-4 relative">
+                    <div class="w-3 h-3 rounded-full bg-cardBg border-2 border-white absolute -left-[29px] z-10"></div>
+                    <span class="text-white font-bold uppercase tracking-wider text-xs w-12">THEN</span>
+                    <span class="text-white font-medium">Move to</span>
+                    <span class="font-mono bg-[rgba(255,255,255,0.05)] px-3 py-1 rounded-lg border border-borderLight text-white">~/Pictures/Screenshots</span>
+                </div>
+            </div>
+
+            <div class="mt-8 pt-5 border-t border-borderLight flex justify-between items-center">
+                <span class="text-xs text-textMuted font-medium">Never run</span>
+                <div class="flex gap-2">
+                    <button class="p-2 hover:bg-[rgba(255,255,255,0.05)] rounded-lg text-textMuted hover:text-white transition-colors"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                    <button class="p-2 hover:bg-[rgba(255,255,255,0.05)] rounded-lg text-textMuted hover:text-white transition-colors"><i data-lucide="play" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>

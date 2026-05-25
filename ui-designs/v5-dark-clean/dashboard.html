@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: {
+                        appBg: '#0b0c10', cardBg: '#14161c',
+                        textMain: '#ffffff', textMuted: '#8b949e',
+                        brandBlue: '#5c33ff', brandHover: '#4a24e6',
+                        borderLight: '#22252e',
+                        accentGreen: '#05cd99', accentYellow: '#ffce20', accentRed: '#ee5d50', accentCyan: '#39b8ff'
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 30px rgba(0, 0, 0, 0.4)',
+                        'blue': '0 10px 20px rgba(92, 51, 255, 0.25)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; font-family: 'Poppins', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+
+        .dark-card {
+            background-color: #14161c;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            border: 1px solid #22252e;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .dark-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+            border-color: #30363d;
+        }
+    </style>
+</head>
+<body class="p-8 h-full overflow-y-auto">
+
+    <!-- Top Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div class="relative">
+            <i data-lucide="search" class="w-5 h-5 text-[#8b949e] absolute left-4 top-1/2 -translate-y-1/2"></i>
+            <input type="text" placeholder="Search files, apps, or settings..." class="bg-[#14161c] text-sm text-white rounded-full pl-12 pr-4 py-3 w-80 focus:outline-none focus:ring-2 focus:ring-[#5c33ff]/50 shadow-soft border border-[#22252e] placeholder-[#8b949e]">
+        </div>
+
+        <div class="flex items-center gap-4">
+            <button class="w-12 h-12 rounded-full bg-[#14161c] shadow-soft border border-[#22252e] flex items-center justify-center text-[#8b949e] hover:text-[#5c33ff] transition-colors relative">
+                <i data-lucide="bell" class="w-5 h-5"></i>
+                <span class="absolute top-3 right-3 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#14161c]"></span>
+            </button>
+            <div class="flex items-center gap-3 bg-[#14161c] border border-[#22252e] p-2 pr-4 rounded-full shadow-soft cursor-pointer hover:border-[#30363d] transition-colors">
+                <img src="https://i.pravatar.cc/100?img=33" alt="User" class="w-8 h-8 rounded-full">
+                <span class="text-sm font-semibold text-white">Jean Doe</span>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-[#8b949e]"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-12 gap-8">
+
+        <!-- Left Column (Main Content) -->
+        <div class="col-span-8 space-y-8">
+
+            <!-- Storage Overview Cards -->
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-white">System Storage</h2>
+                    <a href="#" class="text-sm font-medium text-[#5c33ff] hover:underline">View Details</a>
+                </div>
+
+                <div class="grid grid-cols-2 gap-6">
+                    <!-- Main Drive Card (Blue Accent) -->
+                    <div class="bg-[#5c33ff] rounded-[24px] p-6 text-white shadow-blue relative overflow-hidden cursor-pointer hover:-translate-y-1 transition-transform border border-[#6b47ff]">
+                        <div class="flex justify-between items-start mb-8 relative z-10">
+                            <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md">
+                                <i data-lucide="hard-drive" class="w-6 h-6 text-white"></i>
+                            </div>
+                            <button class="text-white/80 hover:text-white"><i data-lucide="more-horizontal" class="w-5 h-5"></i></button>
+                        </div>
+                        <div class="relative z-10">
+                            <h3 class="text-lg font-semibold mb-1">Macintosh HD</h3>
+                            <p class="text-sm text-white/80 mb-4">145.9 GB used of 494.3 GB</p>
+                            <div class="h-2 w-full bg-white/20 rounded-full overflow-hidden">
+                                <div class="h-full bg-white rounded-full" style="width: 30%"></div>
+                            </div>
+                        </div>
+                        <!-- Decorative background -->
+                        <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+                    </div>
+
+                    <!-- External/Cloud Card (Dark) -->
+                    <div class="dark-card p-6 flex flex-col justify-between cursor-pointer">
+                        <div class="flex justify-between items-start mb-8">
+                            <div class="w-12 h-12 bg-[#5c33ff]/10 border border-[#5c33ff]/20 rounded-xl flex items-center justify-center text-[#5c33ff]">
+                                <i data-lucide="cloud" class="w-6 h-6"></i>
+                            </div>
+                            <button class="text-[#8b949e] hover:text-white"><i data-lucide="more-horizontal" class="w-5 h-5"></i></button>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-1">iCloud Drive</h3>
+                            <p class="text-sm text-[#8b949e] mb-4">45.5 GB used of 200 GB</p>
+                            <div class="h-2 w-full bg-[#22252e] rounded-full overflow-hidden">
+                                <div class="h-full bg-[#5c33ff] rounded-full" style="width: 22%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions (Folders Style) -->
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-white">Quick Actions</h2>
+                </div>
+
+                <div class="grid grid-cols-3 gap-6">
+                    <div class="dark-card p-5 flex flex-col items-center text-center cursor-pointer" onclick="window.location.href='clean.html'">
+                        <div class="w-14 h-14 bg-[#5c33ff]/10 border border-[#5c33ff]/20 rounded-2xl flex items-center justify-center text-[#5c33ff] mb-3">
+                            <i data-lucide="sparkles" class="w-7 h-7"></i>
+                        </div>
+                        <h4 class="font-semibold text-white">Deep Clean</h4>
+                        <p class="text-xs text-[#8b949e] mt-1">Free up space</p>
+                    </div>
+
+                    <div class="dark-card p-5 flex flex-col items-center text-center cursor-pointer" onclick="window.location.href='duplicates.html'">
+                        <div class="w-14 h-14 bg-[#ee5d50]/10 border border-[#ee5d50]/20 rounded-2xl flex items-center justify-center text-[#ee5d50] mb-3">
+                            <i data-lucide="copy" class="w-7 h-7"></i>
+                        </div>
+                        <h4 class="font-semibold text-white">Find Duplicates</h4>
+                        <p class="text-xs text-[#8b949e] mt-1">Remove copies</p>
+                    </div>
+
+                    <div class="dark-card p-5 flex flex-col items-center text-center cursor-pointer" onclick="window.location.href='apps.html'">
+                        <div class="w-14 h-14 bg-[#05cd99]/10 border border-[#05cd99]/20 rounded-2xl flex items-center justify-center text-[#05cd99] mb-3">
+                            <i data-lucide="trash-2" class="w-7 h-7"></i>
+                        </div>
+                        <h4 class="font-semibold text-white">Uninstaller</h4>
+                        <p class="text-xs text-[#8b949e] mt-1">Remove apps</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity List -->
+            <div class="dark-card p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-bold text-white">Recent Activity</h2>
+                    <a href="history.html" class="text-sm font-medium text-[#5c33ff] hover:underline">View all</a>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Item 1 -->
+                    <div class="flex items-center justify-between p-2 hover:bg-[#1c1e26] rounded-xl transition-colors cursor-pointer">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-lg bg-[#5c33ff]/10 border border-[#5c33ff]/20 text-[#5c33ff] flex items-center justify-center font-bold text-xs">CLN</div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-white">System Cache Cleaned</h4>
+                                <p class="text-xs text-[#8b949e]">Recovered 1.2 GB</p>
+                            </div>
+                        </div>
+                        <span class="text-sm text-[#8b949e]">Today, 10:42 AM</span>
+                        <button class="text-[#8b949e] hover:text-white"><i data-lucide="more-horizontal" class="w-5 h-5"></i></button>
+                    </div>
+
+                    <!-- Item 2 -->
+                    <div class="flex items-center justify-between p-2 hover:bg-[#1c1e26] rounded-xl transition-colors cursor-pointer">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-lg bg-[#ee5d50]/10 border border-[#ee5d50]/20 text-[#ee5d50] flex items-center justify-center font-bold text-xs">APP</div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-white">Figma Uninstalled</h4>
+                                <p class="text-xs text-[#8b949e]">Removed app and leftovers</p>
+                            </div>
+                        </div>
+                        <span class="text-sm text-[#8b949e]">Yesterday</span>
+                        <button class="text-[#8b949e] hover:text-white"><i data-lucide="more-horizontal" class="w-5 h-5"></i></button>
+                    </div>
+
+                    <!-- Item 3 -->
+                    <div class="flex items-center justify-between p-2 hover:bg-[#1c1e26] rounded-xl transition-colors cursor-pointer">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-lg bg-[#ffce20]/10 border border-[#ffce20]/20 text-[#ffce20] flex items-center justify-center font-bold text-xs">ORG</div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-white">Rule Executed</h4>
+                                <p class="text-xs text-[#8b949e]">Moved 14 images to Pictures</p>
+                            </div>
+                        </div>
+                        <span class="text-sm text-[#8b949e]">Sep 3, 2024</span>
+                        <button class="text-[#8b949e] hover:text-white"><i data-lucide="more-horizontal" class="w-5 h-5"></i></button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column (Sidebar Stats) -->
+        <div class="col-span-4 space-y-8">
+
+            <!-- Storage Breakdown -->
+            <div class="dark-card p-6">
+                <div class="flex justify-between items-end mb-6">
+                    <div>
+                        <h2 class="text-3xl font-bold text-white">145.9 <span class="text-lg text-[#8b949e] font-medium">GB</span></h2>
+                        <p class="text-sm text-[#8b949e]">Used Space</p>
+                    </div>
+                    <div class="text-right">
+                        <h2 class="text-xl font-bold text-white">494.3 <span class="text-sm text-[#8b949e] font-medium">GB</span></h2>
+                        <p class="text-sm text-[#8b949e]">Total</p>
+                    </div>
+                </div>
+
+                <div class="h-3 w-full bg-[#22252e] rounded-full overflow-hidden flex gap-1 mb-8">
+                    <div class="h-full bg-[#5c33ff]" style="width: 40%"></div>
+                    <div class="h-full bg-[#05cd99]" style="width: 20%"></div>
+                    <div class="h-full bg-[#ffce20]" style="width: 15%"></div>
+                    <div class="h-full bg-[#ee5d50]" style="width: 10%"></div>
+                </div>
+
+                <div class="space-y-5">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-[#5c33ff]/10 border border-[#5c33ff]/20 text-[#5c33ff] flex items-center justify-center"><i data-lucide="grid" class="w-5 h-5"></i></div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-white">Applications</h4>
+                                <p class="text-xs text-[#8b949e]">142 apps</p>
+                            </div>
+                        </div>
+                        <span class="text-sm font-bold text-white">45.2 GB</span>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-[#05cd99]/10 border border-[#05cd99]/20 text-[#05cd99] flex items-center justify-center"><i data-lucide="file-text" class="w-5 h-5"></i></div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-white">Documents</h4>
+                                <p class="text-xs text-[#8b949e]">12k files</p>
+                            </div>
+                        </div>
+                        <span class="text-sm font-bold text-white">22.5 GB</span>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-[#ffce20]/10 border border-[#ffce20]/20 text-[#ffce20] flex items-center justify-center"><i data-lucide="image" class="w-5 h-5"></i></div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-white">Media Files</h4>
+                                <p class="text-xs text-[#8b949e]">Photos & Videos</p>
+                            </div>
+                        </div>
+                        <span class="text-sm font-bold text-white">18.4 GB</span>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-[#ee5d50]/10 border border-[#ee5d50]/20 text-[#ee5d50] flex items-center justify-center"><i data-lucide="hard-drive" class="w-5 h-5"></i></div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-white">System Data</h4>
+                                <p class="text-xs text-[#8b949e]">OS & Caches</p>
+                            </div>
+                        </div>
+                        <span class="text-sm font-bold text-white">59.8 GB</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Health Card -->
+            <div class="dark-card p-8 text-center relative overflow-hidden">
+                <!-- Abstract illustration placeholder -->
+                <div class="w-32 h-32 mx-auto mb-4 relative">
+                    <div class="absolute inset-0 bg-gradient-to-tr from-[#5c33ff] to-[#39b8ff] rounded-full opacity-30 blur-xl"></div>
+                    <div class="relative w-full h-full bg-[#14161c] rounded-full shadow-soft flex items-center justify-center border-4 border-[#22252e]">
+                        <i data-lucide="shield-check" class="w-12 h-12 text-[#05cd99]"></i>
+                    </div>
+                </div>
+
+                <h3 class="text-xl font-bold text-white mb-2">System Optimal</h3>
+                <p class="text-sm text-[#8b949e] mb-6">Your Mac is running smoothly. Keep it clean to maintain performance.</p>
+
+                <button class="w-full py-3 bg-[#5c33ff] hover:bg-[#4a24e6] text-white rounded-xl font-semibold transition-colors shadow-blue border border-[#6b47ff]">
+                    Smart Scan
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

@@ -1,61 +1,35 @@
 #!/usr/bin/env node
 
-/**
- * 图标生成脚本
- * 
- * 使用方法:
- * 1. 安装依赖: npm install sharp png-to-ico
- * 2. 运行: node scripts/generate-icons.js
- * 
- * 或者使用在线工具:
- * - https://icon.kitchen/ (推荐)
- * - https://www.npmjs.com/package/tauri-icon
- */
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
 
-const fs = require('fs');
-const path = require('path');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const projectDir = path.join(__dirname, '..');
+const svgPath = path.join(projectDir, 'public/icon.svg');
+const tempDir = path.join(os.tmpdir(), 'stowmind-icon-gen');
+const tempPng = path.join(tempDir, 'stowmind-icon.png');
 
-// 检查是否安装了 sharp
-let sharp;
-try {
-  sharp = require('sharp');
-} catch (e) {
-  console.log('请先安装依赖: npm install sharp png-to-ico');
-  console.log('或者使用 tauri 官方工具: npm install -g @tauri-apps/cli && tauri icon public/icon.svg');
+if (!fs.existsSync(svgPath)) {
+  console.error(`Missing source icon: ${svgPath}`);
   process.exit(1);
 }
 
-const sizes = [32, 128, 256, 512];
-const iconDir = path.join(__dirname, '../src-tauri/icons');
+fs.mkdirSync(tempDir, { recursive: true });
 
-// 确保目录存在
-if (!fs.existsSync(iconDir)) {
-  fs.mkdirSync(iconDir, { recursive: true });
+async function main() {
+  await sharp(svgPath).resize(1024, 1024).png().toFile(tempPng);
+  execFileSync(path.join(projectDir, 'node_modules/.bin/tauri'), ['icon', tempPng], {
+    cwd: projectDir,
+    stdio: 'inherit',
+  });
+  console.log('done');
 }
 
-async function generateIcons() {
-  const svgPath = path.join(__dirname, '../public/icon.svg');
-  const svgBuffer = fs.readFileSync(svgPath);
-
-  // 生成 PNG 图标
-  for (const size of sizes) {
-    const outputPath = path.join(iconDir, `${size}x${size}.png`);
-    await sharp(svgBuffer)
-      .resize(size, size)
-      .png()
-      .toFile(outputPath);
-    console.log(`✅ 生成 ${size}x${size}.png`);
-  }
-
-  // 生成 128x128@2x.png (256x256)
-  await sharp(svgBuffer)
-    .resize(256, 256)
-    .png()
-    .toFile(path.join(iconDir, '128x128@2x.png'));
-  console.log('✅ 生成 128x128@2x.png');
-
-  console.log('\n⚠️  注意: .icns 和 .ico 文件需要额外工具生成');
-  console.log('推荐使用: npx tauri icon public/icon.svg');
-}
-
-generateIcons().catch(console.error);
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

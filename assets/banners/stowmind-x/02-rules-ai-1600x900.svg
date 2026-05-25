@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+  <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+    <defs>
+      <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
+        <feDropShadow dx="0" dy="24" stdDeviation="30" flood-color="#0F172A" flood-opacity="0.16"/>
+      </filter>
+      <filter id="smallShadow" x="-20%" y="-20%" width="140%" height="150%">
+        <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#0F172A" flood-opacity="0.12"/>
+      </filter>
+
+    <linearGradient id="rulesBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="52%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#042F2E"/>
+    </linearGradient>
+
+    </defs>
+
+    <rect width="1600" height="900" fill="url(#rulesBg)"/>
+    <circle cx="250" cy="220" r="170" fill="#6366F1" opacity="0.22"/>
+    <circle cx="1340" cy="680" r="260" fill="#14B8A6" opacity="0.18"/>
+    <path d="M950 84 C1170 190 1120 420 1375 505" stroke="#38BDF8" stroke-width="3" opacity="0.35" fill="none"/>
+
+
+
+    <g transform="translate(96 38) scale(2.25)">
+      <rect x="0" y="0" width="24" height="24" rx="5" fill="#6366F1"/>
+      <g transform="translate(3.84 3.84) scale(0.68)" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"/>
+        <path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"/>
+        <path d="M3 5a2 2 0 0 0 2 2h3"/>
+        <path d="M3 3v13a2 2 0 0 0 2 2h3"/>
+      </g>
+    </g><text x="168" y="76" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="30" font-weight="800" fill="#F8FAFC" >StowMind</text><text x="168" y="108" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="18" font-weight="600" fill="#CBD5E1" >AI file organizer</text>
+    <rect x="96" y="184" width="154" height="44" rx="22" fill="#0F766E" /><text x="116" y="213" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="700" fill="#CCFBF1" >更快，也更省</text>
+    <text x="96" y="292" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="76" font-weight="900" fill="#F8FAFC" >规则先跑，</text><text x="96" y="382" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="76" font-weight="900" fill="#F8FAFC" >AI 只处理疑难文件</text>
+    <text x="100" y="494" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="30" font-weight="650" fill="#CBD5E1" >扩展名、关键词、父目录提示先命中；</text><text x="100" y="538" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="30" font-weight="650" fill="#CBD5E1" >无法判断时再调用 Ollama / OpenAI / Claude。</text>
+
+    <g filter="url(#smallShadow)">
+      <rect x="124" y="620" width="244" height="138" rx="24" fill="#F8FAFC" />
+      <rect x="146" y="642" width="54" height="36" rx="18" fill="#818CF822" />
+      <text x="161" y="667" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="19" font-weight="900" fill="#818CF8" >01</text>
+      <text x="146" y="710" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="26" font-weight="850" fill="#0F172A" >扩展名规则</text>
+      <text x="146" y="740" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="18" font-weight="650" fill="#64748B" >.pdf / .png / .zip</text>
+    </g>
+
+    <path d="M405 682 L451 682" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+    <path d="M451 682 L435 669 M451 682 L435 695" stroke="#94A3B8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+
+    <g filter="url(#smallShadow)">
+      <rect x="484" y="620" width="244" height="138" rx="24" fill="#F8FAFC" />
+      <rect x="506" y="642" width="54" height="36" rx="18" fill="#22D3EE22" />
+      <text x="521" y="667" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="19" font-weight="900" fill="#22D3EE" >02</text>
+      <text x="506" y="710" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="26" font-weight="850" fill="#0F172A" >关键词匹配</text>
+      <text x="506" y="740" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="18" font-weight="650" fill="#64748B" >合同 / 截图 / 发票</text>
+    </g>
+
+    <path d="M765 682 L811 682" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+    <path d="M811 682 L795 669 M811 682 L795 695" stroke="#94A3B8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+
+    <g filter="url(#smallShadow)">
+      <rect x="844" y="620" width="244" height="138" rx="24" fill="#F8FAFC" />
+      <rect x="866" y="642" width="54" height="36" rx="18" fill="#34D39922" />
+      <text x="881" y="667" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="19" font-weight="900" fill="#34D399" >03</text>
+      <text x="866" y="710" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="26" font-weight="850" fill="#0F172A" >目录提示</text>
+      <text x="866" y="740" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="18" font-weight="650" fill="#64748B" >Downloads / Projects</text>
+    </g>
+
+    <path d="M1125 682 L1171 682" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+    <path d="M1171 682 L1155 669 M1171 682 L1155 695" stroke="#94A3B8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+
+    <g filter="url(#smallShadow)">
+      <rect x="1204" y="620" width="244" height="138" rx="24" fill="#F8FAFC" />
+      <rect x="1226" y="642" width="54" height="36" rx="18" fill="#FBBF2422" />
+      <text x="1241" y="667" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="19" font-weight="900" fill="#FBBF24" >04</text>
+      <text x="1226" y="710" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="26" font-weight="850" fill="#0F172A" >AI 判断</text>
+      <text x="1226" y="740" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="18" font-weight="650" fill="#64748B" >仅疑难项</text>
+    </g>
+    <rect x="1030" y="150" width="430" height="270" rx="28" fill="#F8FAFC" filter="url(#softShadow)" opacity="0.98"/>
+    <text x="1082" y="220" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="34" font-weight="900" fill="#0F172A" >32 个文件</text>
+    <text x="1082" y="262" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="21" font-weight="700" fill="#64748B" >本次扫描结果</text>
+
+    <text x="1082" y="318" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="18" font-weight="700" fill="#64748B" >规则命中</text>
+    <text x="1402" y="318" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="18" font-weight="900" fill="#0F172A" text-anchor="end">28</text>
+    <rect x="1082" y="336" width="320" height="14" rx="7" fill="#E2E8F0" />
+    <rect x="1082" y="336" width="298" height="14" rx="7" fill="#6366F1" />
+
+
+    <text x="1082" y="374" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="18" font-weight="700" fill="#64748B" >AI 处理</text>
+    <text x="1402" y="374" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="18" font-weight="900" fill="#0F172A" text-anchor="end">4</text>
+    <rect x="1082" y="392" width="320" height="14" rx="7" fill="#E2E8F0" />
+    <rect x="1082" y="392" width="106" height="14" rx="7" fill="#14B8A6" />
+
+
+  </svg>

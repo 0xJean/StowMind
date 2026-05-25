@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StowMind</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Satoshi', 'sans-serif'],
+                    },
+                    colors: {
+                        appBg: '#09090b',
+                        cardBg: '#131418',
+                        cardHover: '#1a1b20',
+                        borderLight: 'rgba(255, 255, 255, 0.06)',
+                        accentGreen: '#00e599',
+                        accentGreenDim: 'rgba(0, 229, 153, 0.15)',
+                        accentBlue: '#00d2ff',
+                        textMuted: '#8a8b94'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #09090b;
+            color: #ffffff;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+        .nav-item {
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .nav-item.active {
+            background-color: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+        }
+        .nav-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 16px;
+            background-color: #00e599;
+            border-radius: 0 4px 4px 0;
+            box-shadow: 0 0 8px #00e599;
+        }
+        .nav-item:not(.active) {
+            color: #8a8b94;
+        }
+        .nav-item:not(.active):hover {
+            color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden selection:bg-accentGreen selection:text-black p-4 gap-4">
+
+    <!-- Sidebar -->
+    <aside class="w-[240px] flex flex-col relative z-10 h-full py-4">
+        <!-- App Header -->
+        <div class="px-6 mb-8 flex items-center gap-3">
+            <div class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+                StowMind <span class="text-[10px] px-1.5 py-0.5 bg-accentGreenDim text-accentGreen rounded-md font-bold uppercase tracking-wider">Beta</span>
+            </div>
+        </div>
+
+        <!-- User Profile Mini -->
+        <div class="px-4 mb-6">
+            <div class="flex items-center gap-3 p-2 rounded-xl bg-cardBg border border-borderLight">
+                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-accentGreen to-accentBlue flex items-center justify-center text-black font-bold text-sm">
+                    SM
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium truncate">My Mac</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 px-2 space-y-1 overflow-y-auto">
+            <div class="px-4 mb-3 text-[11px] font-bold text-textMuted uppercase tracking-widest">Main</div>
+            <a href="dashboard.html" target="content-frame" class="nav-item active flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium" onclick="setActive(this)">
+                <i data-lucide="layout-grid" class="w-[18px] h-[18px]"></i>
+                Home
+            </a>
+
+            <div class="px-4 mt-8 mb-3 text-[11px] font-bold text-textMuted uppercase tracking-widest">Optimize</div>
+            <a href="analyze.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium" onclick="setActive(this)">
+                <i data-lucide="pie-chart" class="w-[18px] h-[18px]"></i>
+                Analyze
+            </a>
+            <a href="clean.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium" onclick="setActive(this)">
+                <i data-lucide="zap" class="w-[18px] h-[18px]"></i>
+                Debloat
+            </a>
+            <a href="organize.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium" onclick="setActive(this)">
+                <i data-lucide="folder-tree" class="w-[18px] h-[18px]"></i>
+                Organize
+            </a>
+            <a href="duplicates.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium" onclick="setActive(this)">
+                <i data-lucide="copy" class="w-[18px] h-[18px]"></i>
+                Duplicates
+            </a>
+            <a href="apps.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium" onclick="setActive(this)">
+                <i data-lucide="layers" class="w-[18px] h-[18px]"></i>
+                Apps
+            </a>
+
+            <div class="px-4 mt-8 mb-3 text-[11px] font-bold text-textMuted uppercase tracking-widest">System</div>
+            <a href="history.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium" onclick="setActive(this)">
+                <i data-lucide="activity" class="w-[18px] h-[18px]"></i>
+                Activity
+            </a>
+        </nav>
+
+        <!-- Help CTA -->
+        <div class="px-4 mt-4">
+            <div class="p-4 rounded-2xl bg-cardBg border border-borderLight relative overflow-hidden">
+                <!-- Abstract glow -->
+                <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-accentGreen opacity-10 blur-2xl rounded-full"></div>
+                <h4 class="font-bold text-sm mb-1">Need help?</h4>
+                <p class="text-xs text-textMuted mb-4">24/7 assistance available</p>
+                <button class="w-full py-2 bg-accentGreen text-black hover:bg-[#00c985] rounded-xl text-xs font-bold transition-colors shadow-[0_0_15px_rgba(0,229,153,0.3)]">
+                    Talk to a professional
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 bg-cardBg rounded-[32px] border border-borderLight relative flex flex-col overflow-hidden shadow-2xl">
+        <iframe name="content-frame" src="dashboard.html" class="absolute inset-0 w-full h-full border-none"></iframe>
+    </main>
+
+    <script>
+        lucide.createIcons();
+        function setActive(element) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+        }
+    </script>
+</body>
+</html>

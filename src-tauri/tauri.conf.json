@@ -25,6 +25,20 @@
       "fs": {
         "all": true,
         "scope": ["**"]
+      },
+      "globalShortcut": {
+        "all": true
+      },
+      "notification": {
+        "all": true
+      },
+      "window": {
+        "all": false,
+        "hide": true,
+        "show": true,
+        "setFocus": true,
+        "unminimize": true,
+        "setSkipTaskbar": true
       }
     },
     "bundle": {
@@ -60,6 +74,12 @@
         "timestampUrl": ""
       }
     },
+    "systemTray": {
+      "iconPath": "icons/128x128.png",
+      "iconAsTemplate": false,
+      "menuOnLeftClick": false,
+      "title": "StowMind"
+    },
     "security": {
       "csp": null
     },
@@ -69,12 +89,12 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 720,
+        "height": 820,
         "resizable": true,
         "title": "StowMind",
-        "width": 1100,
-        "minWidth": 900,
-        "minHeight": 600
+        "width": 1280,
+        "minWidth": 1100,
+        "minHeight": 680
       }
     ]
   }

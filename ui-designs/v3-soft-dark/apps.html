@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        mainBg: '#181818', cardBg: '#222222', cardHover: '#2a2a2a', borderLight: '#2e2e2e',
+                        textMain: '#f3f4f6', textMuted: '#9ca3af',
+                        accentPurple: '#a855f7'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #f3f4f6; font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+        .soft-card { background-color: #222222; border-radius: 16px; border: 1px solid transparent; transition: all 0.2s ease; }
+
+        .custom-checkbox {
+            appearance: none; width: 18px; height: 18px; border: 2px solid #3f3f46; border-radius: 4px;
+            background-color: #181818; cursor: pointer; position: relative; transition: all 0.2s;
+        }
+        .custom-checkbox:checked { background-color: #a855f7; border-color: #a855f7; }
+        .custom-checkbox:checked::after {
+            content: ''; position: absolute; left: 4px; top: 1px; width: 5px; height: 9px;
+            border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg);
+        }
+    </style>
+</head>
+<body class="p-8 h-full overflow-y-auto">
+
+    <div class="flex justify-between items-start mb-8">
+        <div>
+            <h1 class="text-3xl font-semibold text-white mb-2">App Uninstaller</h1>
+            <p class="text-[#9ca3af] text-sm">Completely remove apps and their leftovers</p>
+        </div>
+        <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 text-[#6b7280] absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input type="text" placeholder="Search apps..." class="bg-[#222222] text-sm text-white rounded-full pl-9 pr-4 py-2 w-64 focus:outline-none focus:ring-1 focus:ring-[#3f3f46] border border-[#2e2e2e] placeholder-[#6b7280]">
+        </div>
+    </div>
+
+    <div class="grid grid-cols-12 gap-6">
+        <!-- Left Nav -->
+        <div class="col-span-3 space-y-1">
+            <div class="px-3 py-2 bg-[#222222] rounded-lg text-white text-sm font-medium flex justify-between cursor-pointer">
+                <span>All Applications</span>
+                <span class="text-[#9ca3af]">142</span>
+            </div>
+            <div class="px-3 py-2 hover:bg-[#222222] rounded-lg text-[#9ca3af] hover:text-white text-sm font-medium flex justify-between cursor-pointer transition-colors">
+                <span>Unused Apps</span>
+                <span class="text-[#a855f7]">5</span>
+            </div>
+            <div class="px-3 py-2 hover:bg-[#222222] rounded-lg text-[#9ca3af] hover:text-white text-sm font-medium flex justify-between cursor-pointer transition-colors">
+                <span>Large Apps</span>
+                <span>12</span>
+            </div>
+            <div class="px-3 py-2 hover:bg-[#222222] rounded-lg text-[#9ca3af] hover:text-white text-sm font-medium flex justify-between cursor-pointer transition-colors">
+                <span>Leftovers</span>
+                <span class="text-red-400">2</span>
+            </div>
+        </div>
+
+        <!-- Right List -->
+        <div class="col-span-9 soft-card border border-[#2e2e2e] overflow-hidden flex flex-col h-[500px]">
+            <!-- Table Header -->
+            <div class="grid grid-cols-12 gap-4 p-4 border-b border-[#2e2e2e] text-xs font-medium text-[#6b7280] uppercase tracking-wider bg-[#1c1c1c]">
+                <div class="col-span-6 flex items-center gap-3">
+                    <input type="checkbox" class="custom-checkbox">
+                    <span>Name</span>
+                </div>
+                <div class="col-span-3">Last Used</div>
+                <div class="col-span-3 text-right">Size</div>
+            </div>
+
+            <!-- Table Body -->
+            <div class="flex-1 overflow-y-auto p-2 space-y-1">
+                <!-- App 1 -->
+                <label class="grid grid-cols-12 gap-4 p-3 hover:bg-[#2a2a2a] rounded-xl cursor-pointer transition-colors items-center group">
+                    <div class="col-span-6 flex items-center gap-3">
+                        <input type="checkbox" class="custom-checkbox">
+                        <div class="w-8 h-8 rounded bg-[#181818] border border-[#2e2e2e] flex items-center justify-center">
+                            <i data-lucide="figma" class="w-4 h-4 text-pink-400"></i>
+                        </div>
+                        <span class="text-sm font-medium text-white">Figma</span>
+                    </div>
+                    <div class="col-span-3 text-xs text-[#9ca3af]">Today</div>
+                    <div class="col-span-3 text-xs text-[#9ca3af] text-right">1.2 GB</div>
+                </label>
+
+                <!-- App 2 (Unused) -->
+                <label class="grid grid-cols-12 gap-4 p-3 hover:bg-[#2a2a2a] rounded-xl cursor-pointer transition-colors items-center group">
+                    <div class="col-span-6 flex items-center gap-3">
+                        <input type="checkbox" class="custom-checkbox" checked>
+                        <div class="w-8 h-8 rounded bg-[#181818] border border-[#2e2e2e] flex items-center justify-center">
+                            <i data-lucide="box" class="w-4 h-4 text-blue-400"></i>
+                        </div>
+                        <span class="text-sm font-medium text-white">Docker</span>
+                    </div>
+                    <div class="col-span-3 text-xs text-orange-400">3 months ago</div>
+                    <div class="col-span-3 text-xs text-[#9ca3af] text-right">3.4 GB</div>
+                </label>
+
+                <!-- App 3 -->
+                <label class="grid grid-cols-12 gap-4 p-3 hover:bg-[#2a2a2a] rounded-xl cursor-pointer transition-colors items-center group">
+                    <div class="col-span-6 flex items-center gap-3">
+                        <input type="checkbox" class="custom-checkbox">
+                        <div class="w-8 h-8 rounded bg-[#181818] border border-[#2e2e2e] flex items-center justify-center">
+                            <i data-lucide="slack" class="w-4 h-4 text-purple-400"></i>
+                        </div>
+                        <span class="text-sm font-medium text-white">Slack</span>
+                    </div>
+                    <div class="col-span-3 text-xs text-[#9ca3af]">Yesterday</div>
+                    <div class="col-span-3 text-xs text-[#9ca3af] text-right">850 MB</div>
+                </label>
+            </div>
+
+            <!-- Bottom Action Bar -->
+            <div class="p-4 border-t border-[#2e2e2e] bg-[#1c1c1c] flex justify-between items-center">
+                <span class="text-sm text-[#9ca3af]">1 app selected (3.4 GB)</span>
+                <button class="px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-medium transition-colors shadow-[0_4px_14px_rgba(239,68,68,0.3)]">
+                    Uninstall Selected
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

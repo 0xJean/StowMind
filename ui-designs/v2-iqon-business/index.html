@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StowMind</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Satoshi', 'sans-serif'] },
+                    colors: {
+                        appBg: '#08080a', cardBg: '#111215', cardBorder: '#1c1d22',
+                        textMain: '#ffffff', textMuted: '#82838a',
+                        accentGreen: '#00e599', accentCyan: '#00d2ff', accentPurple: '#b14bff', accentRed: '#ef4444'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            -webkit-font-smoothing: antialiased;
+            display: flex; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; padding: 20px;
+        }
+        .app-window {
+            background-color: #08080a;
+            border: 1px solid #1c1d22;
+            border-radius: 32px;
+            width: 100%; max-width: 1400px; height: 100%; max-height: 900px;
+            display: flex; overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+        .nav-item { transition: all 0.2s ease; position: relative; }
+        .nav-item.active { background-color: #111c16; color: #00e599; }
+        .nav-item.active::before {
+            content: ''; position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+            width: 3px; height: 14px; background-color: #00e599; border-radius: 4px;
+            box-shadow: 0 0 8px #00e599;
+        }
+        .nav-item:not(.active) { color: #82838a; }
+        .nav-item:not(.active):hover { color: #ffffff; background-color: #111215; }
+    </style>
+</head>
+<body>
+    <div class="app-window">
+        <!-- Sidebar -->
+        <aside class="w-[220px] flex flex-col relative z-10 h-full py-6 border-r border-[#1c1d22]">
+            <div class="px-6 mb-8 flex items-center gap-2">
+                <div class="text-xl font-bold tracking-tight text-white flex items-center gap-2">StowMind</div>
+                <span class="text-[9px] px-1.5 py-0.5 bg-[#00e599]/10 text-[#00e599] rounded font-bold uppercase tracking-wider">Beta</span>
+            </div>
+
+            <nav class="flex-1 px-2 space-y-0.5 overflow-y-auto">
+                <div class="px-4 mb-2 mt-2 text-[9px] font-bold text-[#82838a] uppercase tracking-widest">Monitor</div>
+                <a href="dashboard.html" target="content-frame" class="nav-item active flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-bold" onclick="setActive(this)">
+                    <i data-lucide="activity" class="w-4 h-4 ml-2"></i> Dashboard
+                </a>
+
+                <div class="px-4 mt-6 mb-2 text-[9px] font-bold text-[#82838a] uppercase tracking-widest">Optimize</div>
+                <div class="pl-4 pr-2 space-y-0.5 border-l border-[#1c1d22] ml-6">
+                    <a href="analyze.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium" onclick="setActive(this)">
+                        Analyze Space
+                    </a>
+                    <a href="clean.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium" onclick="setActive(this)">
+                        Deep Clean
+                    </a>
+                    <a href="organize.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium" onclick="setActive(this)">
+                        Organize Files
+                    </a>
+                    <a href="duplicates.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium" onclick="setActive(this)">
+                        Duplicates
+                    </a>
+                    <a href="apps.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium" onclick="setActive(this)">
+                        App Uninstaller
+                    </a>
+                </div>
+
+                <div class="px-4 mt-6 mb-2 text-[9px] font-bold text-[#82838a] uppercase tracking-widest">System</div>
+                <a href="history.html" target="content-frame" class="nav-item flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium" onclick="setActive(this)">
+                    <i data-lucide="clock" class="w-4 h-4 ml-2"></i> Activity Log
+                </a>
+            </nav>
+
+            <div class="px-4 mt-auto">
+                <div class="p-4 rounded-2xl bg-[#111215] border border-[#1c1d22] relative overflow-hidden">
+                    <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-[#00e599] opacity-10 blur-xl rounded-full"></div>
+                    <h4 class="font-bold text-xs mb-1 text-white relative z-10">System Healthy</h4>
+                    <p class="text-[9px] text-[#82838a] mb-3 relative z-10">Last scanned: Today</p>
+                    <button class="w-full py-2 bg-[#00e599] text-black hover:bg-[#00c985] rounded-xl text-[10px] font-bold transition-colors shadow-[0_0_10px_rgba(0,229,153,0.3)] relative z-10">
+                        Smart Scan
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 relative flex flex-col overflow-hidden bg-[#08080a]">
+            <div class="absolute inset-0 z-0 pointer-events-none opacity-20" style="background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 100px 100px;"></div>
+            <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-white opacity-[0.02] blur-[100px] rounded-full pointer-events-none z-0"></div>
+            <iframe name="content-frame" src="dashboard.html" class="absolute inset-0 w-full h-full border-none z-10"></iframe>
+        </main>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        function setActive(element) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+        }
+    </script>
+</body>
+</html>

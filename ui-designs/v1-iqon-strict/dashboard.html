@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Satoshi', 'sans-serif'] },
+                    colors: {
+                        appBg: '#09090b', cardBg: '#131418', cardHover: '#1a1b20',
+                        borderLight: 'rgba(255, 255, 255, 0.06)',
+                        accentGreen: '#00e599', accentBlue: '#00d2ff', textMuted: '#8a8b94'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; }
+        .bento-card {
+            background-color: #131418;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 24px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .bento-card:hover {
+            background-color: #16171b;
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        /* Progress Bar glow */
+        .progress-bar-glow {
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        /* Abstract mesh background for hero card */
+        .mesh-bg {
+            background-image:
+                radial-gradient(at 80% 100%, rgba(0, 229, 153, 0.15) 0px, transparent 50%),
+                radial-gradient(at 0% 0%, rgba(0, 210, 255, 0.1) 0px, transparent 50%);
+        }
+
+        .status-dot {
+            box-shadow: 0 0 8px currentColor;
+        }
+    </style>
+</head>
+<body class="p-8 font-sans h-full overflow-y-auto">
+
+    <!-- Top Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <p class="text-textMuted text-xs font-semibold tracking-widest uppercase mb-1">Mac Name</p>
+            <h1 class="text-3xl font-bold tracking-tight">Home</h1>
+        </div>
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-3">
+                <div class="text-right">
+                    <p class="text-sm font-bold">Tooltip Mode</p>
+                    <p class="text-xs text-textMuted">Turn it on, if you don't understand how something works</p>
+                </div>
+                <!-- Toggle -->
+                <div class="w-10 h-6 bg-borderLight rounded-full relative cursor-pointer">
+                    <div class="w-4 h-4 bg-textMuted rounded-full absolute left-1 top-1"></div>
+                </div>
+            </div>
+            <div class="h-8 w-px bg-borderLight"></div>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center">
+                    <i data-lucide="user" class="w-5 h-5 text-zinc-400"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-textMuted">Admin</p>
+                    <p class="text-sm font-bold">StowMind User</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bento Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 auto-rows-[minmax(140px,auto)]">
+
+        <!-- Hero Card (Spans 5 cols, 2 rows) -->
+        <div class="bento-card col-span-12 md:col-span-5 row-span-2 p-6 flex flex-col justify-between mesh-bg">
+            <div>
+                <p class="text-textMuted text-sm mb-1">Welcome back</p>
+                <h2 class="text-4xl font-bold">System Status</h2>
+            </div>
+
+            <div class="space-y-4 mt-8">
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-accentGreen status-dot text-accentGreen"></div>
+                    <div>
+                        <p class="text-sm font-bold">Temperatures</p>
+                        <p class="text-xs text-textMuted">Optimal</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-accentGreen status-dot text-accentGreen"></div>
+                    <div>
+                        <p class="text-sm font-bold">Health</p>
+                        <p class="text-xs text-textMuted">Recently scanned</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-accentGreen status-dot text-accentGreen"></div>
+                    <div>
+                        <p class="text-sm font-bold">Stability</p>
+                        <p class="text-xs text-textMuted">No recent crashes</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-red-500 status-dot text-red-500"></div>
+                    <div>
+                        <p class="text-sm font-bold">Junk Files</p>
+                        <p class="text-xs text-textMuted">Need to clean</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button class="px-4 py-2 bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+                    My Mac <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Storage Card -->
+        <div class="bento-card col-span-12 md:col-span-4 p-6 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="font-bold text-lg">Storage</h3>
+                    <p class="text-xs text-textMuted mt-1">Macintosh HD</p>
+                    <div class="flex items-center gap-2 mt-3">
+                        <div class="w-2 h-2 rounded-full bg-accentGreen status-dot text-accentGreen"></div>
+                        <span class="text-sm font-bold">Optimal</span>
+                    </div>
+                </div>
+                <div class="relative w-16 h-16">
+                    <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                        <path stroke="rgba(255,255,255,0.1)" stroke-width="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <path stroke="#00e599" stroke-width="3" stroke-dasharray="60, 100" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" class="progress-bar-glow text-accentGreen" stroke-linecap="round" />
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center text-sm font-bold">60%</div>
+                </div>
+            </div>
+            <div class="mt-4">
+                <div class="flex justify-between text-xs text-textMuted mb-2">
+                    <span>Utilization</span>
+                    <span>245 GB Free</span>
+                </div>
+                <div class="h-1 w-full bg-[rgba(255,255,255,0.1)] rounded-full overflow-hidden">
+                    <div class="h-full bg-accentGreen rounded-full relative" style="width: 60%">
+                        <div class="absolute right-0 top-0 bottom-0 w-4 bg-white blur-[2px]"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Memory Card -->
+        <div class="bento-card col-span-12 md:col-span-3 p-6 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="font-bold text-lg">Memory</h3>
+                    <p class="text-xs text-textMuted mt-1">16 GB Unified</p>
+                    <div class="flex items-center gap-2 mt-3">
+                        <div class="w-2 h-2 rounded-full bg-accentBlue status-dot text-accentBlue"></div>
+                        <span class="text-sm font-bold">Normal</span>
+                    </div>
+                </div>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-textMuted"></i>
+            </div>
+            <div class="mt-4">
+                <div class="flex justify-between text-xs text-textMuted mb-2">
+                    <span>Utilization</span>
+                    <span>72%</span>
+                </div>
+                <div class="h-1 w-full bg-[rgba(255,255,255,0.1)] rounded-full overflow-hidden">
+                    <div class="h-full bg-accentBlue rounded-full relative" style="width: 72%">
+                        <div class="absolute right-0 top-0 bottom-0 w-4 bg-white blur-[2px]"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Junk Files Card -->
+        <div class="bento-card col-span-12 md:col-span-4 p-6 flex flex-col justify-between">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="font-bold text-lg">System Junk</h3>
+                    <p class="text-xs text-textMuted mt-1">Caches, Logs, Trash</p>
+                    <div class="flex items-center gap-2 mt-3">
+                        <div class="w-2 h-2 rounded-full bg-red-500 status-dot text-red-500"></div>
+                        <span class="text-sm font-bold">4.2 GB Found</span>
+                    </div>
+                </div>
+                <div class="relative w-16 h-16">
+                    <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                        <path stroke="rgba(255,255,255,0.1)" stroke-width="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <path stroke="#ef4444" stroke-width="3" stroke-dasharray="25, 100" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" class="progress-bar-glow text-red-500" stroke-linecap="round" />
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-4">
+                <div class="h-1 w-full bg-[rgba(255,255,255,0.1)] rounded-full overflow-hidden">
+                    <div class="h-full bg-red-500 rounded-full relative" style="width: 25%">
+                        <div class="absolute right-0 top-0 bottom-0 w-4 bg-white blur-[2px]"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Network/Activity Card -->
+        <div class="bento-card col-span-12 md:col-span-3 p-6 flex flex-col justify-between relative overflow-hidden">
+            <div class="relative z-10">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="font-bold text-lg">Activity</h3>
+                        <p class="text-xs text-textMuted mt-1">Disk I/O</p>
+                    </div>
+                    <div class="text-right text-xs font-mono text-textMuted">
+                        ↑ 12 MB/s<br>↓ 4 MB/s
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 mt-3">
+                    <div class="w-2 h-2 rounded-full bg-accentGreen status-dot text-accentGreen"></div>
+                    <span class="text-sm font-bold">Active</span>
+                </div>
+            </div>
+            <!-- Fake area chart -->
+            <div class="absolute bottom-0 left-0 right-0 h-16 opacity-50">
+                <svg viewBox="0 0 100 40" preserveAspectRatio="none" class="w-full h-full">
+                    <path d="M0,40 L0,20 Q10,10 20,25 T40,15 T60,30 T80,10 T100,20 L100,40 Z" fill="rgba(0, 210, 255, 0.2)" stroke="#00d2ff" stroke-width="1"></path>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Performance Analyzer -->
+        <div class="bento-card col-span-12 md:col-span-4 p-6 flex flex-col justify-between" style="background: radial-gradient(circle at right bottom, rgba(0, 210, 255, 0.1), #131418 60%);">
+            <div>
+                <h3 class="font-bold text-lg">Space Analyzer</h3>
+                <p class="text-xs text-textMuted mt-1">Visual map of your disk</p>
+                <div class="flex items-center gap-2 mt-3">
+                    <div class="w-2 h-2 rounded-full bg-accentGreen status-dot text-accentGreen"></div>
+                    <span class="text-sm font-bold">Run recently</span>
+                </div>
+            </div>
+            <div class="mt-6">
+                <button class="px-5 py-2 bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+                    Analyze <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Optimization -->
+        <div class="bento-card col-span-12 md:col-span-4 p-6 flex flex-col justify-between" style="background: radial-gradient(circle at right bottom, rgba(0, 229, 153, 0.1), #131418 60%);">
+            <div>
+                <h3 class="font-bold text-lg">Deep Clean</h3>
+                <p class="text-xs text-textMuted mt-1">Recover space in 1 click</p>
+                <div class="flex items-center gap-2 mt-3">
+                    <div class="w-2 h-2 rounded-full bg-accentGreen status-dot text-accentGreen"></div>
+                    <span class="text-sm font-bold">Ready</span>
+                </div>
+            </div>
+            <div class="mt-6">
+                <button class="px-5 py-2 bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+                    Optimize <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Platform Settings -->
+        <div class="bento-card col-span-12 md:col-span-4 row-span-2 p-6 flex flex-col">
+            <h3 class="font-bold text-lg mb-6">Platform Settings</h3>
+
+            <div class="space-y-6 flex-1">
+                <div>
+                    <p class="text-[10px] font-bold text-textMuted uppercase tracking-widest mb-4">General Preferences</p>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-medium">App Notifications</span>
+                            <div class="w-10 h-6 bg-accentGreen rounded-full relative cursor-pointer shadow-[0_0_10px_rgba(0,229,153,0.3)]">
+                                <div class="w-4 h-4 bg-black rounded-full absolute right-1 top-1"></div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-medium">Auto-clean Trash</span>
+                            <div class="w-10 h-6 bg-borderLight rounded-full relative cursor-pointer">
+                                <div class="w-4 h-4 bg-textMuted rounded-full absolute left-1 top-1"></div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-medium">Launch at Login</span>
+                            <div class="w-10 h-6 bg-accentGreen rounded-full relative cursor-pointer shadow-[0_0_10px_rgba(0,229,153,0.3)]">
+                                <div class="w-4 h-4 bg-black rounded-full absolute right-1 top-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="text-[10px] font-bold text-textMuted uppercase tracking-widest mb-4">System Tracking</p>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-medium">Real-Time Monitoring</span>
+                            <div class="w-10 h-6 bg-borderLight rounded-full relative cursor-pointer">
+                                <div class="w-4 h-4 bg-textMuted rounded-full absolute left-1 top-1"></div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-medium">Performance Logs</span>
+                            <div class="w-10 h-6 bg-accentGreen rounded-full relative cursor-pointer shadow-[0_0_10px_rgba(0,229,153,0.3)]">
+                                <div class="w-4 h-4 bg-black rounded-full absolute right-1 top-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-center">
+                <button class="text-sm font-medium text-textMuted hover:text-white transition-colors flex items-center gap-2">
+                    All Settings <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Health Center -->
+        <div class="bento-card col-span-12 md:col-span-4 p-6 flex flex-col justify-between">
+            <div>
+                <h3 class="font-bold text-lg">Duplicates</h3>
+                <p class="text-xs text-textMuted mt-1">Find identical files</p>
+                <div class="flex items-center gap-2 mt-3">
+                    <div class="w-2 h-2 rounded-full bg-accentGreen status-dot text-accentGreen"></div>
+                    <span class="text-sm font-bold">Scanned Recently</span>
+                </div>
+            </div>
+            <div class="mt-6">
+                <button class="px-5 py-2 bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+                    Scan <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Support -->
+        <div class="bento-card col-span-12 md:col-span-4 p-6 flex flex-col justify-between">
+            <div>
+                <h3 class="font-bold text-lg">App Uninstaller</h3>
+                <p class="text-xs text-textMuted mt-1">Remove leftovers</p>
+                <div class="flex items-center gap-2 mt-3">
+                    <div class="w-2 h-2 rounded-full bg-accentBlue status-dot text-accentBlue"></div>
+                    <span class="text-sm font-bold">12 Apps Found</span>
+                </div>
+            </div>
+            <div class="mt-6">
+                <button class="px-5 py-2 bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+                    Manage <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>

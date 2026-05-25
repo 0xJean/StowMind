@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: {
+                        appBg: '#f4f7fe', cardBg: '#ffffff',
+                        textMain: '#1e293b', textMuted: '#8f9bba',
+                        brandBlue: '#4318ff', brandHover: '#3311db',
+                        borderLight: '#e2e8f0'
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 30px rgba(112, 144, 176, 0.08)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #1e293b; font-family: 'Poppins', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .light-card { background-color: #ffffff; border-radius: 20px; box-shadow: 0 10px 30px rgba(112, 144, 176, 0.08); border: 1px solid rgba(226, 232, 240, 0.5); }
+    </style>
+</head>
+<body class="p-8 h-full overflow-y-auto">
+
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl font-bold text-[#1e293b]">Activity History</h1>
+            <p class="text-sm text-[#8f9bba]">Log of all optimizations and changes</p>
+        </div>
+        <button class="text-sm font-bold text-[#8f9bba] hover:text-[#1e293b] transition-colors flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-[#e2e8f0]">
+            <i data-lucide="trash" class="w-4 h-4"></i> Clear History
+        </button>
+    </div>
+
+    <div class="light-card p-8 max-w-3xl">
+        <div class="relative border-l-2 border-[#e2e8f0] ml-4 space-y-10 pb-4">
+
+            <!-- Event 1 -->
+            <div class="relative pl-8">
+                <div class="absolute -left-[21px] top-0 w-10 h-10 rounded-full bg-[#eef2ff] border-4 border-white flex items-center justify-center shadow-sm">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-[#4318ff]"></i>
+                </div>
+                <div class="flex justify-between items-start mb-1">
+                    <h3 class="text-lg font-bold text-[#1e293b]">Deep Clean Completed</h3>
+                    <span class="text-xs font-medium text-[#8f9bba] bg-[#f4f7fe] px-2 py-1 rounded-md">Today, 10:42 AM</span>
+                </div>
+                <p class="text-sm text-[#8f9bba] font-medium mb-3">Recovered 4.2 GB of space by removing system caches and logs.</p>
+                <div class="bg-[#f8fafc] rounded-xl p-3 inline-flex items-center gap-3 border border-[#e2e8f0]">
+                    <i data-lucide="trash-2" class="w-4 h-4 text-[#4318ff]"></i>
+                    <span class="text-xs font-bold text-[#1e293b]">System Cache (1.8 GB)</span>
+                    <span class="text-[#cbd5e1]">|</span>
+                    <span class="text-xs font-bold text-[#1e293b]">Browser Cache (1.2 GB)</span>
+                </div>
+            </div>
+
+            <!-- Event 2 -->
+            <div class="relative pl-8">
+                <div class="absolute -left-[21px] top-0 w-10 h-10 rounded-full bg-[#f0fdf4] border-4 border-white flex items-center justify-center shadow-sm">
+                    <i data-lucide="folder-tree" class="w-4 h-4 text-[#05cd99]"></i>
+                </div>
+                <div class="flex justify-between items-start mb-1">
+                    <h3 class="text-lg font-bold text-[#1e293b]">Rule Executed: Sort Images</h3>
+                    <span class="text-xs font-medium text-[#8f9bba] bg-[#f4f7fe] px-2 py-1 rounded-md">Yesterday, 3:15 PM</span>
+                </div>
+                <p class="text-sm text-[#8f9bba] font-medium">Moved 14 image files from Downloads to Pictures folder automatically.</p>
+            </div>
+
+            <!-- Event 3 -->
+            <div class="relative pl-8">
+                <div class="absolute -left-[21px] top-0 w-10 h-10 rounded-full bg-[#fff1f2] border-4 border-white flex items-center justify-center shadow-sm">
+                    <i data-lucide="trash-2" class="w-4 h-4 text-[#ee5d50]"></i>
+                </div>
+                <div class="flex justify-between items-start mb-1">
+                    <h3 class="text-lg font-bold text-[#1e293b]">App Uninstalled</h3>
+                    <span class="text-xs font-medium text-[#8f9bba] bg-[#f4f7fe] px-2 py-1 rounded-md">Oct 24, 2024</span>
+                </div>
+                <p class="text-sm text-[#8f9bba] font-medium">Completely removed Docker and its leftover files (3.4 GB).</p>
+            </div>
+
+            <!-- Event 4 -->
+            <div class="relative pl-8">
+                <div class="absolute -left-[21px] top-0 w-10 h-10 rounded-full bg-[#f8fafc] border-4 border-white flex items-center justify-center shadow-sm">
+                    <i data-lucide="shield-check" class="w-4 h-4 text-[#8f9bba]"></i>
+                </div>
+                <div class="flex justify-between items-start mb-1">
+                    <h3 class="text-lg font-bold text-[#1e293b]">System Scan</h3>
+                    <span class="text-xs font-medium text-[#8f9bba] bg-[#f4f7fe] px-2 py-1 rounded-md">Oct 20, 2024</span>
+                </div>
+                <p class="text-sm text-[#8f9bba] font-medium">Initial system health scan completed. System status: Optimal.</p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

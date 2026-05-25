@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        mainBg: '#181818', cardBg: '#222222', cardHover: '#2a2a2a', borderLight: '#2e2e2e',
+                        textMain: '#f3f4f6', textMuted: '#9ca3af',
+                        accentPurple: '#a855f7'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #f3f4f6; font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+        .soft-card { background-color: #222222; border-radius: 16px; border: 1px solid transparent; transition: all 0.2s ease; }
+    </style>
+</head>
+<body class="p-8 h-full overflow-y-auto">
+
+    <div class="flex justify-between items-start mb-8">
+        <div>
+            <h1 class="text-3xl font-semibold text-white mb-2">Activity History</h1>
+            <p class="text-[#9ca3af] text-sm">Log of all optimizations and changes</p>
+        </div>
+        <button class="text-sm text-[#6b7280] hover:text-white transition-colors flex items-center gap-1">
+            <i data-lucide="trash" class="w-4 h-4"></i> Clear History
+        </button>
+    </div>
+
+    <div class="soft-card p-8 border border-[#2e2e2e] max-w-3xl">
+        <div class="relative border-l border-[#3f3f46] ml-4 space-y-8 pb-4">
+
+            <!-- Event 1 -->
+            <div class="relative pl-8">
+                <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-[#181818] border border-[#3f3f46] flex items-center justify-center">
+                    <div class="w-2 h-2 rounded-full bg-[#a855f7]"></div>
+                </div>
+                <div class="flex justify-between items-start mb-1">
+                    <h3 class="text-base font-medium text-white">Deep Clean Completed</h3>
+                    <span class="text-xs text-[#6b7280]">Today, 10:42 AM</span>
+                </div>
+                <p class="text-sm text-[#9ca3af] mb-3">Recovered 4.2 GB of space by removing system caches and logs.</p>
+                <div class="bg-[#181818] rounded-xl p-3 inline-flex items-center gap-3 border border-[#2e2e2e]">
+                    <i data-lucide="trash-2" class="w-4 h-4 text-[#a855f7]"></i>
+                    <span class="text-xs text-white">System Cache (1.8 GB)</span>
+                    <span class="text-[#3f3f46]">|</span>
+                    <span class="text-xs text-white">Browser Cache (1.2 GB)</span>
+                </div>
+            </div>
+
+            <!-- Event 2 -->
+            <div class="relative pl-8">
+                <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-[#181818] border border-[#3f3f46] flex items-center justify-center">
+                    <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                </div>
+                <div class="flex justify-between items-start mb-1">
+                    <h3 class="text-base font-medium text-white">Rule Executed: Sort Images</h3>
+                    <span class="text-xs text-[#6b7280]">Yesterday, 3:15 PM</span>
+                </div>
+                <p class="text-sm text-[#9ca3af]">Moved 14 image files from Downloads to Pictures folder automatically.</p>
+            </div>
+
+            <!-- Event 3 -->
+            <div class="relative pl-8">
+                <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-[#181818] border border-[#3f3f46] flex items-center justify-center">
+                    <div class="w-2 h-2 rounded-full bg-red-500"></div>
+                </div>
+                <div class="flex justify-between items-start mb-1">
+                    <h3 class="text-base font-medium text-white">App Uninstalled</h3>
+                    <span class="text-xs text-[#6b7280]">Oct 24, 2024</span>
+                </div>
+                <p class="text-sm text-[#9ca3af]">Completely removed Docker and its leftover files (3.4 GB).</p>
+            </div>
+
+            <!-- Event 4 -->
+            <div class="relative pl-8">
+                <div class="absolute -left-[17px] top-1 w-8 h-8 rounded-full bg-[#181818] border border-[#3f3f46] flex items-center justify-center">
+                    <div class="w-2 h-2 rounded-full bg-[#6b7280]"></div>
+                </div>
+                <div class="flex justify-between items-start mb-1">
+                    <h3 class="text-base font-medium text-white">System Scan</h3>
+                    <span class="text-xs text-[#6b7280]">Oct 20, 2024</span>
+                </div>
+                <p class="text-sm text-[#9ca3af]">Initial system health scan completed. System status: Optimal.</p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

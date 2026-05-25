@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Satoshi', 'sans-serif'] },
+                    colors: {
+                        appBg: '#08080a', cardBg: '#111215', cardBorder: '#1c1d22',
+                        textMain: '#ffffff', textMuted: '#82838a',
+                        accentGreen: '#00e599', accentCyan: '#00d2ff', accentPurple: '#b14bff', accentRed: '#ef4444'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: transparent; color: #ffffff; }
+        .bento-card {
+            background-color: #111215; border: 1px solid #1c1d22; border-radius: 20px; transition: all 0.3s ease;
+        }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1c1d22; border-radius: 10px; }
+
+        /* Custom Checkbox */
+        .custom-checkbox {
+            appearance: none; width: 16px; height: 16px;
+            border: 2px solid #27282d; border-radius: 4px;
+            background-color: #111215; cursor: pointer; position: relative; transition: all 0.2s;
+        }
+        .custom-checkbox:checked {
+            background-color: #00e599; border-color: #00e599;
+            box-shadow: 0 0 8px rgba(0, 229, 153, 0.4);
+        }
+        .custom-checkbox:checked::after {
+            content: ''; position: absolute; left: 4px; top: 1px;
+            width: 4px; height: 8px; border: solid #08080a; border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+    </style>
+</head>
+<body class="p-8 font-sans h-full flex flex-col overflow-hidden">
+
+    <div class="flex justify-between items-center mb-6 flex-shrink-0">
+        <div>
+            <p class="text-[#82838a] text-[10px] font-bold tracking-widest uppercase mb-0.5">Optimize</p>
+            <h1 class="text-2xl font-bold tracking-tight">Deep Clean</h1>
+        </div>
+        <button class="px-6 py-2.5 bg-[#00e599] text-black hover:bg-[#00c985] rounded-xl text-xs font-bold transition-colors shadow-[0_0_15px_rgba(0,229,153,0.3)] flex items-center gap-2">
+            <i data-lucide="zap" class="w-4 h-4"></i> Clean 4.2 GB
+        </button>
+    </div>
+
+    <div class="flex gap-4 flex-1 min-h-0">
+
+        <!-- Left: Status & Summary -->
+        <div class="w-72 flex flex-col gap-4 flex-shrink-0">
+            <div class="bento-card p-6 flex flex-col relative overflow-hidden">
+                <div class="absolute right-0 top-0 w-32 h-32 bg-[#ef4444] opacity-[0.1] blur-[30px] rounded-full"></div>
+
+                <h3 class="text-sm font-bold text-white mb-6 relative z-10">Junk Files Found</h3>
+
+                <div class="flex items-center justify-center mb-6 relative z-10">
+                    <div class="relative w-32 h-32">
+                        <svg viewBox="0 0 100 100" class="w-full h-full transform rotate-[135deg]">
+                            <circle cx="50" cy="50" r="40" stroke="#1c1d22" stroke-width="8" fill="none" stroke-dasharray="188.5 251.2" stroke-linecap="round" />
+                            <circle cx="50" cy="50" r="40" stroke="#ef4444" stroke-width="8" fill="none" stroke-dasharray="120 251.2" stroke-linecap="round" filter="drop-shadow(0 0 6px rgba(239,68,68,0.5))" />
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span class="text-2xl font-bold text-white leading-none mt-1">4.2</span>
+                            <span class="text-[10px] text-[#82838a]">GB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-3 relative z-10 mt-auto">
+                    <div class="flex justify-between items-center bg-[#16171a] p-3 rounded-xl border border-[#1c1d22]">
+                        <span class="text-[10px] text-[#82838a]">System Health</span>
+                        <div class="flex items-center gap-1.5">
+                            <div class="w-1.5 h-1.5 rounded-full bg-[#ef4444] shadow-[0_0_5px_#ef4444]"></div>
+                            <span class="text-[10px] font-bold text-white">Needs Clean</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Categories to Clean -->
+        <div class="flex-1 bento-card p-6 flex flex-col">
+            <h3 class="text-sm font-bold text-white mb-4">Select items to remove</h3>
+
+            <div class="flex-1 overflow-y-auto space-y-2 pr-2">
+
+                <!-- Category -->
+                <label class="flex items-center justify-between p-4 bg-[#16171a] border border-[#1c1d22] hover:border-[#27282d] rounded-xl cursor-pointer transition-colors group">
+                    <div class="flex items-center gap-4">
+                        <input type="checkbox" class="custom-checkbox" checked>
+                        <div class="w-10 h-10 bg-[#111215] border border-[#1c1d22] rounded-lg flex items-center justify-center">
+                            <i data-lucide="globe" class="w-4 h-4 text-[#00d2ff]"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-bold text-white">Browser Caches</h4>
+                            <p class="text-[9px] text-[#82838a] mt-0.5">Chrome, Safari, Firefox temp files</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs font-bold text-white font-mono">1.2 GB</p>
+                    </div>
+                </label>
+
+                <!-- Category -->
+                <label class="flex items-center justify-between p-4 bg-[#16171a] border border-[#1c1d22] hover:border-[#27282d] rounded-xl cursor-pointer transition-colors group">
+                    <div class="flex items-center gap-4">
+                        <input type="checkbox" class="custom-checkbox" checked>
+                        <div class="w-10 h-10 bg-[#111215] border border-[#1c1d22] rounded-lg flex items-center justify-center">
+                            <i data-lucide="terminal" class="w-4 h-4 text-[#b14bff]"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-bold text-white">System Logs</h4>
+                            <p class="text-[9px] text-[#82838a] mt-0.5">Old diagnostic reports and logs</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs font-bold text-white font-mono">450 MB</p>
+                    </div>
+                </label>
+
+                <!-- Category -->
+                <label class="flex items-center justify-between p-4 bg-[#16171a] border border-[#1c1d22] hover:border-[#27282d] rounded-xl cursor-pointer transition-colors group">
+                    <div class="flex items-center gap-4">
+                        <input type="checkbox" class="custom-checkbox" checked>
+                        <div class="w-10 h-10 bg-[#111215] border border-[#1c1d22] rounded-lg flex items-center justify-center">
+                            <i data-lucide="code-2" class="w-4 h-4 text-[#00e599]"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-bold text-white">Developer Caches</h4>
+                            <p class="text-[9px] text-[#82838a] mt-0.5">Xcode derived data, npm, pip</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs font-bold text-white font-mono">2.1 GB</p>
+                    </div>
+                </label>
+
+                <!-- Category -->
+                <label class="flex items-center justify-between p-4 bg-[#16171a] border border-[#1c1d22] hover:border-[#27282d] rounded-xl cursor-pointer transition-colors group opacity-60 hover:opacity-100">
+                    <div class="flex items-center gap-4">
+                        <input type="checkbox" class="custom-checkbox">
+                        <div class="w-10 h-10 bg-[#111215] border border-[#1c1d22] rounded-lg flex items-center justify-center">
+                            <i data-lucide="trash-2" class="w-4 h-4 text-white"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-bold text-white">Trash Bins</h4>
+                            <p class="text-[9px] text-[#82838a] mt-0.5">System and Mail trash</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs font-bold text-white font-mono">45 MB</p>
+                    </div>
+                </label>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+  <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+    <defs>
+      <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
+        <feDropShadow dx="0" dy="24" stdDeviation="30" flood-color="#0F172A" flood-opacity="0.16"/>
+      </filter>
+      <filter id="smallShadow" x="-20%" y="-20%" width="140%" height="150%">
+        <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#0F172A" flood-opacity="0.12"/>
+      </filter>
+
+    </defs>
+
+    <rect width="1600" height="900" fill="#F8FAFC"/>
+    <circle cx="1290" cy="110" r="260" fill="#DBEAFE"/>
+    <circle cx="1370" cy="760" r="220" fill="#CCFBF1"/>
+    <path d="M0 760 C280 640 460 860 760 750 C1030 650 1240 710 1600 610 L1600 900 L0 900 Z" fill="#EEF2FF"/>
+    <path d="M1030 128 L1480 128" stroke="#CBD5E1" stroke-width="2" stroke-dasharray="10 14"/>
+
+
+
+    <g transform="translate(96 38) scale(2.25)">
+      <rect x="0" y="0" width="24" height="24" rx="5" fill="#6366F1"/>
+      <g transform="translate(3.84 3.84) scale(0.68)" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"/>
+        <path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"/>
+        <path d="M3 5a2 2 0 0 0 2 2h3"/>
+        <path d="M3 3v13a2 2 0 0 0 2 2h3"/>
+      </g>
+    </g><text x="168" y="76" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="30" font-weight="800" fill="#111827" >StowMind</text><text x="168" y="108" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="18" font-weight="600" fill="#64748B" >AI file organizer</text>
+    <rect x="96" y="188" width="194" height="44" rx="22" fill="#ECFEFF" /><text x="116" y="217" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="700" fill="#0F766E" >桌面文件整理工具</text>
+    <text x="96" y="292" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="68" font-weight="900" fill="#0F172A" >下载夹乱了？</text><text x="96" y="374" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="68" font-weight="900" fill="#0F172A" >StowMind 自动归类</text>
+    <text x="100" y="520" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="31" font-weight="650" fill="#475569" >规则优先处理常见文件，疑难项再交给 AI。</text><text x="100" y="567" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="31" font-weight="650" fill="#475569" >扫描、预览、执行、撤销，一套流程把风险降下来。</text>
+    <rect x="96" y="676" width="190" height="58" rx="29" fill="#111827" />
+    <text x="139" y="714" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="23" font-weight="800" fill="#FFFFFF" >了解项目</text>
+    <rect x="314" y="684" width="146" height="44" rx="22" fill="#FFFFFF" stroke="#C7D2FE"/><text x="334" y="713" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="700" fill="#4338CA" >Rules first</text>
+    <rect x="482" y="684" width="184" height="44" rx="22" fill="#FFFFFF" stroke="#99F6E4"/><text x="502" y="713" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="700" fill="#0F766E" >AI when needed</text>
+
+    <g filter="url(#softShadow)">
+      <rect x="876" y="178" width="584" height="526" rx="28" fill="#FFFFFF" />
+      <rect x="876" y="178" width="584" height="62" rx="28" fill="#F8FAFC" />
+      <circle cx="908" cy="209" r="8" fill="#FB7185"/>
+      <circle cx="934" cy="209" r="8" fill="#FBBF24"/>
+      <circle cx="960" cy="209" r="8" fill="#34D399"/>
+      <rect x="900" y="266" width="190" height="410" rx="18" fill="#F8FAFC" />
+      <rect x="920" y="296" width="126" height="44" rx="22" fill="#EEF2FF" /><text x="940" y="325" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="700" fill="#4338CA" >整理文件</text>
+      <text x="920" y="390" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="650" fill="#64748B" >历史记录</text>
+      <text x="920" y="446" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="650" fill="#64748B" >统计</text>
+      <text x="920" y="502" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="650" fill="#64748B" >设置</text>
+      <text x="1124" y="306" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="30" font-weight="800" fill="#111827" >分类结果</text>
+      <text x="1124" y="346" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="19" font-weight="600" fill="#64748B" >扫描完成：32 个文件</text>
+
+    <rect x="1124" y="392" width="292" height="54" rx="14" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <circle cx="1154" cy="419" r="10" fill="#6366F1"/>
+    <text x="1178" y="426" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="700" fill="#111827" >report.pdf</text>
+    <rect x="1298" y="403" width="82" height="32" rx="16" fill="#6366F11A" />
+    <text x="1320" y="425" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="17" font-weight="700" fill="#64748B" >文档</text>
+
+
+    <rect x="1124" y="464" width="292" height="54" rx="14" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <circle cx="1154" cy="491" r="10" fill="#0EA5E9"/>
+    <text x="1178" y="498" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="700" fill="#111827" >image.png</text>
+    <rect x="1298" y="475" width="82" height="32" rx="16" fill="#0EA5E91A" />
+    <text x="1320" y="497" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="17" font-weight="700" fill="#64748B" >图片</text>
+
+
+    <rect x="1124" y="536" width="292" height="54" rx="14" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <circle cx="1154" cy="563" r="10" fill="#10B981"/>
+    <text x="1178" y="570" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="700" fill="#111827" >invoice.xls</text>
+    <rect x="1298" y="547" width="82" height="32" rx="16" fill="#10B9811A" />
+    <text x="1320" y="569" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="17" font-weight="700" fill="#64748B" >表格</text>
+
+      <line x1="1124" y1="604" x2="1416" y2="604" stroke="#E2E8F0" stroke-width="2"/>
+      <rect x="1220" y="632" width="184" height="48" rx="24" fill="#6366F1" />
+      <text x="1266" y="663" font-family="&quot;Inter&quot;, &quot;SF Pro Display&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, Arial, sans-serif" font-size="20" font-weight="800" fill="#FFFFFF" >预览移动</text>
+    </g>
+
+  </svg>

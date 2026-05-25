@@ -7,8 +7,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "generate:icons": "node scripts/generate-icons.js",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
+    "tauri:dev:isolated": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "tauri:build": "tauri build"
   },
   "dependencies": {
