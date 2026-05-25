@@ -109,3 +109,40 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target universal-apple-darwin
+
+      - name: publish GitHub release
+        uses: actions/github-script@v7
+        env:
+          TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        with:
+          script: |
+            const tagName = process.env.TAG_NAME
+            let release = null
+
+            for await (const response of github.paginate.iterator(
+              github.rest.repos.listReleases,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+              },
+            )) {
+              release = response.data.find((item) => item.tag_name === tagName)
+              if (release) break
+            }
+
+            if (!release) {
+              throw new Error(`Release not found for tag ${tagName}`)
+            }
+
+            if (!release.draft) {
+              core.info(`Release ${tagName} is already published.`)
+              return
+            }
+
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              draft: false,
+            })
