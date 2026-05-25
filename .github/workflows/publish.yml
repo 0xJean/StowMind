@@ -12,39 +12,14 @@ on:
       - "v*"
 
 jobs:
-  publish-tauri:
+  publish-macos:
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: --target aarch64-apple-darwin
-          - platform: macos-latest
-            args: --target x86_64-apple-darwin
-          - platform: ubuntu-22.04
-            args: ""
-          - platform: windows-latest
-            args: ""
-    runs-on: ${{ matrix.platform }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
-
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libsoup2.4-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            pkg-config \
-            libssl-dev
 
       - name: setup pnpm
         uses: pnpm/action-setup@v4
@@ -61,7 +36,7 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -72,11 +47,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # 未配置 Secrets 时，${{ secrets.X }} 会变成「空字符串」。若把空的 APPLE_CERTIFICATE 传给进程，
-      # Tauri 仍会走「从环境变量导入钥匙串证书」分支并失败（全平台同一 workflow 里也会拖垮 mac 矩阵）。
-      # 因此仅在 macOS 且证书 Secret 非空时，才把 Apple 变量写入 GITHUB_ENV（变量未设置 = 不签名，构建可成功）。
+      # Tauri 仍会走「从环境变量导入钥匙串证书」分支并失败。
+      # 因此仅在证书 Secret 非空时，才把 Apple 变量写入 GITHUB_ENV（变量未设置 = 不签名，构建可成功）。
       # 见 https://tauri.app/v1/guides/distribution/sign-macos
       - name: macOS signing env from secrets (optional)
-        if: matrix.platform == 'macos-latest'
         shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -131,8 +105,7 @@ jobs:
         with:
           tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           releaseName: "StowMind ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
-          releaseBody: "See the assets to download and install this version."
+          releaseBody: "Universal macOS build. See the assets to download and install this version."
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
-
+          args: --target universal-apple-darwin
