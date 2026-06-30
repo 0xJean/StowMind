@@ -1,6 +1,6 @@
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/tauri'
-import { Download, X } from 'lucide-react'
+import { Download, Loader2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
@@ -10,6 +10,12 @@ import { useDashboardCacheSync } from './hooks/useDashboardCacheSync'
 import { useI18n } from './i18n'
 import { checkMoleInstallation, fallbackMoleStatus } from './lib/mole'
 import { resultCacheKeys, saveResultSnapshot } from './lib/resultCache'
+import {
+  getSystemSettingsState,
+  openSystemSettingsTarget,
+  shouldPromptFullDiskAccess,
+  type NativeSystemSettingsState,
+} from './lib/systemSettings'
 import { AnalyzePage } from './pages/AnalyzePage'
 import { CleanPage } from './pages/CleanPage'
 import { DoctorPage } from './pages/DoctorPage'
@@ -28,6 +34,7 @@ import { StatisticsPage } from './pages/StatisticsPage'
 import { SoftwareUpdatePage } from './pages/SoftwareUpdatePage'
 import { ApplicationManagementPage } from './pages/ApplicationManagementPage'
 import type { MoleDoctorResult } from './pages/mole/doctorTypes'
+import { DiskAccessSetupPage } from './pages/onboarding/DiskAccessSetupPage'
 import { MoleSetupPage } from './pages/onboarding/MoleSetupPage'
 import { useAppStore } from './stores/app'
 import { useMoleStore } from './stores/mole'
@@ -38,6 +45,7 @@ interface WatchFolderChangePayload {
 }
 
 const LAST_ROUTE_KEY = 'stowmind.lastRoute.v1'
+const DISK_ACCESS_SETUP_KEY = 'stowmind.diskAccessSetup.v1'
 const MOLE_SETUP_KEY = 'stowmind.moleSetup.v1'
 const CACHEABLE_ROUTES = new Set([
   '/',
@@ -83,10 +91,65 @@ function App() {
   const previousPathRef = useRef(location.pathname)
   const restoredRouteRef = useRef(false)
   const startupUpdateCheckedRef = useRef(false)
+  const [diskAccessPreference, setDiskAccessPreference] = useState<'done' | 'skipped' | null>(() => {
+    const saved = localStorage.getItem(DISK_ACCESS_SETUP_KEY)
+    return saved === 'done' || saved === 'skipped' ? saved : null
+  })
+  const [systemState, setSystemState] = useState<NativeSystemSettingsState | null>(null)
+  const [systemStateChecked, setSystemStateChecked] = useState(() => diskAccessPreference !== null)
+  const [systemStateLoading, setSystemStateLoading] = useState(false)
   const [moleSetupPreference, setMoleSetupPreference] = useState<'done' | 'skipped' | null>(() => {
     const saved = localStorage.getItem(MOLE_SETUP_KEY)
     return saved === 'done' || saved === 'skipped' ? saved : null
   })
+
+  const refreshDiskAccessState = useCallback(async (options?: { notifyOnError?: boolean; skipOnError?: boolean }) => {
+    setSystemStateLoading(true)
+    try {
+      const next = await getSystemSettingsState()
+      setSystemState(next)
+      if (!shouldPromptFullDiskAccess(next)) {
+        localStorage.setItem(DISK_ACCESS_SETUP_KEY, 'done')
+        setDiskAccessPreference('done')
+      }
+      return next
+    } catch (error) {
+      if (options?.notifyOnError) {
+        toast.error(t('diskAccessSetup.stateFail', { error: String(error) }))
+      }
+      if (options?.skipOnError) {
+        localStorage.setItem(DISK_ACCESS_SETUP_KEY, 'skipped')
+        setDiskAccessPreference('skipped')
+      }
+      return null
+    } finally {
+      setSystemStateChecked(true)
+      setSystemStateLoading(false)
+    }
+  }, [t])
+
+  const openFullDiskAccessSettings = useCallback(async () => {
+    try {
+      await openSystemSettingsTarget('full_disk_access')
+    } catch (error) {
+      toast.error(t('settings.mole.openFail', { error: String(error) }))
+    }
+  }, [t])
+
+  const recheckDiskAccess = useCallback(async () => {
+    const next = await refreshDiskAccessState({ notifyOnError: true })
+    if (!next) return
+    if (shouldPromptFullDiskAccess(next)) {
+      toast.info(t('diskAccessSetup.missingToast'))
+      return
+    }
+    toast.success(t('diskAccessSetup.readyToast'))
+  }, [refreshDiskAccessState, t])
+
+  const skipDiskAccessSetup = useCallback(() => {
+    localStorage.setItem(DISK_ACCESS_SETUP_KEY, 'skipped')
+    setDiskAccessPreference('skipped')
+  }, [])
 
   const checkMole = useCallback(async () => {
     startMoleCheck()
@@ -130,9 +193,24 @@ function App() {
   }, [location.pathname, navigate])
 
   useEffect(() => {
-    if (moleChecked) return
+    if (diskAccessPreference || systemStateChecked) return
+    void refreshDiskAccessState({ skipOnError: true })
+  }, [diskAccessPreference, refreshDiskAccessState, systemStateChecked])
+
+  const shouldShowDiskAccessSetup =
+    diskAccessPreference !== 'done' &&
+    diskAccessPreference !== 'skipped' &&
+    systemStateChecked &&
+    shouldPromptFullDiskAccess(systemState)
+  const diskAccessSetupResolved =
+    diskAccessPreference === 'done' ||
+    diskAccessPreference === 'skipped' ||
+    (systemStateChecked && !shouldShowDiskAccessSetup)
+
+  useEffect(() => {
+    if (!diskAccessSetupResolved || moleChecked) return
     void checkMole()
-  }, [checkMole, moleChecked])
+  }, [checkMole, diskAccessSetupResolved, moleChecked])
 
   useEffect(() => {
     if (!moleChecked || !moleStatus?.installed || startupUpdateCheckedRef.current) return
@@ -183,6 +261,7 @@ function App() {
   }, [t])
 
   useEffect(() => {
+    if (!diskAccessSetupResolved) return
     if (!watchFolderEnabled) {
       invoke('watch_set_paths', { paths: [] }).catch(() => {})
       return
@@ -195,7 +274,7 @@ function App() {
       invoke('watch_set_paths', { paths }).catch(() => {})
     }, 800)
     return () => window.clearTimeout(timer)
-  }, [watchFolderEnabled, watchFolderPathsText])
+  }, [diskAccessSetupResolved, watchFolderEnabled, watchFolderPathsText])
 
   useEffect(() => {
     const checkOllama = async () => {
@@ -248,6 +327,7 @@ function App() {
 
   const isHudRoute = location.pathname === '/hud'
   const shouldShowMoleSetup =
+    diskAccessSetupResolved &&
     moleSetupPreference !== 'skipped' &&
     (moleStatus?.installed === false || (!moleChecked && moleSetupPreference !== 'done'))
   const showMoleUpdateBanner =
@@ -255,6 +335,37 @@ function App() {
     location.pathname !== '/software-update' &&
     moleUpdate.checked &&
     moleUpdate.available
+
+  if (!diskAccessSetupResolved && !shouldShowDiskAccessSetup) {
+    return (
+      <div className="min-h-screen bg-background p-3 text-foreground md:p-4 2xl:p-5">
+        <div className="iqon-app-window mx-auto flex h-[calc(100vh-1.5rem)] w-full items-center justify-center gap-2 text-muted-foreground md:h-[calc(100vh-2rem)] 2xl:h-[calc(100vh-2.5rem)]">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>{t('diskAccessSetup.checking')}</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (shouldShowDiskAccessSetup) {
+    return (
+      <div className="min-h-screen bg-background p-3 text-foreground md:p-4 2xl:p-5">
+        <div className="iqon-app-window mx-auto flex h-[calc(100vh-1.5rem)] w-full md:h-[calc(100vh-2rem)] 2xl:h-[calc(100vh-2.5rem)]">
+          <DiskAccessSetupPage
+            status={systemState?.fullDiskAccessStatus ?? 'unknown'}
+            checking={systemStateLoading}
+            onOpenSettings={() => {
+              void openFullDiskAccessSettings()
+            }}
+            onRecheck={() => {
+              void recheckDiskAccess()
+            }}
+            onSkip={skipDiskAccessSetup}
+          />
+        </div>
+      </div>
+    )
+  }
 
   if (shouldShowMoleSetup) {
     return (

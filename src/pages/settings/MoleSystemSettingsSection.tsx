@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/i18n'
+import { getSystemSettingsState, openSystemSettingsTarget, type NativeSystemSettingsState } from '@/lib/systemSettings'
 import { open as openUrl } from '@tauri-apps/api/shell'
 import { invoke } from '@tauri-apps/api/tauri'
 import { platform as getPlatform, type Platform } from '@tauri-apps/api/os'
@@ -23,13 +24,6 @@ import { applyHudNativeSettings } from '../hud/native'
 import { HUD_METRICS, loadHudSettings, saveHudSettings, toggleHudMetric, type HudMetricKey, type HudSettings } from '../hud/settings'
 
 type SystemTarget = 'launchAtLogin' | 'fullDiskAccess'
-
-interface NativeSystemSettingsState {
-  platform: string
-  launchAtLoginSupported: boolean
-  launchAtLoginEnabled: boolean
-  fullDiskAccessStatus: 'granted' | 'denied' | 'unknown' | 'unsupported' | string
-}
 
 function nativeSettingsTarget(target: SystemTarget, platform: Platform | null) {
   if (platform !== 'darwin' && platform !== 'win32') return null
@@ -69,7 +63,7 @@ export function MoleSystemSettingsSection() {
   const refreshSystemState = async () => {
     setSystemLoading(true)
     try {
-      const next = await invoke<NativeSystemSettingsState>('system_settings_state')
+      const next = await getSystemSettingsState()
       setSystemState(next)
     } catch (error) {
       toast.error(t('settings.mole.stateFail', { error: String(error) }))
@@ -100,7 +94,7 @@ export function MoleSystemSettingsSection() {
     }
 
     try {
-      await invoke('open_system_settings', { target: settingsTarget })
+      await openSystemSettingsTarget(settingsTarget)
     } catch (error) {
       toast.error(t('settings.mole.openFail', { error: String(error) }))
     }

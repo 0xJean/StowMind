@@ -26,6 +26,7 @@ import {
   savePendingCleanScan,
   type PendingCleanScanSnapshot,
 } from './clean/cleanScanSnapshot'
+import { hasDiskAccessFailure } from './clean/cleanFailureHints'
 import {
   sortCleanSectionsBySize,
   type CleanCompletionResult,
@@ -291,8 +292,10 @@ export function CleanPage() {
         return null
       }
       setScanError(message)
-      setScanOutput((current) => [...current, ...(errorLines.length ? errorLines : [message])].slice(-160))
-      toast.error(t('clean.cleanFail', { error: errorLines[0] ?? message }))
+      const hintLines = hasDiskAccessFailure(message) ? [t('clean.diskAccessFailureHint')] : []
+      const displayedErrors = errorLines.length ? errorLines : [message]
+      setScanOutput((current) => [...current, ...displayedErrors, ...hintLines].slice(-160))
+      toast.error(t('clean.cleanFail', { error: hintLines[0] ?? errorLines[0] ?? message }))
       return null
     } finally {
       unlistenOutput?.()

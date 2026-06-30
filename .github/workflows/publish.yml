@@ -115,6 +115,11 @@ jobs:
             const tagName = process.env.TAG_NAME
             const owner = context.repo.owner
             const repo = context.repo.repo
+            const defaultBody = 'Universal macOS build. Assets may be ad-hoc signed unless Apple signing secrets are configured.'
+            const notesPath = path.join('.github', 'release-notes', `${tagName}.md`)
+            const releaseBody = fs.existsSync(notesPath)
+              ? fs.readFileSync(notesPath, 'utf8')
+              : defaultBody
 
             let release = null
             for await (const response of github.paginate.iterator(
@@ -131,7 +136,7 @@ jobs:
                 repo,
                 tag_name: tagName,
                 name: `StowMind ${tagName}`,
-                body: 'Universal macOS build. Assets may be ad-hoc signed unless Apple signing secrets are configured.',
+                body: releaseBody,
                 draft: true,
                 prerelease: false,
               })
@@ -168,7 +173,7 @@ jobs:
               repo,
               release_id: release.id,
               name: `StowMind ${tagName}`,
-              body: 'Universal macOS build. Assets may be ad-hoc signed unless Apple signing secrets are configured.',
+              body: releaseBody,
               draft: false,
               prerelease: false,
             })
