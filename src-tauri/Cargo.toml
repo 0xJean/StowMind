@@ -1,6 +1,6 @@
 [package]
 name = "stowmind"
-version = "1.0.2"
+version = "1.0.3"
 description = "StowMind — AI file organizer"
 authors = ["you"]
 license = "MIT"
