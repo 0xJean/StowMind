@@ -2,8 +2,9 @@ import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/tauri'
 import { Download, Loader2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import { AppRoutes } from './AppRoutes'
 import { Button } from './components/ui/button'
 import { Sidebar } from './components/Sidebar'
 import { useDashboardCacheSync } from './hooks/useDashboardCacheSync'
@@ -16,23 +17,8 @@ import {
   shouldPromptFullDiskAccess,
   type NativeSystemSettingsState,
 } from './lib/systemSettings'
-import { AnalyzePage } from './pages/AnalyzePage'
-import { CleanPage } from './pages/CleanPage'
-import { DoctorPage } from './pages/DoctorPage'
-import { DuplicatesPage } from './pages/DuplicatesPage'
-import { HistoryPage } from './pages/HistoryPage'
-import { HomePage } from './pages/HomePage'
 import { HudPage } from './pages/HudPage'
 import { loadHudSettings } from './pages/hud/settings'
-import { InstallerPage } from './pages/InstallerPage'
-import { OptimizePage } from './pages/OptimizePage'
-import { OrganizePage } from './pages/OrganizePage'
-import { PurgePage } from './pages/PurgePage'
-import { StatusPage } from './pages/StatusPage'
-import { SettingsPage } from './pages/SettingsPage'
-import { StatisticsPage } from './pages/StatisticsPage'
-import { SoftwareUpdatePage } from './pages/SoftwareUpdatePage'
-import { ApplicationManagementPage } from './pages/ApplicationManagementPage'
 import type { MoleDoctorResult } from './pages/mole/doctorTypes'
 import { DiskAccessSetupPage } from './pages/onboarding/DiskAccessSetupPage'
 import { MoleSetupPage } from './pages/onboarding/MoleSetupPage'
@@ -91,6 +77,8 @@ function App() {
   const previousPathRef = useRef(location.pathname)
   const restoredRouteRef = useRef(false)
   const startupUpdateCheckedRef = useRef(false)
+  const isHudRoute = location.pathname === '/hud'
+  const [hudMounted, setHudMounted] = useState(() => isHudRoute)
   const [diskAccessPreference, setDiskAccessPreference] = useState<'done' | 'skipped' | null>(() => {
     const saved = localStorage.getItem(DISK_ACCESS_SETUP_KEY)
     return saved === 'done' || saved === 'skipped' ? saved : null
@@ -191,6 +179,12 @@ function App() {
       navigate(saved, { replace: true })
     }
   }, [location.pathname, navigate])
+
+  useEffect(() => {
+    if (isHudRoute) {
+      setHudMounted(true)
+    }
+  }, [isHudRoute])
 
   useEffect(() => {
     if (diskAccessPreference || systemStateChecked) return
@@ -325,7 +319,6 @@ function App() {
     }).catch(() => {})
   }, [location.pathname])
 
-  const isHudRoute = location.pathname === '/hud'
   const shouldShowMoleSetup =
     diskAccessSetupResolved &&
     moleSetupPreference !== 'skipped' &&
@@ -384,62 +377,39 @@ function App() {
     )
   }
 
-  if (isHudRoute) {
-    return (
-      <div className="min-h-screen bg-background text-foreground">
-        <HudPage />
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-black p-3 text-foreground md:p-4 2xl:p-5">
-      <div className="iqon-app-window mx-auto flex h-[calc(100vh-1.5rem)] w-full md:h-[calc(100vh-2rem)] 2xl:h-[calc(100vh-2.5rem)]">
-      {!isHudRoute && <Sidebar />}
-      <main className="relative min-w-0 flex-1 overflow-y-auto bg-background">
-        <div
-          className="pointer-events-none absolute inset-0 z-0 opacity-20"
-          style={{
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
-            backgroundSize: '100px 100px',
-          }}
-        />
-        <div className="pointer-events-none absolute left-1/2 top-0 z-0 h-[400px] w-[800px] -translate-x-1/2 rounded-full bg-white opacity-[0.02] blur-[100px]" />
-        <div className="relative z-10">
-        {showMoleUpdateBanner && (
-          <MoleUpdateBanner
-            onOpen={() => navigate('/software-update')}
-            onDismiss={clearMoleUpdate}
-          />
-        )}
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/organize" element={<OrganizePage />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/statistics" element={<StatisticsPage />} />
-          <Route path="/duplicates" element={<DuplicatesPage />} />
-          <Route path="/clean" element={<CleanPage />} />
-          <Route path="/installers" element={<InstallerPage />} />
-          <Route path="/optimize" element={<OptimizePage />} />
-          <Route path="/uninstall" element={<ApplicationManagementPage />} />
-          <Route path="/apps" element={<ApplicationManagementPage />} />
-          <Route path="/analyze" element={<AnalyzePage />} />
-          <Route path="/purge" element={<PurgePage />} />
-          <Route path="/status" element={<StatusPage />} />
-          <Route path="/status-advanced" element={<Navigate to="/status" replace />} />
-          <Route path="/doctor" element={<DoctorPage />} />
-          <Route path="/software-update" element={<SoftwareUpdatePage />} />
-          <Route path="/hud" element={<HudPage />} />
-          <Route path="/mole-map" element={<Navigate to="/" replace />} />
-          <Route path="/deepclean" element={<Navigate to="/clean" replace />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+    <>
+      {hudMounted && (
+        <div hidden={!isHudRoute} className="min-h-screen bg-background text-foreground">
+          <HudPage />
         </div>
-      </main>
+      )}
+      <div hidden={isHudRoute} className="min-h-screen bg-black p-3 text-foreground md:p-4 2xl:p-5">
+        <div className="iqon-app-window mx-auto flex h-[calc(100vh-1.5rem)] w-full md:h-[calc(100vh-2rem)] 2xl:h-[calc(100vh-2.5rem)]">
+          <Sidebar />
+          <main className="relative min-w-0 flex-1 overflow-y-auto bg-background">
+            <div
+              className="pointer-events-none absolute inset-0 z-0 opacity-20"
+              style={{
+                backgroundImage:
+                  'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
+                backgroundSize: '100px 100px',
+              }}
+            />
+            <div className="pointer-events-none absolute left-1/2 top-0 z-0 h-[400px] w-[800px] -translate-x-1/2 rounded-full bg-white opacity-[0.02] blur-[100px]" />
+            <div className="relative z-10">
+              {showMoleUpdateBanner && (
+                <MoleUpdateBanner
+                  onOpen={() => navigate('/software-update')}
+                  onDismiss={clearMoleUpdate}
+                />
+              )}
+              <AppRoutes />
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
