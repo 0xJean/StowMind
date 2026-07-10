@@ -70,7 +70,12 @@ export function DiskAccessSetupPage({
                   {t(statusKey(status))}
                 </span>
               </div>
-              <p className="leading-6 text-muted-foreground">{t('diskAccessSetup.restartHint')}</p>
+              <p className="leading-6 text-muted-foreground">{t('diskAccessSetup.regrantHint')}</p>
+              <ol className="grid gap-2 pl-5 text-muted-foreground">
+                <li className="list-decimal">{t('diskAccessSetup.regrantStep.remove')}</li>
+                <li className="list-decimal">{t('diskAccessSetup.regrantStep.add')}</li>
+                <li className="list-decimal">{t('diskAccessSetup.regrantStep.restart')}</li>
+              </ol>
             </div>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -80,7 +85,7 @@ export function DiskAccessSetupPage({
               </Button>
               <Button variant="outline" onClick={onRestart}>
                 <RefreshCw className="mr-2 h-4 w-4" />
-                {t('diskAccessSetup.restart')}
+                {t('diskAccessSetup.restartAfterGrant')}
               </Button>
               <Button variant="ghost" onClick={onSkip}>
                 {t('diskAccessSetup.skip')}

@@ -46,21 +46,36 @@ jobs:
       - name: install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: macOS signing env from secrets (optional)
+      - name: require macOS release credentials
         shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           set -euo pipefail
-          if [ -z "${APPLE_CERTIFICATE}" ]; then
-            echo "APPLE_CERTIFICATE not set; building ad-hoc macOS artifacts."
-            exit 0
+          required=(
+            APPLE_CERTIFICATE
+            APPLE_CERTIFICATE_PASSWORD
+            APPLE_SIGNING_IDENTITY
+            APPLE_TEAM_ID
+            APPLE_API_KEY
+            APPLE_API_KEY_ID
+            APPLE_API_ISSUER
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              missing+=("${name}")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required macOS release secrets: ${missing[*]}"
+            exit 1
           fi
 
           d="APPLE_EOF_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_$(openssl rand -hex 8)"
@@ -74,26 +89,58 @@ jobs:
             echo "APPLE_SIGNING_IDENTITY<<${d}_ID"
             printf '%s\n' "${APPLE_SIGNING_IDENTITY}"
             echo "${d}_ID"
-            if [ -n "${APPLE_ID}" ] && [ -n "${APPLE_PASSWORD}" ] && [ -n "${APPLE_TEAM_ID}" ]; then
-              echo "APPLE_ID<<${d}_AID"
-              printf '%s\n' "${APPLE_ID}"
-              echo "${d}_AID"
-              echo "APPLE_PASSWORD<<${d}_APW"
-              printf '%s\n' "${APPLE_PASSWORD}"
-              echo "${d}_APW"
-              echo "APPLE_TEAM_ID<<${d}_TID"
-              printf '%s\n' "${APPLE_TEAM_ID}"
-              echo "${d}_TID"
-            fi
-            if [ -n "${APPLE_PROVIDER_SHORT_NAME}" ]; then
-              echo "APPLE_PROVIDER_SHORT_NAME<<${d}_PROVIDER"
-              printf '%s\n' "${APPLE_PROVIDER_SHORT_NAME}"
-              echo "${d}_PROVIDER"
-            fi
+            echo "APPLE_TEAM_ID<<${d}_TID"
+            printf '%s\n' "${APPLE_TEAM_ID}"
+            echo "${d}_TID"
           } >> "${GITHUB_ENV}"
 
       - name: build universal macOS app
         run: pnpm tauri build --target universal-apple-darwin
+
+      - name: verify Developer ID signature
+        shell: bash
+        env:
+          EXPECTED_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          app_path="src-tauri/target/universal-apple-darwin/release/bundle/macos/StowMind.app"
+          codesign --verify --deep --strict --verbose=2 "${app_path}"
+          signature="$(codesign -dvvv "${app_path}" 2>&1)"
+          printf '%s\n' "${signature}"
+          grep -F "Authority=Developer ID Application:" <<< "${signature}"
+          grep -F "TeamIdentifier=${EXPECTED_TEAM_ID}" <<< "${signature}"
+          if grep -Fq "Signature=adhoc" <<< "${signature}"; then
+            echo "::error::Refusing to publish an ad-hoc signed application."
+            exit 1
+          fi
+
+      - name: notarize and staple macOS disk image
+        shell: bash
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          key_path="${RUNNER_TEMP}/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s\n' "${APPLE_API_KEY}" > "${key_path}"
+          chmod 600 "${key_path}"
+
+          dmg_path="$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name 'StowMind_*.dmg' -print -quit)"
+          if [ -z "${dmg_path}" ]; then
+            echo "::error::No StowMind DMG was produced."
+            exit 1
+          fi
+
+          xcrun notarytool submit "${dmg_path}" \
+            --key "${key_path}" \
+            --key-id "${APPLE_API_KEY_ID}" \
+            --issuer "${APPLE_API_ISSUER}" \
+            --wait \
+            --timeout 30m
+          xcrun stapler staple "${dmg_path}"
+          xcrun stapler validate "${dmg_path}"
+          spctl -a -t open --context context:primary-signature -v "${dmg_path}"
 
       - name: collect release assets
         shell: bash
@@ -115,7 +162,7 @@ jobs:
             const tagName = process.env.TAG_NAME
             const owner = context.repo.owner
             const repo = context.repo.repo
-            const defaultBody = 'Universal macOS build. Assets may be ad-hoc signed unless Apple signing secrets are configured.'
+            const defaultBody = 'Developer ID signed and notarized universal macOS build.'
             const notesPath = path.join('.github', 'release-notes', `${tagName}.md`)
             const releaseBody = fs.existsSync(notesPath)
               ? fs.readFileSync(notesPath, 'utf8')
