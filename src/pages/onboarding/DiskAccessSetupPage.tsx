@@ -9,9 +9,8 @@ type DiskAccessStatusKey =
 
 interface DiskAccessSetupPageProps {
   status: string
-  checking: boolean
   onOpenSettings: () => void
-  onRecheck: () => void
+  onRestart: () => void
   onSkip: () => void
 }
 
@@ -23,9 +22,8 @@ function statusKey(status: string): DiskAccessStatusKey {
 
 export function DiskAccessSetupPage({
   status,
-  checking,
   onOpenSettings,
-  onRecheck,
+  onRestart,
   onSkip,
 }: DiskAccessSetupPageProps) {
   const { t } = useI18n()
@@ -80,9 +78,9 @@ export function DiskAccessSetupPage({
                 <Shield className="mr-2 h-4 w-4" />
                 {t('diskAccessSetup.openSettings')}
               </Button>
-              <Button variant="outline" onClick={onRecheck} disabled={checking}>
-                <RefreshCw className={`mr-2 h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
-                {t('diskAccessSetup.recheck')}
+              <Button variant="outline" onClick={onRestart}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                {t('diskAccessSetup.restart')}
               </Button>
               <Button variant="ghost" onClick={onSkip}>
                 {t('diskAccessSetup.skip')}

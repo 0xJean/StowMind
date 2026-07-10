@@ -163,6 +163,34 @@ fn set_launch_at_login(_enabled: bool) -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
+#[derive(Clone, Copy)]
+enum DiskAccessProbe {
+    Granted,
+    Denied,
+    Missing,
+    Unknown,
+}
+
+#[cfg(target_os = "macos")]
+fn summarize_full_disk_access(probes: impl IntoIterator<Item = DiskAccessProbe>) -> &'static str {
+    let mut saw_denied = false;
+
+    for probe in probes {
+        match probe {
+            DiskAccessProbe::Granted => return "granted",
+            DiskAccessProbe::Denied => saw_denied = true,
+            DiskAccessProbe::Missing | DiskAccessProbe::Unknown => {}
+        }
+    }
+
+    if saw_denied {
+        "denied"
+    } else {
+        "unknown"
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn full_disk_access_status() -> String {
     let Some(home) = std::env::var_os("HOME") else {
         return "unknown".to_string();
@@ -174,25 +202,14 @@ fn full_disk_access_status() -> String {
         home.join("Library").join("Safari"),
     ];
 
-    let mut saw_missing = false;
-    for probe in probes {
-        match fs::read_dir(&probe) {
-            Ok(_) => return "granted".to_string(),
-            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
-                return "denied".to_string();
-            }
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                saw_missing = true;
-            }
-            Err(_) => {}
-        }
-    }
+    let results = probes.into_iter().map(|probe| match fs::read_dir(&probe) {
+        Ok(_) => DiskAccessProbe::Granted,
+        Err(error) if error.kind() == io::ErrorKind::PermissionDenied => DiskAccessProbe::Denied,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => DiskAccessProbe::Missing,
+        Err(_) => DiskAccessProbe::Unknown,
+    });
 
-    if saw_missing {
-        "unknown".to_string()
-    } else {
-        "denied".to_string()
-    }
+    summarize_full_disk_access(results).to_string()
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -270,5 +287,40 @@ pub fn open_system_settings(target: String) -> Result<(), String> {
         Err(format!(
             "System settings target is not supported on this platform: {target}"
         ))
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::{summarize_full_disk_access, DiskAccessProbe};
+
+    #[test]
+    fn granted_probe_wins_over_an_earlier_denial() {
+        let status = summarize_full_disk_access([
+            DiskAccessProbe::Denied,
+            DiskAccessProbe::Granted,
+            DiskAccessProbe::Missing,
+        ]);
+
+        assert_eq!(status, "granted");
+    }
+
+    #[test]
+    fn denied_requires_at_least_one_permission_error() {
+        let status = summarize_full_disk_access([
+            DiskAccessProbe::Missing,
+            DiskAccessProbe::Denied,
+            DiskAccessProbe::Unknown,
+        ]);
+
+        assert_eq!(status, "denied");
+    }
+
+    #[test]
+    fn inconclusive_probes_remain_unknown() {
+        let status =
+            summarize_full_disk_access([DiskAccessProbe::Missing, DiskAccessProbe::Unknown]);
+
+        assert_eq!(status, "unknown");
     }
 }

@@ -32,6 +32,9 @@
       "notification": {
         "all": true
       },
+      "process": {
+        "relaunch": true
+      },
       "window": {
         "all": false,
         "hide": true,

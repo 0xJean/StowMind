@@ -1,4 +1,5 @@
 import { listen } from '@tauri-apps/api/event'
+import { relaunch } from '@tauri-apps/api/process'
 import { invoke } from '@tauri-apps/api/tauri'
 import { Download, Loader2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -85,14 +86,12 @@ function App() {
   })
   const [systemState, setSystemState] = useState<NativeSystemSettingsState | null>(null)
   const [systemStateChecked, setSystemStateChecked] = useState(() => diskAccessPreference !== null)
-  const [systemStateLoading, setSystemStateLoading] = useState(false)
   const [moleSetupPreference, setMoleSetupPreference] = useState<'done' | 'skipped' | null>(() => {
     const saved = localStorage.getItem(MOLE_SETUP_KEY)
     return saved === 'done' || saved === 'skipped' ? saved : null
   })
 
   const refreshDiskAccessState = useCallback(async (options?: { notifyOnError?: boolean; skipOnError?: boolean }) => {
-    setSystemStateLoading(true)
     try {
       const next = await getSystemSettingsState()
       setSystemState(next)
@@ -112,7 +111,6 @@ function App() {
       return null
     } finally {
       setSystemStateChecked(true)
-      setSystemStateLoading(false)
     }
   }, [t])
 
@@ -124,15 +122,13 @@ function App() {
     }
   }, [t])
 
-  const recheckDiskAccess = useCallback(async () => {
-    const next = await refreshDiskAccessState({ notifyOnError: true })
-    if (!next) return
-    if (shouldPromptFullDiskAccess(next)) {
-      toast.info(t('diskAccessSetup.missingToast'))
-      return
+  const restartForDiskAccess = useCallback(async () => {
+    try {
+      await relaunch()
+    } catch (error) {
+      toast.error(t('diskAccessSetup.restartFail', { error: String(error) }))
     }
-    toast.success(t('diskAccessSetup.readyToast'))
-  }, [refreshDiskAccessState, t])
+  }, [t])
 
   const skipDiskAccessSetup = useCallback(() => {
     localStorage.setItem(DISK_ACCESS_SETUP_KEY, 'skipped')
@@ -346,12 +342,11 @@ function App() {
         <div className="iqon-app-window mx-auto flex h-[calc(100vh-1.5rem)] w-full md:h-[calc(100vh-2rem)] 2xl:h-[calc(100vh-2.5rem)]">
           <DiskAccessSetupPage
             status={systemState?.fullDiskAccessStatus ?? 'unknown'}
-            checking={systemStateLoading}
             onOpenSettings={() => {
               void openFullDiskAccessSettings()
             }}
-            onRecheck={() => {
-              void recheckDiskAccess()
+            onRestart={() => {
+              void restartForDiskAccess()
             }}
             onSkip={skipDiskAccessSetup}
           />
