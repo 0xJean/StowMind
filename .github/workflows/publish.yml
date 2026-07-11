@@ -11,35 +11,42 @@ on:
     tags:
       - "v*"
 
+concurrency:
+  group: publish-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   publish-macos:
+    environment: production-release
     permissions:
       contents: write
     runs-on: macos-latest
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          persist-credentials: false
 
       - name: setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           # 须与 pnpm-lock.yaml（lockfileVersion 6.x = pnpm 8）一致；latest 常为 pnpm 9/10 会报 LOCKFILE_BREAKING_CHANGE
           version: 8.15.5
 
       - name: setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: lts/*
           cache: pnpm
 
       - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Rust cache
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: "./src-tauri -> target"
 
@@ -152,7 +159,7 @@ jobs:
           shasum -a 256 release-assets/* | tee release-assets/SHA256SUMS.txt
 
       - name: publish GitHub release
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         with:
