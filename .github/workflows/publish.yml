@@ -156,7 +156,10 @@ jobs:
           mkdir -p release-assets
           find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name 'StowMind_*.dmg' -exec cp {} release-assets/ \;
           find src-tauri/target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app.tar.gz' -exec cp {} release-assets/ \;
-          shasum -a 256 release-assets/* | tee release-assets/SHA256SUMS.txt
+          (
+            cd release-assets
+            shasum -a 256 -- * | tee SHA256SUMS.txt
+          )
 
       - name: publish GitHub release
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
