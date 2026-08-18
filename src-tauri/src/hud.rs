@@ -34,12 +34,11 @@ impl SavedWindowState {
     }
 }
 
-
 #[cfg(target_os = "macos")]
 #[allow(unexpected_cfgs)]
 fn apply_activation_policy(_: &AppHandle, hide_dock_icon: bool) {
-    use objc::{class, msg_send, sel, sel_impl};
     use objc::runtime::Object;
+    use objc::{class, msg_send, sel, sel_impl};
 
     let policy: isize = if hide_dock_icon { 1 } else { 0 };
     unsafe {

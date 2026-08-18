@@ -2,10 +2,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 export interface AIProvider {
-  type: 'ollama' | 'openai' | 'claude'
+  type: 'ollama' | 'openai' | 'claude' | 'local_codex' | 'local_claude_code'
   host?: string
   model: string
   apiKey?: string
+  executable?: string
 }
 
 export interface Category {
@@ -56,7 +57,7 @@ export interface DuplicateGroup {
   paths: string[]
 }
 
-export type HistoryRecordType = 'organize' | 'duplicates' | 'clean' | 'purge' | 'installer' | 'uninstall' | 'optimize'
+export type HistoryRecordType = 'organize' | 'ios-organize' | 'duplicates' | 'clean' | 'purge' | 'installer' | 'uninstall' | 'optimize'
 
 export interface CleanupSummary {
   itemCount?: number
@@ -78,6 +79,8 @@ export interface HistoryRecord {
   cleanupSummary?: CleanupSummary
   /** 整理时部分失败的原因（成功项仍会保留） */
   organizeErrors?: string[]
+  iosSessionId?: string
+  iosSnapshotId?: string
   undone?: boolean
 }
 

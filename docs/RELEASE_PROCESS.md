@@ -6,6 +6,8 @@
 ## 1. 强制原则
 
 - 正式 macOS 产物只能由 `.github/workflows/publish.yml` 构建和上传。
+- 包含 iPhone 整理功能时，发布产物还必须包含 `stowmind-ios-helper` universal helper；
+  helper 必须与主 App 使用同一 Team ID 的 Developer ID 签名，不能是 ad-hoc。
 - 禁止手工上传本地构建的 DMG 到 GitHub Release。
 - 禁止发布 ad-hoc、无签名、未公证或未 staple 的 macOS 产物。
 - 禁止绕过 `production-release` Environment 的人工审批。
@@ -143,6 +145,9 @@ ruby -e "require 'yaml'; YAML.load_file('.github/workflows/publish.yml', aliases
 pnpm tauri build --debug --bundles app
 ```
 
+如果变更包含 iPhone 整理 helper，还必须先运行 `pnpm build:ios-helper`，并使用
+`--config src-tauri/tauri.ios.conf.json` 验证 helper 已进入 app 资源目录。
+
 所有失败必须解决。不能以“CI 可能会通过”为理由跳过本地失败。
 
 ## 5. 创建发布提交
@@ -225,16 +230,17 @@ gh api repos/0xJean/StowMind/actions/runs/RUN_ID/pending_deployments
 2. 安装冻结版本的前端依赖。
 3. 构建 Intel + Apple Silicon universal macOS 应用。
 4. 使用 Developer ID Application 证书签名。
-5. `codesign --verify --deep --strict` 验证应用。
-6. 检查 `Authority=Developer ID Application`。
-7. 检查 `TeamIdentifier=H4NCLYWCAJ`。
-8. 明确拒绝 `Signature=adhoc`。
-9. 使用专用 API Key 提交 Apple Notary Service。
-10. 等待公证成功。
-11. 对 DMG 执行 `stapler staple` 和 `stapler validate`。
-12. 使用 Gatekeeper `spctl` 验证 DMG。
-13. 生成只包含文件名的 `SHA256SUMS.txt`。
-14. 替换或创建 GitHub Release 资产。
+5. `codesign --verify --strict` 验证 nested iOS helper。
+6. 检查主 App 和 helper 的 `Authority=Developer ID Application`。
+7. 检查主 App 和 helper 的 `TeamIdentifier=H4NCLYWCAJ`。
+8. 明确拒绝主 App 或 helper 的 `Signature=adhoc`。
+9. `codesign --verify --deep --strict` 验证应用。
+10. 使用专用 API Key 提交 Apple Notary Service。
+11. 等待公证成功。
+12. 对 DMG 执行 `stapler staple` 和 `stapler validate`。
+13. 使用 Gatekeeper `spctl` 验证 DMG。
+14. 生成只包含文件名的 `SHA256SUMS.txt`。
+15. 替换或创建 GitHub Release 资产。
 
 任一步骤失败都不得发布或保留新的 Release 资产。
 

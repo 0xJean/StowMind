@@ -1,5 +1,15 @@
 use crate::mole_utils::mole_command;
 use serde::{Deserialize, Serialize};
+use std::process::{Child, Command, Output, Stdio};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
+
+const MOLE_STATUS_TIMEOUT: Duration = Duration::from_secs(20);
+static MOLE_STATUS_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+fn mole_status_lock() -> &'static tokio::sync::Mutex<()> {
+    MOLE_STATUS_LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+}
 
 /// Mole 安装状态
 #[derive(Clone, Serialize)]
@@ -180,60 +190,130 @@ pub async fn mole_check() -> MoleStatus {
 /// 使用 Mole 的真实 JSON 输出获取系统状态。
 #[tauri::command]
 pub async fn mole_status_json() -> Result<MoleStatusMetrics, String> {
-    let output = tokio::task::spawn_blocking(|| -> Result<std::process::Output, String> {
-        mole_command()?
-            .args(["status", "-json"])
-            .output()
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| format!("Failed to join status task: {e}"))?
-    .map_err(|e| format!("Failed to run mo status -json: {e}"))?;
+    let output = run_mole_status_command().await?;
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let detail = if stderr.is_empty() { stdout } else { stderr };
-        return Err(if detail.is_empty() {
-            "mo status -json failed".to_string()
-        } else {
-            detail
-        });
+        return Err(status_command_error(&output));
     }
 
     let stdout = String::from_utf8(output.stdout)
         .map_err(|e| format!("Mole status output is not valid UTF-8: {e}"))?;
+    if stdout.trim().is_empty() {
+        return Err("Mole status returned an empty JSON response".to_string());
+    }
     serde_json::from_str::<MoleStatusMetrics>(&stdout)
         .map_err(|e| format!("Failed to parse Mole status JSON: {e}"))
 }
 
 #[tauri::command]
 pub async fn mole_status_raw_json() -> Result<serde_json::Value, String> {
-    let output = tokio::task::spawn_blocking(|| -> Result<std::process::Output, String> {
-        mole_command()?
-            .args(["status", "-json"])
-            .output()
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| format!("Failed to join status task: {e}"))?
-    .map_err(|e| format!("Failed to run mo status -json: {e}"))?;
+    let output = run_mole_status_command().await?;
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let detail = if stderr.is_empty() { stdout } else { stderr };
-        return Err(if detail.is_empty() {
-            "mo status -json failed".to_string()
-        } else {
-            detail
-        });
+        return Err(status_command_error(&output));
     }
 
     let stdout = String::from_utf8(output.stdout)
         .map_err(|e| format!("Mole status output is not valid UTF-8: {e}"))?;
+    if stdout.trim().is_empty() {
+        return Err("Mole status returned an empty JSON response".to_string());
+    }
     serde_json::from_str::<serde_json::Value>(&stdout)
         .map_err(|e| format!("Failed to parse Mole status JSON: {e}"))
+}
+
+async fn run_mole_status_command() -> Result<Output, String> {
+    let _guard = mole_status_lock().lock().await;
+
+    tokio::task::spawn_blocking(|| {
+        let mut command = mole_command()?;
+        configure_status_process(&mut command);
+        let mut child = command
+            .args(["status", "-json"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to start Mole status: {e}"))?;
+        let deadline = Instant::now() + MOLE_STATUS_TIMEOUT;
+
+        loop {
+            match child
+                .try_wait()
+                .map_err(|e| format!("Failed to check Mole status: {e}"))?
+            {
+                Some(_) => {
+                    return child
+                        .wait_with_output()
+                        .map_err(|e| format!("Failed to collect Mole status output: {e}"));
+                }
+                None if Instant::now() >= deadline => {
+                    terminate_status_process(&mut child);
+                    return Err(format!(
+                        "Mole status timed out after {} seconds",
+                        MOLE_STATUS_TIMEOUT.as_secs()
+                    ));
+                }
+                None => std::thread::sleep(Duration::from_millis(100)),
+            }
+        }
+    })
+    .await
+    .map_err(|e| format!("Failed to join Mole status task: {e}"))?
+}
+
+#[cfg(unix)]
+fn configure_status_process(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    command.process_group(0);
+}
+
+#[cfg(not(unix))]
+fn configure_status_process(_command: &mut Command) {}
+
+fn terminate_status_process(child: &mut Child) {
+    let pid = child.id().to_string();
+
+    #[cfg(unix)]
+    {
+        let process_group = format!("-{pid}");
+        let _ = Command::new("/bin/kill")
+            .args(["-TERM", &process_group])
+            .status();
+        let grace_deadline = Instant::now() + Duration::from_millis(500);
+        while Instant::now() < grace_deadline {
+            if matches!(child.try_wait(), Ok(Some(_))) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        if matches!(child.try_wait(), Ok(None)) {
+            let _ = Command::new("/bin/kill")
+                .args(["-KILL", &process_group])
+                .status();
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid, "/T", "/F"])
+            .status();
+    }
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+fn status_command_error(output: &Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let detail = if stderr.is_empty() { stdout } else { stderr };
+    if detail.is_empty() {
+        "Mole status -json failed".to_string()
+    } else {
+        detail
+    }
 }
 
 /// 从 "Mole version 1.35.0 macOS: ..." 中提取 "1.35.0"

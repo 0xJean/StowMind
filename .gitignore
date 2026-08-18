@@ -113,3 +113,6 @@ __pycache__/
 *.rpm
 *.zip
 *.ipa
+src-tauri/binaries/stowmind-ios-helper
+src-tauri/binaries/stowmind-ios-helper-arm64
+src-tauri/binaries/stowmind-ios-helper-x86_64

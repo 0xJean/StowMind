@@ -1,0 +1,13 @@
+{
+  "package": {
+    "productName": "StowMind Dev"
+  },
+  "tauri": {
+    "bundle": {
+      "identifier": "com.stowmind.app.debug",
+      "resources": [
+        "binaries/stowmind-ios-helper"
+      ]
+    }
+  }
+}

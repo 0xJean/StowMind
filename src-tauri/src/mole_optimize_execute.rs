@@ -16,9 +16,9 @@ pub async fn mole_optimize_execute() -> Result<MoleOptimizeExecuteOutcome, Strin
             .output()
             .map_err(|e| e.to_string())
     })
-        .await
-        .map_err(|e| format!("Failed to join Mole optimize task: {e}"))?
-        .map_err(|e| format!("Failed to run mo optimize: {e}"))?;
+    .await
+    .map_err(|e| format!("Failed to join Mole optimize task: {e}"))?
+    .map_err(|e| format!("Failed to run mo optimize: {e}"))?;
 
     let raw_output = output_text(&output);
     if !output.status.success() {

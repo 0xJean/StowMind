@@ -8,6 +8,7 @@ import { DuplicatesPage } from './pages/DuplicatesPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { HomePage } from './pages/HomePage'
 import { InstallerPage } from './pages/InstallerPage'
+import { IosOrganizePage } from './pages/IosOrganizePage'
 import { OptimizePage } from './pages/OptimizePage'
 import { OrganizePage } from './pages/OrganizePage'
 import { PurgePage } from './pages/PurgePage'
@@ -24,6 +25,7 @@ interface KeepAliveRoute {
 const KEEP_ALIVE_ROUTES: KeepAliveRoute[] = [
   { path: '/', Component: HomePage },
   { path: '/organize', Component: OrganizePage },
+  { path: '/ios-organize', Component: IosOrganizePage },
   { path: '/history', Component: HistoryPage },
   { path: '/statistics', Component: StatisticsPage },
   { path: '/duplicates', Component: DuplicatesPage },

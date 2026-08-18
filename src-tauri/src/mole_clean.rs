@@ -58,11 +58,10 @@ pub async fn mole_clean_preview() -> Result<MoleCleanPreview, String> {
     };
 
     if !output.status.success() {
-        return Err(if raw_output.trim().is_empty() {
-            "mo clean --dry-run failed".to_string()
-        } else {
-            raw_output
-        });
+        return Err(format_clean_process_failure(
+            output.status.code(),
+            &raw_output,
+        ));
     }
 
     Ok(parse_clean_preview(&raw_output))
@@ -138,11 +137,7 @@ pub async fn mole_clean_preview_stream(
     };
 
     if !status.success() {
-        return Err(if raw_output.trim().is_empty() {
-            "mo clean --dry-run failed".to_string()
-        } else {
-            raw_output
-        });
+        return Err(format_clean_process_failure(status.code(), &raw_output));
     }
 
     Ok(parse_clean_preview(&raw_output))
@@ -238,6 +233,18 @@ pub(crate) fn parse_clean_preview(raw: &str) -> MoleCleanPreview {
         category_count,
         sections,
         raw_output: clean,
+    }
+}
+
+pub(crate) fn format_clean_process_failure(exit_code: Option<i32>, raw_output: &str) -> String {
+    let code = exit_code
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    let message = format!("mo clean --dry-run failed with exit code {code}");
+    if raw_output.trim().is_empty() {
+        message
+    } else {
+        format!("{message}\n{raw_output}")
     }
 }
 
@@ -341,7 +348,19 @@ fn extract_clean_count(label: &str) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_clean_preview;
+    use super::{format_clean_process_failure, parse_clean_preview};
+
+    #[test]
+    fn process_failures_keep_exit_code_and_output() {
+        assert_eq!(
+            format_clean_process_failure(Some(2), "permission denied"),
+            "mo clean --dry-run failed with exit code 2\npermission denied"
+        );
+        assert_eq!(
+            format_clean_process_failure(None, ""),
+            "mo clean --dry-run failed with exit code unknown"
+        );
+    }
 
     #[test]
     fn parses_clean_preview_sections_and_summary() {

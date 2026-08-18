@@ -1,15 +1,19 @@
 {
   "name": "stowmind",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "packageManager": "pnpm@8.15.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "build:ios-helper": "bash scripts/build-ios-helper.sh",
+    "build:ios-helper:debug": "node scripts/build-ios-debug.mjs --helper-only",
     "generate:icons": "node scripts/generate-icons.js",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
+    "tauri:dev:ios": "pnpm build:ios-helper:debug && tauri dev --config src-tauri/tauri.ios.debug.conf.json",
+    "tauri:build:ios-debug": "node scripts/build-ios-debug.mjs",
     "tauri:dev:isolated": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "tauri:build": "tauri build"
   },

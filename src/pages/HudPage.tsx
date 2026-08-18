@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { buildCleanupActivitySummary } from '@/lib/stowmind-supplements/cleanupActivity'
 import { formatDate, formatDecimal, formatFileSize } from '@/lib/utils'
-import { useAppStore, type HistoryRecord } from '@/stores/app'
+import { useAppStore } from '@/stores/app'
 import { invoke } from '@tauri-apps/api/tauri'
 import { appWindow } from '@tauri-apps/api/window'
 import {
@@ -19,10 +19,12 @@ import {
   Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { applyHudTraySettings, applyHudWindowMode, openHudPopover } from './hud/native'
 import { loadHudStatusCache, saveHudStatusCache } from './hud/cache'
 import { buildHudCpuAlert, notifyHudCpuAlert } from './hud/alerts'
+import { appendHudHistory, EMPTY_HUD_HISTORY, summarizeCleanupHistory, type HudHistory } from './hud/data'
 import { loadHudSettings, saveHudSettings, toggleHudMetric, type HudMetricKey, type HudSettings } from './hud/settings'
 import { HudChip, HudMetricTile, HudRoundStat, HudWatchStat } from './hud/HudWidgets'
 import { HudSettingsPanel } from './hud/HudSettingsPanel'
@@ -30,24 +32,6 @@ import type { MoleStatusRaw } from './status/advancedTypes'
 import { findPrimaryDisk, findPrimaryNetwork, sortProcesses } from './status/diagnostics'
 import { formatTemperature, getPrimaryTemperature, getValidFanSpeed, getValidGpuUsage, getValidTemperature } from './status/sensorReadings'
 import { formatMaybe, formatPercent, formatRate } from './status/utils'
-
-interface HudHistory {
-  cpu: number[]
-  memory: number[]
-  networkRx: number[]
-  networkTx: number[]
-  diskRead: number[]
-  diskWrite: number[]
-}
-
-const EMPTY_HISTORY: HudHistory = {
-  cpu: [],
-  memory: [],
-  networkRx: [],
-  networkTx: [],
-  diskRead: [],
-  diskWrite: [],
-}
 
 const TRAY_ACTIVITY_FRAMES = ['|', '/', '-', '\\']
 const DRAG_EXCLUDE_SELECTOR = [
@@ -91,33 +75,6 @@ function formatHudHealthMessage(message: string | undefined, t: ReturnType<typeo
   return localizedReasons.length > 0 ? level + ': ' + localizedReasons.join(', ') : level
 }
 
-function appendSample(values: number[], value: number | undefined) {
-  return [...values, Number.isFinite(value) ? Number(value) : 0].slice(-24)
-}
-
-function appendHudHistory(current: HudHistory, data: MoleStatusRaw): HudHistory {
-  const primaryNetwork = findPrimaryNetwork(data.network)
-  return {
-    cpu: appendSample(current.cpu, data.cpu.usage),
-    memory: appendSample(current.memory, data.memory.used_percent),
-    networkRx: appendSample(current.networkRx, primaryNetwork?.rx_rate_mbs),
-    networkTx: appendSample(current.networkTx, primaryNetwork?.tx_rate_mbs),
-    diskRead: appendSample(current.diskRead, data.disk_io.read_rate),
-    diskWrite: appendSample(current.diskWrite, data.disk_io.write_rate),
-  }
-}
-
-function cleanupSummary(history: HistoryRecord[]) {
-  const cleanup = history.filter((record) => ['clean', 'purge', 'installer', 'uninstall', 'optimize'].includes(record.type ?? 'organize'))
-  const executed = cleanup.filter((record) => record.executed)
-  const cleaned = executed.reduce((sum, record) => sum + (record.cleanupSummary?.totalSize ?? 0), 0)
-  return {
-    cleaned,
-    scans: cleanup.length,
-    optimized: cleanup.filter((record) => record.type === 'optimize').length,
-  }
-}
-
 function shouldStartWindowDrag(target: EventTarget | null) {
   if (!(target instanceof Element)) return false
   if (target.closest(DRAG_EXCLUDE_SELECTOR)) return false
@@ -126,11 +83,13 @@ function shouldStartWindowDrag(target: EventTarget | null) {
 
 export function HudPage() {
   const { t, locale } = useI18n()
+  const location = useLocation()
+  const active = location.pathname === '/hud'
   const historyRecords = useAppStore((s) => s.history)
   const statistics = useAppStore((s) => s.statistics)
   const [cachedStatus, setCachedStatus] = useState(() => loadHudStatusCache())
   const [data, setData] = useState<MoleStatusRaw | null>(() => cachedStatus?.data ?? null)
-  const [hudHistory, setHudHistory] = useState<HudHistory>(EMPTY_HISTORY)
+  const [hudHistory, setHudHistory] = useState<HudHistory>(EMPTY_HUD_HISTORY)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [settings, setSettings] = useState<HudSettings>(() => loadHudSettings())
@@ -139,36 +98,49 @@ export function HudPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsRef = useRef(settings)
   const initialWindowModeAppliedRef = useRef(false)
+  const refreshInFlightRef = useRef(false)
+  const hasDataRef = useRef(Boolean(cachedStatus?.data))
+  const lastErrorToastAtRef = useRef(0)
 
   useEffect(() => {
     settingsRef.current = settings
   }, [settings])
 
   const refresh = async () => {
+    if (refreshInFlightRef.current) return
+    refreshInFlightRef.current = true
     setLoading(true)
     try {
       const next = await invoke<MoleStatusRaw>('mole_status_raw_json')
       setData(next)
+      hasDataRef.current = true
       saveHudStatusCache(next)
       setCachedStatus(null)
       setHudHistory((current) => appendHudHistory(current, next))
       setError(null)
+      lastErrorToastAtRef.current = 0
       await notifyHudCpuAlert(buildHudCpuAlert(next, t), settingsRef.current.cpuAlerts, t)
     } catch (err) {
       const message = String(err)
       setError(message)
-      toast.error(t('hud.fail', { error: message }))
+      const now = Date.now()
+      if (!hasDataRef.current || now - lastErrorToastAtRef.current > 15_000) {
+        lastErrorToastAtRef.current = now
+        toast.error(t('hud.fail', { error: message }))
+      }
     } finally {
+      refreshInFlightRef.current = false
       setLoading(false)
     }
   }
 
   useEffect(() => {
+    if (!active) return
     void refresh()
     const timer = window.setInterval(() => void refresh(), 15000)
     return () => window.clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [active])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -217,7 +189,7 @@ export function HudPage() {
   const primaryTemperature = getPrimaryTemperature(thermal)
   const fanSpeed = getValidFanSpeed(thermal)
   const topProcesses = useMemo(() => sortProcesses(data?.top_processes).slice(0, 5), [data])
-  const cleanWatch = useMemo(() => cleanupSummary(historyRecords), [historyRecords])
+  const cleanWatch = useMemo(() => summarizeCleanupHistory(historyRecords), [historyRecords])
   const cleanupActivity = useMemo(
     () => buildCleanupActivitySummary(historyRecords, statistics),
     [historyRecords, statistics]

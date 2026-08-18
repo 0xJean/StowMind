@@ -10,6 +10,7 @@ import {
   PackageSearch,
   PackageX,
   Search,
+  Smartphone,
   Sparkles,
   Trash2,
   Undo2,
@@ -26,6 +27,7 @@ type HistoryTypeKey = `history.type.${HistoryRecordType}`
 
 const HISTORY_TYPE_KEYS: Record<HistoryRecordType, HistoryTypeKey> = {
   organize: 'history.type.organize',
+  'ios-organize': 'history.type.ios-organize',
   duplicates: 'history.type.duplicates',
   clean: 'history.type.clean',
   purge: 'history.type.purge',
@@ -36,6 +38,7 @@ const HISTORY_TYPE_KEYS: Record<HistoryRecordType, HistoryTypeKey> = {
 
 const HISTORY_ICONS: Record<HistoryRecordType, LucideIcon> = {
   organize: Sparkles,
+  'ios-organize': Smartphone,
   duplicates: Copy,
   clean: Trash2,
   purge: PackageX,
@@ -47,6 +50,7 @@ const HISTORY_ICONS: Record<HistoryRecordType, LucideIcon> = {
 const TYPE_FILTER_ORDER: TypeFilter[] = [
   'all',
   'organize',
+  'ios-organize',
   'clean',
   'purge',
   'installer',

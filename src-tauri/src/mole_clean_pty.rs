@@ -1,4 +1,6 @@
-use crate::mole_clean::{parse_clean_preview, MoleCleanPreview, MoleCleanPreviewOutput};
+use crate::mole_clean::{
+    format_clean_process_failure, parse_clean_preview, MoleCleanPreview, MoleCleanPreviewOutput,
+};
 use crate::mole_utils::{locate_mole_executable, runtime_path, strip_ansi};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, PtySize};
 use serde::Serialize;
@@ -346,14 +348,10 @@ fn run_mole_clean_preview_pty(
     let status = status.ok_or_else(|| "mo clean --dry-run exited without status".to_string())?;
 
     if !status.success() {
-        return Err(if raw_output.trim().is_empty() {
-            format!(
-                "mo clean --dry-run failed with exit code {}",
-                status.exit_code()
-            )
-        } else {
-            raw_output
-        });
+        return Err(format_clean_process_failure(
+            Some(status.exit_code() as i32),
+            &raw_output,
+        ));
     }
 
     Ok(parse_clean_preview(&raw_output))

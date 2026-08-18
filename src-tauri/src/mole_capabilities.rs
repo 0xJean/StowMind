@@ -1,4 +1,6 @@
-use crate::mole_utils::{current_platform, locate_mole_executable, mo_cmd, mole_command, strip_ansi};
+use crate::mole_utils::{
+    current_platform, locate_mole_executable, mo_cmd, mole_command, strip_ansi,
+};
 use serde::Serialize;
 use std::process::Command;
 
@@ -184,7 +186,8 @@ fn run_app_update_probes() -> Vec<MoleCapabilityProbe> {
 }
 
 fn run_probe(args: &[&str]) -> MoleCapabilityProbe {
-    let output = mole_command().and_then(|mut command| command.args(args).output().map_err(|e| e.to_string()));
+    let output = mole_command()
+        .and_then(|mut command| command.args(args).output().map_err(|e| e.to_string()));
     let command = format!("{} {}", mo_cmd(), args.join(" "));
     match output {
         Ok(output) => {

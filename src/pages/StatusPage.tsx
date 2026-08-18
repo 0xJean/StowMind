@@ -6,6 +6,7 @@ import { formatDate, formatDecimal, formatFileSize } from '@/lib/utils'
 import { invoke } from '@tauri-apps/api/tauri'
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { FieldRow, SectionCard } from './status/StatusWidgets'
 import { StatusAdvancedSection } from './status/StatusAdvancedSection'
@@ -24,6 +25,8 @@ import {
 
 export function StatusPage() {
   const { t } = useI18n()
+  const location = useLocation()
+  const active = location.pathname === '/status'
   const [data, setData] = useState<MoleStatusRaw | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,12 +35,18 @@ export function StatusPage() {
   const [processSortKey, setProcessSortKey] = useState<ProcessSortKey>('cpu')
   const [pinnedPid, setPinnedPid] = useState<number | null>(null)
   const lastSnapshotWriteRef = useRef(0)
+  const refreshInFlightRef = useRef(false)
+  const hasDataRef = useRef(false)
+  const lastErrorToastAtRef = useRef(0)
 
   const refresh = async () => {
+    if (refreshInFlightRef.current) return
+    refreshInFlightRef.current = true
     setLoading(true)
     try {
       const next = await invoke<MoleStatusRaw>('mole_status_raw_json')
       setData(next)
+      hasDataRef.current = true
       if (Date.now() - lastSnapshotWriteRef.current > 15_000) {
         lastSnapshotWriteRef.current = Date.now()
         await saveResultSnapshot(resultCacheKeys.statusRaw, next)
@@ -45,25 +54,35 @@ export function StatusPage() {
       const nextPrimaryDisk = findPrimaryDisk(next.disks)
       setHistory((current) => appendStatusHistory(current, next, nextPrimaryDisk))
       setError(null)
+      lastErrorToastAtRef.current = 0
     } catch (err) {
       const message = String(err)
       setError(message)
-      toast.error(t('status.fail', { error: message }))
+      const now = Date.now()
+      if (!hasDataRef.current || now - lastErrorToastAtRef.current > 15_000) {
+        lastErrorToastAtRef.current = now
+        toast.error(t('status.fail', { error: message }))
+      }
     } finally {
+      refreshInFlightRef.current = false
       setLoading(false)
     }
   }
 
   useEffect(() => {
+    if (!active) return
     void (async () => {
       const snapshot = await loadResultSnapshot<MoleStatusRaw>(resultCacheKeys.statusRaw)
-      if (snapshot) setData(snapshot.payload)
+      if (snapshot) {
+        hasDataRef.current = true
+        setData(snapshot.payload)
+      }
       await refresh()
     })()
     const timer = window.setInterval(() => void refresh(), 1000)
     return () => window.clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [active])
 
   const primaryDisk = useMemo(() => findPrimaryDisk(data?.disks), [data])
   const sortedProcesses = useMemo(() => sortProcesses(data?.top_processes), [data])

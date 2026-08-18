@@ -8,14 +8,31 @@ import { useI18n, type Locale } from '@/i18n'
 import { parseCategoriesImport, serializeCategories } from '@/lib/categoryRules'
 import { defaultCategories, useAppStore, type AIProvider, type Category } from '@/stores/app'
 import { open, save } from '@tauri-apps/api/dialog'
+import { listen } from '@tauri-apps/api/event'
 import { readTextFile, writeTextFile } from '@tauri-apps/api/fs'
 import { invoke } from '@tauri-apps/api/tauri'
-import { Archive, Eye, Globe, Moon, RefreshCw, Save, Sun } from 'lucide-react'
+import { Archive, Bot, Eye, Globe, Loader2, Moon, RefreshCw, Save, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { CategoryRulesSection } from './settings/CategoryRulesSection'
 import { MoleSystemSettingsSection } from './settings/MoleSystemSettingsSection'
+
+interface AiStreamEvent {
+  provider: string
+  status: 'started' | 'chunk' | 'completed' | 'error'
+  chunk?: string
+  message?: string
+}
+
+interface AiTestResult {
+  ok: boolean
+  detail: string
+}
+
+function isLocalCliProvider(type: AIProvider['type']) {
+  return type === 'local_codex' || type === 'local_claude_code'
+}
 
 export function SettingsPage() {
   const location = useLocation()
@@ -45,12 +62,44 @@ export function SettingsPage() {
     setExcludeDraft(excludePatterns.join('\n'))
   }, [location.pathname, excludePatterns])
 
+  useEffect(() => {
+    if (location.hash !== '#ai-settings') return
+    const timer = window.setTimeout(() => {
+      document.getElementById('ai-settings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
+    return () => window.clearTimeout(timer)
+  }, [location.hash])
+
   const [localProvider, setLocalProvider] = useState<AIProvider>(aiProvider)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null)
+  const [streamText, setStreamText] = useState('')
+  const [streamMessage, setStreamMessage] = useState('')
   useEffect(() => {
     setLocalProvider(aiProvider)
   }, [aiProvider])
+
+  useEffect(() => {
+    const unlisten = listen<AiStreamEvent>('ai-stream', (event) => {
+      const data = event.payload
+      if (data.provider !== localProvider.type) return
+      if (data.status === 'started') {
+        setStreamText('')
+        setStreamMessage(data.message || '')
+        return
+      }
+      if (data.status === 'chunk' && data.chunk) {
+        setStreamText((current) => `${current}${data.chunk}`.slice(-12000))
+        return
+      }
+      if (data.status === 'completed' || data.status === 'error') {
+        setStreamMessage(data.message || '')
+      }
+    })
+    return () => {
+      unlisten.then((fn) => fn())
+    }
+  }, [localProvider.type])
 
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
 
@@ -59,7 +108,12 @@ export function SettingsPage() {
       ollama: { host: 'http://localhost:11434', model: 'qwen3:4b' },
       openai: { model: 'gpt-4o-mini' },
       claude: { model: 'claude-3-haiku-20240307' },
+      local_codex: { executable: 'codex', model: '' },
+      local_claude_code: { executable: 'claude', model: '' },
     }
+    setStreamText('')
+    setStreamMessage('')
+    setTestResult(null)
     setLocalProvider({ ...localProvider, type, ...defaults[type] })
   }
 
@@ -79,17 +133,16 @@ export function SettingsPage() {
   const testConnection = async () => {
     setTesting(true)
     setTestResult(null)
+    setStreamText('')
+    setStreamMessage('')
     try {
-      if (localProvider.type === 'ollama') {
-        const online = await invoke<boolean>('check_ollama', { host: localProvider.host })
-        setTestResult(online ? 'success' : 'error')
-        setOllamaOnline(online)
-      } else {
-        const result = await invoke<boolean>('test_api_connection', { provider: localProvider })
-        setTestResult(result ? 'success' : 'error')
-      }
+      const result = await invoke<AiTestResult>('ai_test_provider', { provider: localProvider })
+      setTestResult(result.ok ? 'success' : 'error')
+      setStreamMessage(result.detail)
+      if (localProvider.type === 'ollama') setOllamaOnline(result.ok)
     } catch {
       setTestResult('error')
+      setStreamMessage(t('settings.aiStreamFailed'))
     } finally {
       setTesting(false)
     }
@@ -269,8 +322,15 @@ export function SettingsPage() {
         </div>
       </SettingsCard>
 
-      <SettingsCard title={t('settings.aiConfig')} description={t('settings.aiConfigDesc')}>
+      <SettingsCard id="ai-settings" title={t('settings.aiConfig')} description={t('settings.aiConfigDesc')}>
         <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-xl border border-iqon-cyan/30 bg-iqon-cyan/5 p-4">
+            <Bot className="mt-0.5 h-4 w-4 shrink-0 text-iqon-cyan" />
+            <div className="text-xs text-muted-foreground">
+              <div className="font-bold text-foreground">{t('settings.aiIndependentTitle')}</div>
+              <div className="mt-1">{t('settings.aiIndependentDesc')}</div>
+            </div>
+          </div>
           <SettingsRow label={t('settings.aiHardOnly')} description={t('settings.aiHardOnlyDesc')}>
             <Switch checked={aiOnlyHardCases} onCheckedChange={setAIOnlyHardCases} />
           </SettingsRow>
@@ -283,6 +343,8 @@ export function SettingsPage() {
                   <SelectItem value="ollama">{t('settings.ollamaLocal')}</SelectItem>
                   <SelectItem value="openai">OpenAI</SelectItem>
                   <SelectItem value="claude">Claude</SelectItem>
+                  <SelectItem value="local_codex">{t('settings.codexLocal')}</SelectItem>
+                  <SelectItem value="local_claude_code">{t('settings.claudeCodeLocal')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -295,6 +357,18 @@ export function SettingsPage() {
             <div className="space-y-2">
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('settings.ollamaHost')}</label>
               <Input value={localProvider.host} onChange={(e) => setLocalProvider({ ...localProvider, host: e.target.value })} placeholder="http://localhost:11434" />
+            </div>
+          )}
+          {isLocalCliProvider(localProvider.type) && (
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('settings.cliExecutable')}</label>
+              <Input
+                value={localProvider.executable || ''}
+                onChange={(e) => setLocalProvider({ ...localProvider, executable: e.target.value })}
+                placeholder={localProvider.type === 'local_codex' ? 'codex' : 'claude'}
+                className="font-mono text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground">{t('settings.cliExecutableDesc')}</p>
             </div>
           )}
           {(localProvider.type === 'openai' || localProvider.type === 'claude') && (
@@ -315,6 +389,22 @@ export function SettingsPage() {
               </span>
             )}
           </div>
+          {isLocalCliProvider(localProvider.type) && (testing || streamText || streamMessage) && (
+            <div className="rounded-xl border border-iqon-border bg-[#101418] p-4 text-xs text-slate-200">
+              <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-iqon-cyan">
+                {testing && <Loader2 className="h-3 w-3 animate-spin" />}
+                {t('settings.aiStreamTitle')}
+              </div>
+              <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed">
+                {streamText || streamMessage || t('settings.aiStreamWaiting')}
+              </pre>
+              {streamMessage && !testing && (
+                <div className={`mt-3 border-t border-white/10 pt-2 text-[10px] ${testResult === 'success' ? 'text-iqon-green' : 'text-iqon-red'}`}>
+                  {streamMessage}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </SettingsCard>
 
@@ -337,18 +427,20 @@ export function SettingsPage() {
 }
 
 function SettingsCard({
+  id,
   icon,
   title,
   description,
   children,
 }: {
+  id?: string
   icon?: React.ReactNode
   title: string
   description?: string
   children: React.ReactNode
 }) {
   return (
-    <div className="iqon-card p-6">
+    <div id={id} className="iqon-card scroll-mt-6 p-6">
       <div className="mb-4">
         <div className="flex items-center gap-2">
           {icon && <span className="text-muted-foreground">{icon}</span>}

@@ -1,12 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod ai;
+mod ai_commands;
 mod app_icons;
 mod dashboard_cache;
 mod deepclean;
 mod duplicates;
 mod hud;
 mod hud_position;
+mod ios;
 mod macos_dock;
 mod mole_analyze;
 mod mole_capabilities;
@@ -21,6 +23,7 @@ mod mole_purge;
 mod mole_uninstall;
 mod mole_utils;
 mod organize_commands;
+mod organize_rules;
 mod organizer;
 mod pty;
 mod result_cache;
@@ -64,6 +67,8 @@ fn watch_set_paths(
 fn main() {
     let builder = tauri::Builder::default()
         .manage(WatchManager::default())
+        .manage(ios::execution::IosExecutionManager::default())
+        .manage(ios::mirror_preview::IosMirrorPreviewManager::default())
         .manage(pty::PtyManager::new())
         .manage(mole_analyze::MoleAnalyzeManager::default())
         .manage(mole_clean_pty::MoleCleanPtyManager::default())
@@ -87,6 +92,7 @@ fn main() {
             let tray = hud::build_tray();
             let _ = tray.build(app)?;
             register_shortcut(&app.handle());
+            ios::execution::register_emergency_shortcut(&app.handle());
             Ok(())
         })
         .on_window_event(|event| {
@@ -112,13 +118,31 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            organize_commands::check_ollama,
-            organize_commands::test_api_connection,
+            ai_commands::check_ollama,
+            ai_commands::test_api_connection,
+            ai_commands::ai_test_provider,
             organize_commands::scan_directory,
             organize_commands::organize_files,
             organize_commands::scan_folders_cmd,
             organize_commands::organize_folders,
             organize_commands::undo_organize,
+            ios::commands::ios_capabilities,
+            ios::commands::ios_open_mirroring,
+            ios::commands::ios_reveal_current_app,
+            ios::commands::ios_open_permission_settings,
+            ios::commands::ios_request_permission,
+            ios::commands::ios_set_mirror_preview,
+            ios::commands::ios_stop_mirror_preview,
+            ios::commands::ios_enter_mirror_interaction,
+            ios::commands::ios_exit_mirror_interaction,
+            ios::commands::ios_capture_snapshot,
+            ios::commands::ios_scan_inventory,
+            ios::commands::ios_create_plan,
+            ios::commands::ios_start_execution,
+            ios::commands::ios_resume_execution,
+            ios::commands::ios_pause_execution,
+            ios::commands::ios_cancel_execution,
+            ios::commands::ios_prepare_restore,
             find_duplicates_cmd,
             watch_set_paths,
             dashboard_cache::dashboard_cache_load,

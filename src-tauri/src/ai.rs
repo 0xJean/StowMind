@@ -1,5 +1,14 @@
+mod classification;
+mod local_cli;
+
+pub use classification::{parse_ai_classification, AIClassification};
+
 use crate::organizer::{Category, FileItem};
+use classification::{
+    classification_output_schema, classification_system_prompt, file_classification_prompt,
+};
 use futures_util::StreamExt;
+use local_cli::{call_local_cli_stream, call_local_cli_stream_with_schema, local_cli_ready};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -10,7 +19,11 @@ pub struct AIProvider {
     pub model: String,
     #[serde(rename = "apiKey")]
     pub api_key: Option<String>,
+    pub executable: Option<String>,
 }
+
+pub const AI_CLASSIFICATION_PROMPT_VERSION: &str = "stowmind-classification-v2";
+pub const MIN_AI_CLASSIFICATION_CONFIDENCE: f32 = 0.75;
 
 #[derive(Debug, Serialize)]
 struct OllamaChatRequest {
@@ -100,8 +113,82 @@ pub async fn test_connection(provider: &AIProvider) -> bool {
                 false
             }
         }
+        "local_codex" | "local_claude_code" => local_cli_ready(provider),
         _ => false,
     }
+}
+
+/// Run a text request and report output chunks as they arrive.
+pub async fn classify_text_stream<F>(
+    provider: &AIProvider,
+    system: &str,
+    prompt: &str,
+    on_output: &mut F,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>>
+where
+    F: FnMut(String) + Send,
+{
+    match provider.provider_type.as_str() {
+        "ollama" => call_ollama_stream(provider, system, prompt, on_output).await,
+        "openai" => {
+            let result = call_openai(provider, system, prompt).await?;
+            if !result.is_empty() {
+                on_output(result.clone());
+            }
+            Ok(result)
+        }
+        "claude" => {
+            let result = call_claude(provider, system, prompt).await?;
+            if !result.is_empty() {
+                on_output(result.clone());
+            }
+            Ok(result)
+        }
+        "local_codex" | "local_claude_code" => {
+            call_local_cli_stream(provider, system, prompt, on_output).await
+        }
+        _ => Err("不支持的 AI 提供商".into()),
+    }
+}
+
+/// Run a category classification request and enforce a structured, allowlisted result.
+pub async fn classify_category_stream<F>(
+    provider: &AIProvider,
+    system: &str,
+    prompt: &str,
+    allowed_categories: &[String],
+    on_output: &mut F,
+) -> Result<AIClassification, Box<dyn std::error::Error + Send + Sync>>
+where
+    F: FnMut(String) + Send,
+{
+    if allowed_categories.is_empty() {
+        return Err("AI 分类至少需要一个允许类别".into());
+    }
+    let schema = classification_output_schema(allowed_categories);
+    let response = match provider.provider_type.as_str() {
+        "ollama" => call_ollama_stream(provider, system, prompt, on_output).await?,
+        "openai" => {
+            let result = call_openai(provider, system, prompt).await?;
+            if !result.is_empty() {
+                on_output(result.clone());
+            }
+            result
+        }
+        "claude" => {
+            let result = call_claude(provider, system, prompt).await?;
+            if !result.is_empty() {
+                on_output(result.clone());
+            }
+            result
+        }
+        "local_codex" | "local_claude_code" => {
+            call_local_cli_stream_with_schema(provider, system, prompt, &schema, on_output).await?
+        }
+        _ => return Err("不支持的 AI 提供商".into()),
+    };
+
+    parse_ai_classification(&response, allowed_categories).map_err(Into::into)
 }
 
 /// 流式分类文件，支持实时回调 thinking 内容
@@ -110,38 +197,23 @@ pub async fn classify_file_stream<F>(
     provider: &AIProvider,
     categories: &[Category],
     mut on_thinking: F,
-) -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>>
+) -> Result<AIClassification, Box<dyn std::error::Error + Send + Sync>>
 where
     F: FnMut(String) + Send,
 {
-    let category_names: Vec<&str> = categories.iter().map(|c| c.name.as_str()).collect();
-
-    let system_prompt = "你是一个文件分类助手。根据文件名，将文件分类到最合适的类别中。只返回类别名称，不要其他内容。";
-
-    let user_prompt = format!(
-        "请将文件 \"{}\" 分类到以下类别之一：{}\n只返回类别名称，不要解释。",
-        file.name,
-        category_names.join(", ")
-    );
-
-    let response = match provider.provider_type.as_str() {
-        "ollama" => {
-            call_ollama_stream(provider, system_prompt, &user_prompt, &mut on_thinking).await?
-        }
-        "openai" => call_openai(provider, system_prompt, &user_prompt).await?,
-        "claude" => call_claude(provider, system_prompt, &user_prompt).await?,
-        _ => return Err("不支持的 AI 提供商".into()),
-    };
-
-    // 解析响应，找到匹配的类别
-    let response_lower = response.to_lowercase();
-    for cat in categories {
-        if response_lower.contains(&cat.name.to_lowercase()) {
-            return Ok((cat.name.clone(), "AI 智能分类".to_string()));
-        }
-    }
-
-    Ok(("其他".to_string(), "AI 无法确定分类".to_string()))
+    let category_names = categories
+        .iter()
+        .map(|category| category.name.clone())
+        .collect::<Vec<_>>();
+    let user_prompt = file_classification_prompt(file, categories)?;
+    classify_category_stream(
+        provider,
+        classification_system_prompt(),
+        &user_prompt,
+        &category_names,
+        &mut on_thinking,
+    )
+    .await
 }
 
 /// Ollama 流式调用，实时输出 thinking
@@ -236,7 +308,7 @@ async fn call_openai(
                 content: prompt.to_string(),
             },
         ],
-        max_tokens: 100,
+        max_tokens: 200,
     };
 
     let client = reqwest::Client::new();
@@ -265,7 +337,7 @@ async fn call_claude(
 
     let body = serde_json::json!({
         "model": provider.model,
-        "max_tokens": 100,
+        "max_tokens": 200,
         "system": system,
         "messages": [
             {"role": "user", "content": prompt}

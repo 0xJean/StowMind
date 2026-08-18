@@ -1,4 +1,5 @@
-use crate::ai::{self, classify_file_stream, AIProvider};
+use crate::ai::{classify_file_stream, AIProvider, MIN_AI_CLASSIFICATION_CONFIDENCE};
+use crate::organize_rules::{classify_by_rules, is_hard_case};
 use crate::organizer::{
     group_similar_files, move_files, move_folders, scan_files, scan_folders, undo_moves, Category,
     FileItem, FolderItem, MoveRecord, OrganizeOutcome,
@@ -37,20 +38,6 @@ struct OrganizeProgressEvent {
     total: usize,
     path: String,
     phase: String,
-}
-
-#[tauri::command]
-pub async fn check_ollama(host: String) -> bool {
-    let url = format!("{}/api/tags", host);
-    match reqwest::get(&url).await {
-        Ok(resp) => resp.status().is_success(),
-        Err(_) => false,
-    }
-}
-
-#[tauri::command]
-pub async fn test_api_connection(provider: AIProvider) -> bool {
-    ai::test_connection(&provider).await
 }
 
 #[tauri::command]
@@ -103,7 +90,12 @@ pub async fn scan_directory(
             })
             .await
             {
-                Ok((cat, reason)) => {
+                Ok(suggestion) if suggestion.confidence >= MIN_AI_CLASSIFICATION_CONFIDENCE => {
+                    let reason = format!(
+                        "AI 智能分类（{}%）：{}",
+                        (suggestion.confidence * 100.0).round() as u8,
+                        suggestion.reason
+                    );
                     let _ = window.emit(
                         "scan-progress",
                         ScanProgressEvent {
@@ -112,10 +104,29 @@ pub async fn scan_directory(
                             file_name: file.name.clone(),
                             status: "classified".to_string(),
                             thinking: None,
-                            category: Some(cat.clone()),
+                            category: Some(suggestion.category.clone()),
                         },
                     );
-                    (cat, reason, "ai".to_string())
+                    (suggestion.category, reason, "ai".to_string())
+                }
+                Ok(suggestion) => {
+                    let confidence = (suggestion.confidence * 100.0).round() as u8;
+                    let reason = format!(
+                        "AI 置信度仅 {}%，已回退规则分类：{}",
+                        confidence, rule_reason
+                    );
+                    let _ = window.emit(
+                        "scan-progress",
+                        ScanProgressEvent {
+                            current: index + 1,
+                            total,
+                            file_name: file.name.clone(),
+                            status: "classified".to_string(),
+                            thinking: None,
+                            category: Some(rule_cat.clone()),
+                        },
+                    );
+                    (rule_cat, reason, "fallback".to_string())
                 }
                 Err(e) => {
                     let _ = window.emit(
@@ -190,123 +201,6 @@ pub async fn scan_directory(
     apply_group_majority(&mut results);
 
     Ok(results)
-}
-
-fn classify_by_rules(file: &FileItem, categories: &[Category]) -> (String, String, String) {
-    let ext_lower = file.extension.to_lowercase();
-    if !ext_lower.is_empty() {
-        for cat in categories {
-            if cat.extensions.iter().any(|e| e.to_lowercase() == ext_lower) {
-                return (
-                    cat.name.clone(),
-                    "基于扩展名规则".to_string(),
-                    "rule".to_string(),
-                );
-            }
-        }
-    }
-
-    let name_lower = file.name.to_lowercase();
-    for cat in categories {
-        for kw in &cat.keywords {
-            let kw_lower = kw.to_lowercase();
-            if !kw_lower.is_empty() && name_lower.contains(&kw_lower) {
-                return (
-                    cat.name.clone(),
-                    format!("文件名包含关键词：{}", kw),
-                    "rule".to_string(),
-                );
-            }
-        }
-    }
-
-    if let Some(dir_cat) = classify_by_directory_hint(&file.path, categories) {
-        return (
-            dir_cat,
-            "基于目录名提示规则".to_string(),
-            "rule".to_string(),
-        );
-    }
-
-    (
-        "其他".to_string(),
-        "规则未命中".to_string(),
-        "rule".to_string(),
-    )
-}
-
-fn classify_by_directory_hint(file_path: &str, categories: &[Category]) -> Option<String> {
-    let parent_name = Path::new(file_path)
-        .parent()
-        .and_then(|p| p.file_name())
-        .map(|s| s.to_string_lossy().to_lowercase())?;
-
-    let screenshot_hints = [
-        "screenshots",
-        "screenshot",
-        "screen shots",
-        "截图",
-        "屏幕截图",
-        "截屏",
-    ];
-    if screenshot_hints.iter().any(|h| parent_name.contains(h)) {
-        if let Some(cat) = categories.iter().find(|c| c.name == "图片") {
-            return Some(cat.name.clone());
-        }
-    }
-
-    let recording_hints = [
-        "screen recordings",
-        "screen recording",
-        "recordings",
-        "录屏",
-        "屏幕录制",
-        "录制",
-    ];
-    if recording_hints.iter().any(|h| parent_name.contains(h)) {
-        if let Some(cat) = categories.iter().find(|c| c.name == "视频") {
-            return Some(cat.name.clone());
-        }
-    }
-
-    let photo_hints = ["dcim", "camera", "photos", "相机", "照片"];
-    if photo_hints.iter().any(|h| parent_name.contains(h)) {
-        if let Some(cat) = categories.iter().find(|c| c.name == "图片") {
-            return Some(cat.name.clone());
-        }
-    }
-
-    None
-}
-
-fn is_hard_case(file: &FileItem, rule_category: &str, categories: &[Category]) -> bool {
-    if rule_category == "其他" {
-        return true;
-    }
-
-    let ext = file.extension.to_lowercase();
-    if ext.is_empty() {
-        return true;
-    }
-
-    let ambiguous = [
-        ".bin",
-        ".dat",
-        ".tmp",
-        ".log",
-        ".bak",
-        ".cache",
-        ".part",
-        ".download",
-        ".crdownload",
-    ];
-    if ambiguous.iter().any(|e| *e == ext) {
-        return true;
-    }
-
-    !categories
-        .iter()
-        .any(|c| c.extensions.iter().any(|e| e.to_lowercase() == ext))
 }
 
 fn apply_group_majority(results: &mut [ScanResult]) {
@@ -446,48 +340,4 @@ pub async fn organize_folders(
 #[tauri::command]
 pub async fn undo_organize(records: Vec<MoveRecord>) -> Result<Vec<String>, String> {
     undo_moves(&records).map_err(|e| e.to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{classify_by_rules, Category};
-    use crate::organizer::FileItem;
-
-    fn minimal_categories() -> Vec<Category> {
-        vec![
-            Category {
-                name: "图片".to_string(),
-                icon: "🖼️".to_string(),
-                extensions: vec![".png".to_string()],
-                keywords: vec!["截图".to_string()],
-            },
-            Category {
-                name: "视频".to_string(),
-                icon: "🎬".to_string(),
-                extensions: vec![".mp4".to_string()],
-                keywords: vec!["录屏".to_string()],
-            },
-            Category {
-                name: "其他".to_string(),
-                icon: "📁".to_string(),
-                extensions: vec![],
-                keywords: vec![],
-            },
-        ]
-    }
-
-    #[test]
-    fn directory_hint_classifies_screenshots_as_images() {
-        let cats = minimal_categories();
-        let file = FileItem {
-            name: "IMG_0001".to_string(),
-            path: "/Users/me/Screenshots/IMG_0001".to_string(),
-            size: 1,
-            extension: "".to_string(),
-        };
-
-        let (cat, _reason, method) = classify_by_rules(&file, &cats);
-        assert_eq!(cat, "图片");
-        assert_eq!(method, "rule");
-    }
 }

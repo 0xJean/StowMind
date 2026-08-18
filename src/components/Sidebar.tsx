@@ -14,6 +14,7 @@ import {
   HardDrive,
   History,
   Home,
+  Smartphone,
   PackageSearch,
   PackageX,
   Settings,
@@ -78,6 +79,7 @@ export function Sidebar() {
         items: [
           { path: '/analyze', icon: HardDrive, label: t('nav.analyze') },
           { path: '/organize', icon: FolderOpen, label: t('nav.organize') },
+          { path: '/ios-organize', icon: Smartphone, label: t('nav.iosOrganize') },
         ],
       },
       {
@@ -112,10 +114,14 @@ export function Sidebar() {
 
   const aiLabel = aiProvider.type === 'ollama'
     ? (ollamaOnline ? t('sidebar.ollamaOnline') : t('sidebar.ollamaOffline'))
-    : aiProvider.type.toUpperCase()
+    : aiProvider.type === 'local_codex'
+      ? 'CODEX CLI'
+      : aiProvider.type === 'local_claude_code'
+        ? 'CLAUDE CODE'
+        : aiProvider.type.toUpperCase()
 
   return (
-    <aside className="flex w-[240px] shrink-0 flex-col border-r border-iqon-border bg-iqon-bg py-6">
+    <aside className="app-sidebar flex w-[240px] shrink-0 flex-col border-r border-iqon-border bg-iqon-bg py-6">
       <div className="mb-6 flex items-center gap-2 px-6">
         <img src="/icon.svg" alt="StowMind" className="h-8 w-8" draggable={false} />
         <div className="flex items-center gap-2">

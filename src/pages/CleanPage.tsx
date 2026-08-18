@@ -143,12 +143,12 @@ export function CleanPage() {
     const runId = `clean-${startedAt}-${Math.random().toString(36).slice(2)}`
     let unlistenOutput: (() => void) | null = null
     let unlistenInteraction: (() => void) | null = null
-
     setLoading(true)
     setActivity('scan')
     setActiveRunId(runId)
     cancellingRef.current = false
     setCancelling(false)
+    setPreview(null)
     setCompletedClean(null)
     setScanStartedAt(startedAt)
     setScanElapsedMs(0)

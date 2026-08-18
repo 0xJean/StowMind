@@ -3,7 +3,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card'
 import { useI18n } from '@/i18n'
 import { cn, formatFileSize } from '@/lib/utils'
-import { Ban, Trash2 } from 'lucide-react'
+import { AlertCircle, Ban, RefreshCw, Trash2 } from 'lucide-react'
+import {
+  getCleanFailureDetails,
+  getCleanFailureKind,
+  getCleanFailureSummary,
+} from './cleanFailureHints'
 import { findLatestProgress, findLatestStep, parseCleanProgress } from './cleanProgress'
 import { CleanScanStatusPanel, formatElapsed } from './CleanScanStatusPanel'
 
@@ -60,6 +65,21 @@ export function CleanScanCard({
     cleaning && preview && estimatedFreed !== null
       ? Math.max(0, preview.potential_space - estimatedFreed)
       : null
+  const failureKind = scanError ? getCleanFailureKind(scanError) : null
+  const failureSummary = scanError
+    ? failureKind?.kind === 'runtime_limit'
+      ? t(cleaning ? 'clean.cleanRuntimeLimit' : 'clean.scanRuntimeLimit', {
+          time: formatElapsed((failureKind.seconds ?? 0) * 1000),
+        })
+      : failureKind?.kind === 'idle_limit'
+        ? t(cleaning ? 'clean.cleanIdleFailure' : 'clean.scanIdleFailure', {
+            time: formatElapsed((failureKind.seconds ?? 0) * 1000),
+          })
+        : failureKind?.kind === 'permission'
+          ? t('clean.diskAccessFailureHint')
+          : getCleanFailureSummary(scanError)
+    : ''
+  const failureDetails = scanError ? getCleanFailureDetails(scanError) : ''
 
   return (
     <Card className={fullScreen ? 'w-full border-0 bg-transparent shadow-none' : undefined}>
@@ -97,6 +117,28 @@ export function CleanScanCard({
           </CardDescription>
         </div>
 
+        {!loading && scanError && (
+          <div className="w-full max-w-2xl rounded-2xl border border-iqon-red/30 bg-iqon-red/5 p-4 text-left">
+            <div className="flex items-center gap-2 text-xs font-bold text-iqon-red">
+              <AlertCircle className="h-4 w-4" />
+              {t('clean.scanFailureTitle')}
+            </div>
+            <p className="mt-2 break-words font-mono text-xs leading-relaxed text-foreground">
+              {failureSummary}
+            </p>
+            {failureDetails && (
+              <details className="mt-3 rounded-xl border border-iqon-red/20 bg-background/40 p-3">
+                <summary className="cursor-pointer text-[11px] font-semibold text-muted-foreground">
+                  {t('clean.scanFailureDetails')}
+                </summary>
+                <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-muted-foreground">
+                  {failureDetails}
+                </pre>
+              </details>
+            )}
+          </div>
+        )}
+
         {loading && (
           <ProgressTracker
             tone={showIdle ? 'yellow' : 'green'}
@@ -115,6 +157,12 @@ export function CleanScanCard({
           <Button type="button" className="mt-1 w-full max-w-xs" onClick={onScan}>
             <Trash2 className="mr-2 h-4 w-4" />
             {t('clean.preview')}
+          </Button>
+        )}
+        {!loading && scanError && (
+          <Button type="button" className="mt-1 w-full max-w-xs" onClick={onScan}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            {t('clean.scanRetry')}
           </Button>
         )}
         {loading && onCancel && (

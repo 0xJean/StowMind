@@ -3,6 +3,8 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { AiSetupGuide } from '@/components/AiSetupGuide'
+import { useAiActivation } from '@/hooks/useAiActivation'
 import { useI18n } from '@/i18n'
 import { cn, formatFileSize, pathRoughlyEqual } from '@/lib/utils'
 import { FileItem, FolderItem, MoveRecord, OrganizeOutcome, useAppStore } from '@/stores/app'
@@ -40,7 +42,6 @@ export function OrganizePage() {
   const [organizing, setOrganizing] = useState(false)
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [thinkingText, setThinkingText] = useState('')
-  const [useAI, setUseAI] = useState(false)
   const [organizeFolders, setOrganizeFolders] = useState(false)
   const [showTempFiles, setShowTempFiles] = useState(true)
   const [dragOver, setDragOver] = useState(false)
@@ -51,6 +52,12 @@ export function OrganizePage() {
   const [organizeProgress, setOrganizeProgress] = useState<OrganizeProgressEvent | null>(null)
 
   const aiProvider = useAppStore((s) => s.aiProvider)
+  const {
+    enabled: useAI,
+    status: aiStatus,
+    issue: aiIssue,
+    setEnabled: setAiEnabled,
+  } = useAiActivation(aiProvider)
   const categories = useAppStore((s) => s.categories)
   const aiOnlyHardCases = useAppStore((s) => s.aiOnlyHardCases)
   const addHistory = useAppStore((s) => s.addHistory)
@@ -597,7 +604,11 @@ export function OrganizePage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <label className="iqon-row flex cursor-pointer items-center gap-2 px-3 py-2">
-                <Switch checked={useAI} onCheckedChange={setUseAI} />
+                <Switch
+                  checked={useAI}
+                  disabled={aiStatus === 'checking'}
+                  onCheckedChange={(checked) => void setAiEnabled(checked)}
+                />
                 <span className="text-xs font-bold">{t('organize.aiClassify')}</span>
               </label>
               <label className="iqon-row flex cursor-pointer items-center gap-2 px-3 py-2">
@@ -619,7 +630,7 @@ export function OrganizePage() {
               </label>
             </div>
 
-            <Button onClick={scanDirectory} disabled={!directory || scanning} className="shrink-0">
+            <Button onClick={scanDirectory} disabled={!directory || scanning || aiStatus === 'checking'} className="shrink-0">
               {scanning ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -628,6 +639,14 @@ export function OrganizePage() {
               {scanning ? t('organize.scanning') : t('organize.scanFiles')}
             </Button>
           </div>
+          {aiStatus !== 'off' && (
+            <AiSetupGuide
+              provider={aiProvider}
+              status={aiStatus}
+              issue={aiIssue}
+              onOpenSettings={() => navigate('/settings#ai-settings')}
+            />
+          )}
         </div>
       </div>
 
