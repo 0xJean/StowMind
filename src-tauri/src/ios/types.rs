@@ -115,6 +115,12 @@ pub struct IosLayoutSnapshot {
     pub pages: Vec<IosPageSnapshot>,
     pub dock: Vec<String>,
     pub inventory_hash: String,
+    /// A stable fingerprint of the observable Home Screen layout.
+    ///
+    /// Older snapshots do not contain this field, so deserializing them must
+    /// continue to work while callers refresh the fingerprint before use.
+    #[serde(default)]
+    pub layout_hash: String,
     pub confidence: f32,
     pub source: String,
     #[serde(default)]
@@ -130,6 +136,7 @@ pub struct IosLayoutSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     tag = "type",
+    deny_unknown_fields,
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
@@ -187,6 +194,8 @@ pub struct IosLayoutPlan {
     pub template: String,
     pub use_ai: bool,
     pub operations: Vec<IosOperation>,
+    #[serde(default)]
+    pub target_layout_hash: Option<String>,
     pub warnings: Vec<String>,
     pub protected_app_ids: Vec<String>,
     pub created_at: String,

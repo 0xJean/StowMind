@@ -5,7 +5,8 @@ import {
   ExternalLink,
   FolderOpen,
   Grid2X2,
-  LayoutGrid,
+  Loader2,
+  MousePointer2,
   LockKeyhole,
   Minimize2,
   Pause,
@@ -19,6 +20,8 @@ import {
   StopCircle,
 } from 'lucide-react'
 import { AiSetupGuide } from '@/components/AiSetupGuide'
+import { IosPlanPreview } from './IosPlanPreview'
+import { IosScanActivity } from './IosScanActivity'
 import type { AiActivationStatus } from '@/hooks/useAiActivation'
 import { useI18n } from '@/i18n'
 import type { AiSetupIssue } from '@/lib/aiProvider'
@@ -30,11 +33,10 @@ import type {
   IosProgressEvent,
   IosScanProgress,
 } from '@/lib/ios'
-import { hasAllHomeScreenPages } from '@/lib/ios'
+import { getIosVerificationError, hasAllHomeScreenPages } from '@/lib/ios'
 import type { AIProvider } from '@/stores/app'
 import {
   Capability,
-  operationLabel,
   ProgressBar,
   Warning,
   type IosOrganizeStep,
@@ -49,6 +51,11 @@ interface IosOrganizeActionPanelProps {
   canScan: boolean
   canExecute: boolean
   busy: boolean
+  scanning: boolean
+  mirrorMode: 'preview' | 'interaction'
+  onEnterInteraction: Action
+  onExitInteraction: Action
+  onCancelScan: Action
   scanProgress: IosScanProgress | null
   snapshot: IosLayoutSnapshot | null
   snapshotStale: boolean
@@ -87,6 +94,11 @@ export function IosOrganizeActionPanel({
   canScan,
   canExecute,
   busy,
+  scanning = false,
+  mirrorMode = 'preview',
+  onEnterInteraction,
+  onExitInteraction,
+  onCancelScan,
   scanProgress,
   snapshot,
   snapshotStale,
@@ -139,6 +151,8 @@ export function IosOrganizeActionPanel({
     : null
   const executionWarning = mirrorStatusWarning ?? capabilities?.executionMessage
   const fullHomeScreenInventory = hasAllHomeScreenPages(snapshot)
+  const verificationPassed = Boolean(verification && !busy && canScan
+    && getIosVerificationError(snapshot, plan, session, verification, snapshotStale) === null)
   const permissionAction = (permission: PermissionTarget | null) => permission
     ? {
         actionLabel: permission === 'accessibility'
@@ -147,6 +161,20 @@ export function IosOrganizeActionPanel({
         onAction: () => void onOpenPermissionSettings(permission),
       }
     : {}
+
+  if (scanning) return <IosScanActivity onCancel={onCancelScan} />
+
+  if (mirrorMode === 'interaction' && !['running', 'paused'].includes(session?.status ?? '')) {
+    return (
+      <>
+        <p className="text-sm font-bold">{t('iosOrganize.interaction.finishEditing')}</p>
+        <p className="text-xs leading-5 text-muted-foreground">{t('iosOrganize.interaction.finishHelp')}</p>
+        <button type="button" className="iqon-btn-primary min-h-11 w-full justify-center" onClick={() => void onExitInteraction()} disabled={busy}>
+          {t(session?.status === 'completed' ? 'iosOrganize.interaction.returnVerify' : 'iosOrganize.interaction.returnScan')}
+        </button>
+      </>
+    )
+  }
 
   if (currentStep === 'connect') {
     return (
@@ -248,6 +276,8 @@ export function IosOrganizeActionPanel({
               type="button"
               className="ios-template-option"
               data-selected={template === id}
+              aria-pressed={template === id}
+              disabled={busy}
               onClick={() => onTemplateChange(id)}
             >
               <Icon className="h-4 w-4" />
@@ -262,7 +292,7 @@ export function IosOrganizeActionPanel({
           aria-checked={useAi}
           className="ios-ai-option"
           data-enabled={useAi}
-          disabled={aiStatus === 'checking'}
+          disabled={busy || aiStatus === 'checking'}
           onClick={() => void onAiEnabledChange(!useAi)}
         >
           <span className="ios-ai-icon">
@@ -283,8 +313,8 @@ export function IosOrganizeActionPanel({
           />
         )}
         <button type="button" className="iqon-btn-primary min-h-11 w-full justify-center" onClick={() => void onCreatePlan()} disabled={busy || !snapshot || !fullHomeScreenInventory || aiStatus === 'checking'}>
-          <Sparkles className="h-4 w-4" />
-          {t('iosOrganize.createPlan')}
+          {busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Sparkles className="h-4 w-4" />}
+          {t(busy ? 'iosOrganize.plan.creating' : 'iosOrganize.createPlan')}
         </button>
         {hasRestoreSnapshot && snapshot && (
           <button type="button" className="iqon-btn-secondary min-h-11 w-full justify-center" onClick={() => void onPrepareRestore()} disabled={busy}>
@@ -298,44 +328,11 @@ export function IosOrganizeActionPanel({
 
   if (currentStep === 'preview' && plan) {
     return (
-      <>
-        <div className="flex items-center justify-between rounded-2xl border border-iqon-border bg-iqon-row px-4 py-3">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
-              {plan.template === 'restore' ? t('iosOrganize.restorePreview') : t('iosOrganize.previewTitle')}
-            </p>
-            <p className="mt-1 text-xl font-bold text-foreground">
-              {t('iosOrganize.visual.operationSummary', { count: plan.operations.length })}
-            </p>
-          </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-iqon-green/10 text-iqon-green">
-            <LayoutGrid className="h-5 w-5" />
-          </div>
-        </div>
-        <div className="max-h-56 space-y-2 overflow-auto pr-1">
-          {plan.warnings.map((warning) => <Warning key={warning} text={warning} compact />)}
-          {plan.operations.slice(0, 12).map((operation, index) => (
-            <div key={`${operation.type}-${index}`} className="ios-operation-row">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-iqon-green/10 font-mono text-[10px] font-bold text-iqon-green">
-                {index + 1}
-              </span>
-              <span className="text-[11px] leading-4 text-muted-foreground">
-                {operationLabel(operation, snapshot, t)}
-              </span>
-            </div>
-          ))}
-        </div>
-        {!canExecute && executionWarning && (
-          <Warning text={executionWarning} {...permissionAction(executionPermission)} />
-        )}
-        <button type="button" className="iqon-btn-primary min-h-11 w-full justify-center" onClick={() => void onExecute()} disabled={busy || !canExecute || plan.operations.length === 0 || Boolean(session)}>
-          <Play className="h-4 w-4" />
-          {t('iosOrganize.execute')}
-        </button>
-        <button type="button" className="iqon-btn-secondary min-h-11 w-full justify-center" onClick={() => void onChangePlan()} disabled={busy}>
-          {t('iosOrganize.visual.changePlan')}
-        </button>
-      </>
+      <IosPlanPreview plan={plan} snapshot={snapshot} busy={busy} canExecute={canExecute}
+        canScan={canScan} hasSession={Boolean(session)} onExecute={onExecute}
+        onChangePlan={onChangePlan} onScan={onScan}>
+        {!canExecute && executionWarning && <Warning text={executionWarning} {...permissionAction(executionPermission)} />}
+      </IosPlanPreview>
     )
   }
 
@@ -353,6 +350,11 @@ export function IosOrganizeActionPanel({
         {progress && <ProgressBar label={progress.message} current={progress.current} total={progress.total} />}
         {session.status === 'paused' && (
           <Warning text={session.guidanceMessage ?? t('iosOrganize.guidanceDefault')} />
+        )}
+        {session.status === 'paused' && session.guidanceCanResume && mirrorMode === 'preview' && (
+          <button type="button" className="iqon-btn-primary min-h-11 w-full justify-center" onClick={() => void onEnterInteraction()} disabled={busy || !capabilities?.mirrorRunning}>
+            <MousePointer2 className="h-4 w-4" />{t('iosOrganize.interaction.followGuidance')}
+          </button>
         )}
         {snapshotStale && (
           <Warning text={t('iosOrganize.visual.snapshotStale')} />
@@ -381,9 +383,9 @@ export function IosOrganizeActionPanel({
           )}
         </div>
         {['paused', 'failed', 'cancelled'].includes(session.status) && (
-          <button type="button" className="iqon-btn-secondary min-h-11 w-full justify-center" onClick={() => void onScan()} disabled={busy || !canScan}>
+          <button type="button" className="iqon-btn-secondary min-h-11 w-full justify-center" onClick={() => void (mirrorMode === 'interaction' ? onExitInteraction() : onScan())} disabled={busy || (mirrorMode !== 'interaction' && !canScan)}>
             <RefreshCw className="h-4 w-4" />
-            {t('iosOrganize.rescan')}
+            {t(mirrorMode === 'interaction' ? 'iosOrganize.interaction.returnScan' : 'iosOrganize.rescan')}
           </button>
         )}
       </>
@@ -392,7 +394,7 @@ export function IosOrganizeActionPanel({
 
   return (
     <>
-      <div className="ios-verify-visual" data-passed={Boolean(verification && snapshot?.inventoryHash === verification.inventoryHash)}>
+      <div className="ios-verify-visual" data-passed={verificationPassed}>
         <div className="ios-verify-ring">
           <ShieldCheck className="h-8 w-8" />
         </div>
@@ -405,7 +407,12 @@ export function IosOrganizeActionPanel({
         <ShieldCheck className="h-4 w-4" />
         {t('iosOrganize.verify')}
       </button>
-      {verification && snapshot?.inventoryHash === verification.inventoryHash && (
+      {verification && !verificationPassed && (
+        <button type="button" className="iqon-btn-secondary min-h-11 w-full justify-center" onClick={() => void onScan()} disabled={busy || !canScan}>
+          <RefreshCw className="h-4 w-4" />{t('iosOrganize.rescan')}
+        </button>
+      )}
+      {verificationPassed && (
         <div className="flex items-center gap-2 rounded-2xl border border-iqon-green/25 bg-iqon-green/[0.07] p-3 text-xs font-bold text-iqon-green">
           <CheckCircle2 className="h-4 w-4" />
           {t('iosOrganize.verifyPassed')}

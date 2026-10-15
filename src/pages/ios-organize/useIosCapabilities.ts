@@ -20,6 +20,7 @@ export function useIosCapabilities(active: boolean) {
       setCapabilities(result)
       setCapabilityError(null)
     } catch (cause) {
+      setCapabilities(null)
       setCapabilityError(String(cause))
     } finally {
       refreshInFlightRef.current = false

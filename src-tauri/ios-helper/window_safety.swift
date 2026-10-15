@@ -78,7 +78,8 @@ func prepareMirroringInputTarget(
     _ target: WindowTarget,
     points: [CGPoint] = []
 ) -> WindowTarget? {
-    guard let app = NSRunningApplication(processIdentifier: target.pid),
+    guard !inputWasCancelled(),
+          let app = NSRunningApplication(processIdentifier: target.pid),
           app.bundleIdentifier == mirroringBundleIdentifier else {
         return nil
     }
@@ -86,20 +87,26 @@ func prepareMirroringInputTarget(
 
     let deadline = Date().addingTimeInterval(1.0)
     while Date() < deadline {
+        guard !inputWasCancelled() else { return nil }
         if NSWorkspace.shared.frontmostApplication?.processIdentifier == target.pid {
             break
         }
         Thread.sleep(forTimeInterval: 0.02)
     }
-    guard NSWorkspace.shared.frontmostApplication?.processIdentifier == target.pid,
-          let current = findMirroringWindow(),
-          current.id == target.id,
-          current.pid == target.pid,
-          boundsMatch(target.bounds, current.bounds),
-          points.allSatisfy({ pointIsUnobscured($0, target: current) }) else {
+    guard mirroringInputTargetStillMatches(target, points: points) else {
         return nil
     }
-    return current
+    return target
+}
+
+func mirroringInputTargetStillMatches(
+    _ target: WindowTarget, points: [CGPoint] = []
+) -> Bool {
+    guard NSWorkspace.shared.frontmostApplication?.processIdentifier == target.pid,
+          let current = findMirroringWindow(),
+          current.id == target.id, current.pid == target.pid,
+          boundsMatch(target.bounds, current.bounds) else { return false }
+    return points.allSatisfy { pointIsUnobscured($0, target: current) }
 }
 
 func dismissDangerousMenu(target: WindowTarget) {
@@ -116,6 +123,7 @@ func dismissDangerousMenu(target: WindowTarget) {
           ) else {
         return
     }
-    down.postToPid(target.pid)
+    guard postInputUnlessCancelled({ down.postToPid(target.pid) }) else { return }
+    // Complete only the key press already sent if cancellation arrives here.
     up.postToPid(target.pid)
 }

@@ -80,6 +80,7 @@ export function WorkflowRail({
             className="ios-workflow-step"
             data-active={active}
             data-done={done}
+            aria-current={active ? 'step' : undefined}
             title={step.description}
           >
             <span className="ios-workflow-marker">
@@ -187,7 +188,7 @@ export function ProgressBar({
           {Math.round(width)}%
         </span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-iqon-row">
+      <div className="h-1.5 overflow-hidden rounded-full bg-iqon-row" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(width)}>
         <div
           className="h-full rounded-full bg-iqon-green transition-[width] duration-300"
           style={{ width: `${width}%` }}
@@ -205,6 +206,7 @@ export function IosDeviceStage({
   capabilities,
   onRefreshPreview,
   onEnterInteraction,
+  interactionDisabled = false,
 }: {
   previewRef: RefObject<HTMLDivElement>
   previewState: IosMirrorPreviewState
@@ -213,6 +215,7 @@ export function IosDeviceStage({
   capabilities: IosDeviceCapabilities | null
   onRefreshPreview: () => void
   onEnterInteraction: () => void
+  interactionDisabled?: boolean
 }) {
   const { t } = useI18n()
   const connectionState = capabilities?.mirrorConnectionState ?? 'unavailable'
@@ -237,7 +240,7 @@ export function IosDeviceStage({
   const confidence = snapshot ? `${Math.round(snapshot.confidence * 100)}%` : '--'
 
   return (
-    <section className="ios-device-stage">
+    <section className="ios-device-stage order-2 lg:order-1">
       <div className="ios-stage-glow" aria-hidden="true" />
       <header className="relative z-10 flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -267,7 +270,7 @@ export function IosDeviceStage({
             type="button"
             className="ios-stage-control"
             onClick={onEnterInteraction}
-            disabled={!capabilities?.mirrorRunning}
+            disabled={interactionDisabled || !capabilities?.mirrorRunning}
           >
             <MousePointer2 className="h-3.5 w-3.5" />
             {t('iosOrganize.interaction.enter')}
@@ -442,6 +445,12 @@ export function operationLabel(
     case 'moveApp':
       return t('iosOrganize.operation.move', {
         app: operationAppName(operation, snapshot, t),
+        fromPage: operation.fromPage + 1,
+        fromRow: operation.fromRow + 1,
+        fromColumn: operation.fromColumn + 1,
+        toPage: operation.toPage + 1,
+        toRow: operation.toRow + 1,
+        toColumn: operation.toColumn + 1,
       })
     case 'createFolder':
       return t('iosOrganize.operation.folder', {

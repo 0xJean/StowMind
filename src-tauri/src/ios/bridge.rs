@@ -4,13 +4,18 @@ use super::types::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::io::Read;
 use std::path::PathBuf;
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Command, Stdio};
+use std::sync::atomic::Ordering;
 use std::sync::Mutex;
-use std::thread;
-use std::time::{Duration, Instant};
-use tauri::AppHandle;
+use std::time::Duration;
+use tauri::{AppHandle, Manager};
+
+#[path = "helper_process.rs"]
+mod helper_process;
+#[cfg(test)]
+pub(super) use helper_process::collect_child_output;
+pub(super) use helper_process::collect_child_output_cancellable;
 
 static HELPER_REQUEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -46,86 +51,6 @@ struct HelperCapabilities {
 #[serde(rename_all = "camelCase")]
 struct HelperPermissionResult {
     granted: bool,
-}
-
-pub(super) struct HelperProcessOutput {
-    pub(super) status: ExitStatus,
-    pub(super) stdout: Vec<u8>,
-    pub(super) stderr: Vec<u8>,
-}
-
-fn read_child_stream<R>(
-    mut stream: R,
-    name: &'static str,
-) -> thread::JoinHandle<Result<Vec<u8>, String>>
-where
-    R: Read + Send + 'static,
-{
-    thread::spawn(move || {
-        let mut output = Vec::new();
-        stream
-            .read_to_end(&mut output)
-            .map_err(|error| format!("无法读取镜像辅助组件{name}：{error}"))?;
-        Ok(output)
-    })
-}
-
-fn join_child_stream(
-    reader: thread::JoinHandle<Result<Vec<u8>, String>>,
-    name: &str,
-) -> Result<Vec<u8>, String> {
-    reader
-        .join()
-        .map_err(|_| format!("镜像辅助组件{name}读取线程异常"))?
-}
-
-pub(super) fn collect_child_output(
-    mut child: Child,
-    timeout: Duration,
-) -> Result<HelperProcessOutput, String> {
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "镜像辅助组件未提供标准输出".to_string())?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| "镜像辅助组件未提供错误输出".to_string())?;
-    let stdout_reader = read_child_stream(stdout, "响应");
-    let stderr_reader = read_child_stream(stderr, "诊断信息");
-
-    let started = Instant::now();
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if started.elapsed() < timeout => {
-                thread::sleep(Duration::from_millis(50));
-            }
-            Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = join_child_stream(stdout_reader, "响应");
-                let _ = join_child_stream(stderr_reader, "诊断信息");
-                return Err(format!(
-                    "镜像辅助组件超时（{} 秒），已安全停止",
-                    timeout.as_secs()
-                ));
-            }
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = join_child_stream(stdout_reader, "响应");
-                let _ = join_child_stream(stderr_reader, "诊断信息");
-                return Err(format!("无法检查镜像辅助组件状态：{error}"));
-            }
-        }
-    };
-
-    Ok(HelperProcessOutput {
-        status,
-        stdout: join_child_stream(stdout_reader, "响应")?,
-        stderr: join_child_stream(stderr_reader, "诊断信息")?,
-    })
 }
 
 pub fn helper_path(app: &AppHandle) -> Option<PathBuf> {
@@ -255,14 +180,15 @@ pub(super) fn execution_ready(scan_ready: bool, accessibility: bool) -> bool {
     scan_ready && accessibility
 }
 
-pub fn capabilities(app: &AppHandle) -> IosDeviceCapabilities {
+pub fn capabilities(app: &AppHandle) -> Result<IosDeviceCapabilities, String> {
     let supported = cfg!(target_os = "macos");
     let helper = helper_available(app);
     let helper_capabilities = helper
         .then(|| request::<HelperCapabilities>(app, "capabilities", json!({})))
         .transpose()
-        .ok()
-        .flatten();
+        .map_err(|error| {
+            format!("无法检查 iPhone 镜像状态，请刷新重试；当前无法判断权限是否已授权：{error}")
+        })?;
     let mirror_window = helper_capabilities
         .as_ref()
         .map(|value| value.mirror_window_found)
@@ -345,7 +271,7 @@ pub fn capabilities(app: &AppHandle) -> IosDeviceCapabilities {
         None
     };
 
-    IosDeviceCapabilities {
+    Ok(IosDeviceCapabilities {
         platform_supported: supported,
         mirror_running: mirror_window,
         mirror_content_ready,
@@ -359,11 +285,11 @@ pub fn capabilities(app: &AppHandle) -> IosDeviceCapabilities {
         app_bundle_path,
         message,
         execution_message,
-    }
+    })
 }
 
 pub fn require_execution_ready(app: &AppHandle) -> Result<(), String> {
-    let capabilities = capabilities(app);
+    let capabilities = capabilities(app)?;
     if capabilities.execution_ready {
         return Ok(());
     }
@@ -380,6 +306,18 @@ pub fn request<T: DeserializeOwned>(
     let _guard = HELPER_REQUEST_LOCK
         .lock()
         .map_err(|_| "无法锁定 iPhone 镜像辅助组件".to_string())?;
+    let manager = if matches!(operation, "executeAction" | "scanInventory") {
+        Some(
+            app.try_state::<super::execution_manager::IosExecutionManager>()
+                .ok_or_else(|| "无法读取 iPhone 安全停止状态".to_string())?,
+        )
+    } else {
+        None
+    };
+    let cancelled = manager.as_ref().map(|manager| &manager.cancelled);
+    if cancelled.is_some_and(|flag| flag.load(Ordering::SeqCst)) {
+        return Err("镜像操作已取消，未启动输入动作".to_string());
+    }
     let helper = helper_path(app)
         .ok_or_else(|| "镜像辅助组件不可用，请先安装正式 macOS 构建".to_string())?;
     let input = serde_json::to_string(&HelperRequest {
@@ -397,9 +335,11 @@ pub fn request<T: DeserializeOwned>(
 
     if let Some(stdin) = child.stdin.as_mut() {
         use std::io::Write;
-        stdin
-            .write_all(format!("{input}\n").as_bytes())
-            .map_err(|error| format!("无法发送镜像请求：{error}"))?;
+        if let Err(error) = stdin.write_all(format!("{input}\n").as_bytes()) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!("无法发送镜像请求：{error}"));
+        }
     }
     drop(child.stdin.take());
 
@@ -408,7 +348,7 @@ pub fn request<T: DeserializeOwned>(
         "requestPermission" => Duration::from_secs(120),
         _ => Duration::from_secs(30),
     };
-    let output = collect_child_output(child, timeout)?;
+    let output = collect_child_output_cancellable(child, timeout, cancelled)?;
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
     }
@@ -445,7 +385,7 @@ pub fn scan_inventory(
     app: &AppHandle,
     device_name: Option<String>,
 ) -> Result<IosLayoutSnapshot, String> {
-    let capabilities = capabilities(app);
+    let capabilities = capabilities(app)?;
     if !capabilities.scan_ready {
         return Err(capabilities
             .message

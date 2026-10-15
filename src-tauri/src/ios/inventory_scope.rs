@@ -44,6 +44,7 @@ mod tests {
             }],
             dock: Vec::new(),
             inventory_hash: String::new(),
+            layout_hash: String::new(),
             confidence: 1.0,
             source: "test".to_string(),
             scan_scope: scope.to_string(),

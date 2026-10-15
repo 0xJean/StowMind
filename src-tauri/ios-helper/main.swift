@@ -118,7 +118,7 @@ func recognizeText(_ image: CGImage) -> [TextHit] {
             return nil
         }
         let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard text.count >= 2, text.count <= 36 else {
+        guard !text.isEmpty, text.count <= 36 else {
             return nil
         }
         return TextHit(text: text, confidence: candidate.confidence, box: observation.boundingBox)
@@ -159,13 +159,14 @@ func categoryFor(_ name: String) -> (String, Bool) {
 
 let forbiddenTerms = [
     "delete app", "remove app", "remove from home screen", "uninstall",
-    "hide page", "reset home screen", "删除 app", "删除应用", "卸载",
-    "移除应用", "从主屏幕移除", "移出主屏幕", "隐藏页面", "重置主屏幕"
+    "hide page", "hide app", "reset home screen", "remove widget", "edit widget",
+    "删除 app", "删除应用", "卸载", "移除 app", "移除应用", "从主屏幕移除",
+    "移出主屏幕", "隐藏页面", "隐藏 app", "隐藏应用", "重置主屏幕", "移除小组件", "编辑小组件"
 ]
 
 func containsForbiddenText(_ hits: [TextHit]) -> Bool {
-    let text = hits.map(\.text).joined(separator: "\n").lowercased()
-    return forbiddenTerms.contains(where: { text.contains($0) })
+    let text = controlLabel(hits.map(\.text).joined(separator: "\n"))
+    return forbiddenTerms.contains(where: { text.contains(controlLabel($0)) })
 }
 
 private func normalizedControlText(_ value: String) -> String {
@@ -213,34 +214,31 @@ func snapshotFromImage(_ image: CGImage, target: WindowTarget) -> [String: Any] 
     let geometry = detectMirrorGeometry(image, hits: hits)
     var apps = [[String: Any]]()
     var ids = [String]()
-    var seen = Set<String>()
-
-    for hit in hits {
-        guard hit.box.width < 0.34 else {
-            continue
-        }
+    let labels = preservingAmbiguousLabels(hits.compactMap { hit -> AppLabelEvidence? in
+        guard hit.box.width < 0.34 else { return nil }
         guard let geometry,
               let position = gridPosition(hit, image: image, geometry: geometry) else {
-            continue
+            return nil
         }
-        let id = normalizedId(hit.text)
-        if seen.contains(id) {
-            continue
-        }
-        seen.insert(id)
-        ids.append(id)
-        let (category, sensitive) = categoryFor(hit.text)
+        return AppLabelEvidence(
+            id: normalizedId(hit.text), name: hit.text, confidence: Double(hit.confidence),
+            row: position.row, column: position.column
+        )
+    })
+    for label in labels {
+        ids.append(label.id)
+        let (category, sensitive) = categoryFor(label.name)
         apps.append([
-            "id": id,
-            "name": hit.text,
+            "id": label.id,
+            "name": label.name,
             "bundleId": NSNull(),
             "category": category,
             "sensitive": sensitive,
-            "confidence": Double(hit.confidence),
-            "source": "vision",
+            "confidence": label.confidence,
+            "source": label.confidence == 0 ? "ambiguousVision" : "vision",
             "currentPage": 0,
-            "currentRow": position.row,
-            "currentColumn": position.column,
+            "currentRow": label.row,
+            "currentColumn": label.column,
             "inDock": false,
             "folderName": NSNull()
         ])
@@ -261,6 +259,9 @@ func snapshotFromImage(_ image: CGImage, target: WindowTarget) -> [String: Any] 
     }
     if containsForbiddenText(hits) {
         warnings.append("检测到删除、移除、隐藏或重置菜单。")
+    }
+    if labels.contains(where: { $0.confidence == 0 }) {
+        warnings.append("存在同名 App 或同一格位的识别冲突，已保留全部结果并禁止自动移动。")
     }
 
     let hasWidgets = hits.contains { hit in
@@ -385,8 +386,12 @@ func handle(_ request: [String: Any]) {
     }
 
     if operation == "scanInventory" {
+        if editingModeActive(preflightHits, image: preflightImage) {
+            failure("请先在真实 iPhone 镜像中点“完成”退出主屏幕编辑模式，再返回重新盘点；编辑模式下不能安全翻页。")
+            return
+        }
         guard let payload = scanInventoryFromMirror(target: target) else {
-            failure("无法完成只读盘点，请确认镜像窗口正在显示主屏幕且没有被遮挡，然后重试")
+            failure("盘点已停止：未能持续确认主屏幕页面和镜像窗口。请退出主屏幕编辑模式，返回普通主屏幕，保持镜像窗口位置不变且不被遮挡，再重新盘点。")
             return
         }
         success(payload)
@@ -419,6 +424,8 @@ func handle(_ request: [String: Any]) {
 
     failure("不支持的辅助组件操作")
 }
+
+inputCancellation.installSignalListener()
 
 let helperApplication = NSApplication.shared
 helperApplication.setActivationPolicy(.prohibited)

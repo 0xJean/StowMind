@@ -7,6 +7,7 @@ export function IosMirrorInteractionCompanion({
   stepNumber,
   totalSteps,
   error,
+  busy = false,
   onExit,
   children,
 }: {
@@ -14,6 +15,7 @@ export function IosMirrorInteractionCompanion({
   stepNumber: number
   totalSteps: number
   error: ReactNode
+  busy?: boolean
   onExit: () => void
   children: ReactNode
 }) {
@@ -35,7 +37,7 @@ export function IosMirrorInteractionCompanion({
             </h1>
           </div>
         </div>
-        <button type="button" className="ios-stage-control" onClick={onExit}>
+        <button type="button" className="ios-stage-control" onClick={onExit} disabled={busy}>
           <ArrowLeft className="h-3.5 w-3.5" />
           {t('iosOrganize.interaction.exit')}
         </button>

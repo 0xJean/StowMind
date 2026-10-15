@@ -1,6 +1,8 @@
 use super::types::{IosAppIdentity, IosLayoutPlan, IosLayoutSnapshot, IosOperation};
 use std::collections::{HashMap, HashSet};
 
+pub use super::layout::{layout_hash, snapshot_after_operations};
+
 pub const MAX_BATCH_ACTIONS: usize = 3;
 pub const MIN_AUTOMATION_CONFIDENCE: f32 = 0.90;
 const MAX_PAGE_INDEX: usize = 99;
@@ -14,16 +16,6 @@ fn validate_grid(page: usize, row: usize, column: usize) -> Result<(), String> {
         return Err("Home Screen coordinates are outside the safe grid".to_string());
     }
     Ok(())
-}
-
-fn operation_app_ids(operation: &IosOperation) -> Vec<&str> {
-    match operation {
-        IosOperation::MoveApp { app_id, .. } | IosOperation::MoveToDock { app_id, .. } => {
-            vec![app_id.as_str()]
-        }
-        IosOperation::CreateFolder { app_ids, .. } => app_ids.iter().map(String::as_str).collect(),
-        IosOperation::RenameFolder { .. } => Vec::new(),
-    }
 }
 
 pub fn validate_operation(operation: &IosOperation) -> Result<(), String> {
@@ -119,178 +111,147 @@ pub fn validate_plan_against_snapshot(
     if plan.source_snapshot_id != snapshot.id {
         return Err("Plan source does not match the stored snapshot".to_string());
     }
-
-    let apps = snapshot
-        .apps
+    let protected = plan.protected_app_ids.iter().collect::<HashSet<_>>();
+    if protected
         .iter()
-        .map(|app| (app.id.as_str(), app))
-        .collect::<HashMap<_, _>>();
-    let protected = plan
-        .protected_app_ids
-        .iter()
-        .map(String::as_str)
-        .collect::<HashSet<_>>();
-    let widget_pages = snapshot
-        .pages
-        .iter()
-        .filter(|page| page.has_widgets)
-        .map(|page| page.index)
-        .collect::<HashSet<_>>();
-
-    for protected_id in &protected {
-        if !apps.contains_key(protected_id) {
-            return Err("Protected App is missing from the source snapshot".to_string());
-        }
+        .any(|id| !snapshot.apps.iter().any(|app| &app.id == *id))
+    {
+        return Err("Protected App is missing from the source snapshot".to_string());
     }
-
+    let normalized = |name: &str| {
+        name.to_lowercase()
+            .chars()
+            .filter(|character| character.is_alphanumeric())
+            .collect::<String>()
+    };
+    let mut moved = HashSet::new();
+    let mut destinations = HashSet::new();
     for operation in &plan.operations {
-        for app_id in operation_app_ids(operation) {
-            let app = apps
-                .get(app_id)
-                .ok_or_else(|| "Plan references an App outside the source snapshot".to_string())?;
-            if protected.contains(app_id) || app.sensitive {
-                return Err(format!("Protected App cannot be moved: {}", app.name));
-            }
-            if app.folder_name.is_some()
-                || app
-                    .current_page
-                    .map(|page| widget_pages.contains(&page))
-                    .unwrap_or(false)
-            {
-                return Err(format!(
-                    "App is inside a protected folder or widget page: {}",
-                    app.name
-                ));
-            }
-            if app.confidence < MIN_AUTOMATION_CONFIDENCE {
-                return Err(format!(
-                    "Low-confidence App cannot be automated: {}",
-                    app.name
-                ));
+        // Serialized variants remain a whitelist, but the current helper only
+        // supports same-page moves. Reject legacy/handcrafted unsupported plans.
+        let IosOperation::MoveApp {
+            app_id,
+            from_page,
+            from_row,
+            from_column,
+            to_page,
+            to_row,
+            to_column,
+        } = operation
+        else {
+            return Err("此方案包含尚不支持的自动动作，请重新生成方案".to_string());
+        };
+        if from_page != to_page || (from_row, from_column) == (to_row, to_column) {
+            return Err("Only non-empty same-page moves can be automated".to_string());
+        }
+        if !moved.insert(app_id) || !destinations.insert((to_page, to_row, to_column)) {
+            return Err("A plan cannot repeat an App or destination".to_string());
+        }
+        let candidates = snapshot
+            .apps
+            .iter()
+            .filter(|app| app.id == *app_id)
+            .collect::<Vec<_>>();
+        if candidates.len() != 1 {
+            return Err("Plan App identity is missing or ambiguous".to_string());
+        }
+        let app = candidates[0];
+        let name = normalized(&app.name);
+        if name.is_empty()
+            || snapshot
+                .apps
+                .iter()
+                .filter(|other| normalized(&other.name) == name)
+                .count()
+                != 1
+        {
+            return Err("App name is not unique in the source snapshot".to_string());
+        }
+        if protected.contains(&app.id)
+            || app.sensitive
+            || super::classification::category_for_name(&app.name).1
+        {
+            return Err(format!("Protected App cannot be moved: {}", app.name));
+        }
+        if app.in_dock
+            || snapshot.dock.contains(app_id)
+            || app.folder_name.is_some()
+            || snapshot
+                .folders
+                .iter()
+                .any(|folder| folder.app_ids.contains(app_id))
+        {
+            return Err("Dock and folder Apps cannot be automated".to_string());
+        }
+        if !app.confidence.is_finite()
+            || !(MIN_AUTOMATION_CONFIDENCE..=1.0).contains(&app.confidence)
+        {
+            return Err(format!(
+                "Low-confidence App cannot be automated: {}",
+                app.name
+            ));
+        }
+        if app.current_page != Some(*from_page)
+            || app.current_row != Some(*from_row)
+            || app.current_column != Some(*from_column)
+        {
+            return Err(format!(
+                "Plan source position no longer matches App: {}",
+                app.name
+            ));
+        }
+        let pages = snapshot
+            .pages
+            .iter()
+            .filter(|page| page.index == *from_page)
+            .collect::<Vec<_>>();
+        if pages.len() != 1 || pages[0].has_widgets {
+            return Err("Source page is missing, ambiguous or contains widgets".to_string());
+        }
+        if pages[0].app_ids.iter().any(|id| {
+            !snapshot.apps.iter().any(|other| {
+                other.id == *id
+                    && other.current_page == Some(*from_page)
+                    && other.current_row.is_some()
+                    && other.current_column.is_some()
+            })
+        }) {
+            return Err("Page contains an unknown or unlocated App identity".to_string());
+        }
+        // Ambiguous or unlocated contents cannot establish a safe empty slot.
+        let mut occupied = HashSet::new();
+        for other in snapshot.apps.iter().filter(|other| {
+            other.current_page == Some(*from_page)
+                && !other.in_dock
+                && other.folder_name.is_none()
+                && !snapshot
+                    .folders
+                    .iter()
+                    .any(|folder| folder.app_ids.contains(&other.id))
+        }) {
+            let (Some(row), Some(column)) = (other.current_row, other.current_column) else {
+                return Err("Page contains an App without a reliable position".to_string());
+            };
+            validate_grid(*from_page, row, column)?;
+            if !occupied.insert((row, column)) {
+                return Err("Page contains overlapping App positions".to_string());
             }
         }
-
-        match operation {
-            IosOperation::MoveApp {
-                app_id,
-                from_page,
-                from_row,
-                from_column,
-                to_page,
-                to_row,
-                to_column,
-            } => {
-                let app = apps[app_id.as_str()];
-                if app.in_dock
-                    || app.current_page != Some(*from_page)
-                    || app.current_row != Some(*from_row)
-                    || app.current_column != Some(*from_column)
-                {
-                    return Err(format!(
-                        "Plan source position no longer matches App: {}",
-                        app.name
-                    ));
-                }
-                if widget_pages.contains(to_page) {
-                    return Err("Apps cannot be moved onto a widget page".to_string());
-                }
-                if (*from_page, *from_row, *from_column) != (*to_page, *to_row, *to_column)
-                    && apps.values().any(|other| {
-                        other.id != app.id
-                            && !other.in_dock
-                            && other.current_page == Some(*to_page)
-                            && other.current_row == Some(*to_row)
-                            && other.current_column == Some(*to_column)
-                    })
-                {
-                    return Err(
-                        "Move target is already occupied in the source snapshot".to_string()
-                    );
-                }
+        for folder in snapshot
+            .folders
+            .iter()
+            .filter(|folder| folder.page == *from_page)
+        {
+            validate_grid(folder.page, folder.row, folder.column)?;
+            if !occupied.insert((folder.row, folder.column)) {
+                return Err("Page contains overlapping folder positions".to_string());
             }
-            IosOperation::MoveToDock {
-                app_id,
-                from_page,
-                from_row,
-                from_column,
-                dock_index,
-            } => {
-                let app = apps[app_id.as_str()];
-                if app.in_dock
-                    || app.current_page != Some(*from_page)
-                    || app.current_row != Some(*from_row)
-                    || app.current_column != Some(*from_column)
-                {
-                    return Err(format!(
-                        "Plan source position no longer matches App: {}",
-                        app.name
-                    ));
-                }
-                if snapshot.dock.get(*dock_index).is_some() {
-                    return Err("Move target Dock slot is already occupied".to_string());
-                }
-            }
-            IosOperation::CreateFolder {
-                page,
-                row,
-                column,
-                app_ids,
-                ..
-            } => {
-                if app_ids.iter().any(|id| apps[id.as_str()].in_dock) {
-                    return Err("Dock Apps cannot be used to create a folder".to_string());
-                }
-                if widget_pages.contains(page) {
-                    return Err("Folders cannot be created on a widget page".to_string());
-                }
-                if !app_ids.iter().any(|id| {
-                    let app = apps[id.as_str()];
-                    app.current_page == Some(*page)
-                        && app.current_row == Some(*row)
-                        && app.current_column == Some(*column)
-                }) {
-                    return Err("Folder anchor does not match a member App position".to_string());
-                }
-            }
-            IosOperation::RenameFolder {
-                page,
-                row,
-                column,
-                from,
-                ..
-            } => {
-                if widget_pages.contains(page) {
-                    return Err("Folders on widget pages cannot be renamed".to_string());
-                }
-                let matches = snapshot.folders.iter().filter(|folder| {
-                    folder.page == *page
-                        && folder.row == *row
-                        && folder.column == *column
-                        && folder.name == *from
-                });
-                let matching_folders = matches.collect::<Vec<_>>();
-                if matching_folders.len() != 1 {
-                    return Err("Folder rename target is not unique".to_string());
-                }
-                if matching_folders[0].app_ids.iter().any(|id| {
-                    apps.get(id.as_str())
-                        .map(|app| app.sensitive || protected.contains(id.as_str()))
-                        .unwrap_or(false)
-                }) {
-                    return Err("Folders containing protected Apps cannot be renamed".to_string());
-                }
-            }
+        }
+        if occupied.contains(&(*to_row, *to_column)) {
+            return Err("Move target is already occupied in the source snapshot".to_string());
         }
     }
-
     Ok(())
-}
-
-pub fn protected_apps(apps: &[IosAppIdentity]) -> Vec<String> {
-    apps.iter()
-        .filter(|app| app.sensitive)
-        .map(|app| app.id.clone())
-        .collect()
 }
 
 pub fn inventory_hash(apps: &[IosAppIdentity]) -> String {
@@ -316,7 +277,9 @@ pub fn inventory_matches(before: &[IosAppIdentity], after: &[IosAppIdentity]) ->
 }
 
 pub fn validate_batch(plan: &IosLayoutPlan, start: usize) -> Result<&[IosOperation], String> {
-    let end = (start + MAX_BATCH_ACTIONS).min(plan.operations.len());
+    let end = start
+        .saturating_add(MAX_BATCH_ACTIONS)
+        .min(plan.operations.len());
     let batch = plan
         .operations
         .get(start..end)
@@ -334,6 +297,7 @@ pub fn contains_forbidden_text(text: &str) -> bool {
         "remove app",
         "remove from home screen",
         "hide page",
+        "hide app",
         "reset home screen",
         "reset home screen layout",
         "uninstall",
@@ -341,6 +305,9 @@ pub fn contains_forbidden_text(text: &str) -> bool {
         "删除应用",
         "卸载",
         "移除应用",
+        "移除 app",
+        "隐藏应用",
+        "隐藏 app",
         "从主屏幕移除",
         "移出主屏幕",
         "隐藏页面",
@@ -351,146 +318,5 @@ pub fn contains_forbidden_text(text: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn app(id: &str) -> IosAppIdentity {
-        IosAppIdentity {
-            id: id.to_string(),
-            name: id.to_string(),
-            bundle_id: None,
-            category: "其他".to_string(),
-            sensitive: false,
-            confidence: 1.0,
-            source: "test".to_string(),
-            current_page: Some(0),
-            current_row: Some(0),
-            current_column: Some(0),
-            in_dock: false,
-            folder_name: None,
-        }
-    }
-
-    #[test]
-    fn inventory_hash_is_order_independent() {
-        assert_eq!(
-            inventory_hash(&[app("a"), app("b")]),
-            inventory_hash(&[app("b"), app("a")])
-        );
-    }
-
-    #[test]
-    fn inventory_mismatch_is_detected() {
-        assert!(!inventory_matches(&[app("a")], &[app("b")]));
-    }
-
-    #[test]
-    fn forbidden_delete_words_are_blocked() {
-        assert!(contains_forbidden_text("Delete App"));
-        assert!(contains_forbidden_text("删除应用"));
-        assert!(contains_forbidden_text("Remove from Home Screen"));
-        assert!(!contains_forbidden_text("Move app"));
-    }
-
-    #[test]
-    fn destructive_operation_variants_cannot_deserialize() {
-        for operation in [
-            r#"{"type":"deleteApp","appId":"a"}"#,
-            r#"{"type":"uninstall","appId":"a"}"#,
-            r#"{"type":"removeFromHomeScreen","appId":"a"}"#,
-            r#"{"type":"hidePage","page":0}"#,
-            r#"{"type":"resetLayout"}"#,
-        ] {
-            assert!(serde_json::from_str::<IosOperation>(operation).is_err());
-        }
-    }
-
-    #[test]
-    fn protected_app_cannot_appear_in_plan() {
-        let mut protected = app("bank");
-        protected.sensitive = true;
-        let snapshot = IosLayoutSnapshot {
-            id: "snapshot".to_string(),
-            captured_at: "0".to_string(),
-            device_name: None,
-            apps: vec![protected],
-            folders: Vec::new(),
-            pages: Vec::new(),
-            dock: Vec::new(),
-            inventory_hash: String::new(),
-            confidence: 1.0,
-            source: "test".to_string(),
-            scan_scope: "fixture".to_string(),
-            inventory_complete: true,
-            warnings: Vec::new(),
-            window_bounds: None,
-        };
-        let plan = IosLayoutPlan {
-            id: "plan".to_string(),
-            source_snapshot_id: snapshot.id.clone(),
-            template: "efficiency".to_string(),
-            use_ai: false,
-            operations: vec![IosOperation::MoveApp {
-                app_id: "bank".to_string(),
-                from_page: 0,
-                from_row: 0,
-                from_column: 0,
-                to_page: 0,
-                to_row: 0,
-                to_column: 1,
-            }],
-            warnings: Vec::new(),
-            protected_app_ids: vec!["bank".to_string()],
-            created_at: "0".to_string(),
-            restore_target_snapshot_id: None,
-        };
-        assert!(validate_plan_against_snapshot(&plan, &snapshot).is_err());
-    }
-
-    #[test]
-    fn occupied_move_target_is_rejected() {
-        let first = app("first");
-        let mut second = app("second");
-        second.current_column = Some(1);
-        let snapshot = IosLayoutSnapshot {
-            id: "snapshot".to_string(),
-            captured_at: "0".to_string(),
-            device_name: None,
-            apps: vec![first.clone(), second],
-            folders: Vec::new(),
-            pages: vec![super::super::types::IosPageSnapshot {
-                index: 0,
-                app_ids: vec![first.id.clone(), "second".to_string()],
-                has_widgets: false,
-            }],
-            dock: Vec::new(),
-            inventory_hash: String::new(),
-            confidence: 1.0,
-            source: "test".to_string(),
-            scan_scope: "fixture".to_string(),
-            inventory_complete: true,
-            warnings: Vec::new(),
-            window_bounds: None,
-        };
-        let plan = IosLayoutPlan {
-            id: "plan".to_string(),
-            source_snapshot_id: snapshot.id.clone(),
-            template: "efficiency".to_string(),
-            use_ai: false,
-            operations: vec![IosOperation::MoveApp {
-                app_id: first.id,
-                from_page: 0,
-                from_row: 0,
-                from_column: 0,
-                to_page: 0,
-                to_row: 0,
-                to_column: 1,
-            }],
-            warnings: Vec::new(),
-            protected_app_ids: Vec::new(),
-            created_at: "0".to_string(),
-            restore_target_snapshot_id: None,
-        };
-        assert!(validate_plan_against_snapshot(&plan, &snapshot).is_err());
-    }
-}
+#[path = "safety_tests.rs"]
+mod tests;

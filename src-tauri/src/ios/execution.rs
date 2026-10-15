@@ -1,113 +1,20 @@
 use super::bridge;
+use super::execution_checks::{apply_control_state, matches_another_page, matches_expected_page};
+use super::inventory_scope::require_all_home_screen_pages;
 use super::safety::{
-    contains_forbidden_text, inventory_hash, inventory_matches, validate_batch,
-    validate_plan_against_snapshot,
+    contains_forbidden_text, inventory_hash, layout_hash, snapshot_after_operations,
+    validate_batch, validate_plan_against_snapshot,
 };
 use super::storage;
 use super::types::{
     IosExecutionSession, IosExecutionStatus, IosLayoutPlan, IosProgressEvent, IosWindowBounds,
 };
 use serde_json::to_value;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Mutex,
-};
+use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, GlobalShortcutManager, Manager, Window};
+use tauri::{AppHandle, Window};
 
-#[derive(Default)]
-pub struct IosExecutionManager {
-    active_session: Mutex<Option<String>>,
-    paused: AtomicBool,
-    cancelled: AtomicBool,
-}
-
-impl IosExecutionManager {
-    fn claim(&self, session_id: &str) -> Result<(), String> {
-        if let Ok(mut active) = self.active_session.lock() {
-            if let Some(current) = active.as_deref() {
-                if current != session_id {
-                    return Err("另一个 iPhone 整理会话正在运行".to_string());
-                }
-                if !self.paused.load(Ordering::SeqCst) {
-                    return Err("该 iPhone 整理会话已经在运行".to_string());
-                }
-            }
-            *active = Some(session_id.to_string());
-        } else {
-            return Err("无法锁定 iPhone 整理会话".to_string());
-        }
-        self.paused.store(false, Ordering::SeqCst);
-        self.cancelled.store(false, Ordering::SeqCst);
-        Ok(())
-    }
-
-    fn clear(&self, session_id: &str) {
-        if let Ok(mut active) = self.active_session.lock() {
-            if active.as_deref() == Some(session_id) {
-                *active = None;
-            }
-        }
-        self.paused.store(false, Ordering::SeqCst);
-        self.cancelled.store(false, Ordering::SeqCst);
-    }
-
-    fn release_cancelled(&self, session_id: &str) {
-        if let Ok(mut active) = self.active_session.lock() {
-            if active.as_deref() == Some(session_id) {
-                *active = None;
-            }
-        }
-        self.paused.store(false, Ordering::SeqCst);
-        self.cancelled.store(true, Ordering::SeqCst);
-    }
-
-    fn active_id(&self) -> Option<String> {
-        self.active_session
-            .lock()
-            .ok()
-            .and_then(|value| value.clone())
-    }
-
-    pub fn request_pause(&self, session_id: &str) -> Result<(), String> {
-        if self.active_id().as_deref() != Some(session_id) {
-            return Err("找不到正在运行的 iPhone 整理会话".to_string());
-        }
-        self.paused.store(true, Ordering::SeqCst);
-        Ok(())
-    }
-
-    pub fn request_cancel(&self, session_id: &str) {
-        if self.active_id().as_deref() != Some(session_id) {
-            return;
-        }
-        self.cancelled.store(true, Ordering::SeqCst);
-        if self.paused.load(Ordering::SeqCst) {
-            self.release_cancelled(session_id);
-        }
-    }
-}
-
-pub fn register_emergency_shortcut(app: &AppHandle) {
-    let handle = app.clone();
-    let _ = app
-        .global_shortcut_manager()
-        .register("CommandOrControl+Shift+Escape", move || {
-            let manager = handle.state::<IosExecutionManager>();
-            manager.cancelled.store(true, Ordering::SeqCst);
-            if let Some(session_id) = manager.active_id() {
-                if let Ok(mut session) = storage::get_session(&handle, &session_id) {
-                    session.status = IosExecutionStatus::Cancelled;
-                    session.error = Some("已通过紧急停止快捷键终止".to_string());
-                    session.updated_at = now_string();
-                    let _ = storage::save_session(&handle, &session);
-                }
-                if manager.paused.load(Ordering::SeqCst) {
-                    manager.release_cancelled(&session_id);
-                }
-            }
-        });
-}
+pub use super::execution_manager::{register_emergency_shortcut, IosExecutionManager};
 
 pub fn now_string() -> String {
     SystemTime::now()
@@ -156,6 +63,20 @@ fn snapshot_contains_forbidden_text(snapshot: &super::types::IosLayoutSnapshot) 
             .any(|app| contains_forbidden_text(&app.name))
 }
 
+fn save_execution_session(
+    app: &AppHandle,
+    manager: &IosExecutionManager,
+    session: &mut IosExecutionSession,
+) -> Result<(), String> {
+    manager.with_control_lock(|cancelled, paused| {
+        let was_cancelled = storage::get_session(app, &session.id)
+            .map(|saved| saved.status == IosExecutionStatus::Cancelled)
+            .unwrap_or(false);
+        apply_control_state(session, cancelled || was_cancelled, paused);
+        storage::save_session(app, session)
+    })?
+}
+
 fn pause_for_guidance(
     window: &Window,
     app: &AppHandle,
@@ -169,8 +90,10 @@ fn pause_for_guidance(
     session.guidance_can_resume = can_resume;
     session.updated_at = now_string();
     manager.paused.store(true, Ordering::SeqCst);
-    storage::save_session(app, session)?;
-    let _ = window.emit("ios-execution-paused", &*session);
+    save_execution_session(app, manager, session)?;
+    if session.status == IosExecutionStatus::Paused {
+        let _ = window.emit("ios-execution-paused", &*session);
+    }
     Ok(session.clone())
 }
 
@@ -185,8 +108,11 @@ fn fail_execution(
     session.error = Some(message.clone());
     session.guidance_can_resume = false;
     session.updated_at = now_string();
-    storage::save_session(app, session)?;
+    save_execution_session(app, manager, session)?;
     manager.clear(&session.id);
+    if session.status == IosExecutionStatus::Cancelled {
+        return Ok(session.clone());
+    }
     let _ = window.emit("ios-execution-failed", &*session);
     Err(message)
 }
@@ -202,7 +128,7 @@ fn stop_if_requested(
     session.status = IosExecutionStatus::Cancelled;
     session.error = Some("执行已停止".to_string());
     session.updated_at = now_string();
-    storage::save_session(app, session)?;
+    save_execution_session(app, manager, session)?;
     manager.clear(&session.id);
     Ok(true)
 }
@@ -210,19 +136,61 @@ fn stop_if_requested(
 pub async fn run_execution(
     window: Window,
     app: AppHandle,
-    mut session: IosExecutionSession,
+    session: IosExecutionSession,
     plan: IosLayoutPlan,
     manager: &IosExecutionManager,
+    generation: u64,
 ) -> Result<IosExecutionSession, String> {
     let baseline = storage::get_snapshot(&app, &plan.source_snapshot_id)?;
+    require_all_home_screen_pages(&baseline)?;
     validate_plan_against_snapshot(&plan, &baseline)?;
-    manager.claim(&session.id)?;
+    if session.plan_id != plan.id
+        || session.total != plan.operations.len()
+        || session.current_index > session.total
+        || plan.operations.is_empty()
+    {
+        return Err("执行进度与已保存方案不一致，请重新生成方案".to_string());
+    }
+    let target = snapshot_after_operations(&baseline, &plan.operations)?;
+    if plan.target_layout_hash.as_deref() != Some(target.layout_hash.as_str()) {
+        return Err("方案缺少可靠的目标布局，请重新生成方案".to_string());
+    }
+    manager.claim_for_generation(&session.id, generation)?;
+    let result =
+        run_claimed_execution(&window, &app, session.clone(), &plan, &baseline, manager).await;
+    if !matches!(&result, Ok(value) if value.status == IosExecutionStatus::Paused && value.guidance_can_resume)
+    {
+        manager.clear(&session.id);
+    }
+    if let Err(error) = &result {
+        // Even persistence failures must release the runner. An uncertain action
+        // must never be retried using the previous execution cursor.
+        let mut failed = storage::get_session(&app, &session.id).unwrap_or(session);
+        failed.status = IosExecutionStatus::Failed;
+        failed.error = Some(error.clone());
+        failed.guidance_can_resume = false;
+        failed.updated_at = now_string();
+        let _ = save_execution_session(&app, manager, &mut failed);
+        let _ = window.emit("ios-execution-failed", &failed);
+    }
+    manager.running.store(false, Ordering::SeqCst);
+    result
+}
+
+async fn run_claimed_execution(
+    window: &Window,
+    app: &AppHandle,
+    mut session: IosExecutionSession,
+    plan: &IosLayoutPlan,
+    baseline: &super::types::IosLayoutSnapshot,
+    manager: &IosExecutionManager,
+) -> Result<IosExecutionSession, String> {
     session.status = IosExecutionStatus::Running;
     session.error = None;
     session.guidance_message = None;
     session.guidance_can_resume = false;
     session.updated_at = now_string();
-    storage::save_session(&app, &session)?;
+    save_execution_session(&app, manager, &mut session)?;
     emit_progress(&window, &session, "开始执行前检查".to_string());
 
     while session.current_index < plan.operations.len() {
@@ -267,6 +235,7 @@ pub async fn run_execution(
             }
         };
         preflight.inventory_hash = inventory_hash(&preflight.apps);
+        preflight.layout_hash = layout_hash(&preflight);
         if snapshot_contains_forbidden_text(&preflight) {
             return pause_for_guidance(
                 &window,
@@ -290,23 +259,35 @@ pub async fn run_execution(
                 false,
             );
         }
-        if !preflight_matches_expected_page(
-            &baseline,
+        let expected_before =
+            snapshot_after_operations(&baseline, &plan.operations[..session.current_index])
+                .map_err(|error| format!("无法构造动作前布局校验：{error}"))?;
+        if !matches_expected_page(
+            &expected_before,
             &preflight,
             &plan.operations[session.current_index],
         ) {
-            return pause_for_guidance(
-                &window,
-                &app,
-                manager,
-                &mut session,
-                "当前可观测 App 清单与方案来源不一致，请重新盘点".to_string(),
-                false,
-            );
+            let can_switch = matches_another_page(&expected_before, &preflight);
+            let message = if can_switch {
+                let super::types::IosOperation::MoveApp { from_page, .. } =
+                    &plan.operations[session.current_index]
+                else {
+                    unreachable!()
+                };
+                format!(
+                    "请在真实镜像中切换到第 {} 页并手动进入编辑模式，然后继续",
+                    from_page + 1
+                )
+            } else {
+                "当前 App 位置或识别结果与方案不一致，请重新盘点".to_string()
+            };
+            return pause_for_guidance(&window, &app, manager, &mut session, message, can_switch);
         }
 
         let batch = validate_batch(&plan, session.current_index)?;
-        for operation in batch {
+        // SpringBoard may shift neighbouring icons after one drag. Verify the
+        // entire visible page before allowing the next action.
+        for operation in batch.iter().take(1) {
             if stop_if_requested(&app, manager, &mut session)? {
                 return Ok(session);
             }
@@ -322,12 +303,18 @@ pub async fn run_execution(
             }
 
             let payload = to_value(operation).map_err(|error| error.to_string())?;
-            let outcome = match bridge::execute_action(
+            let action_result = bridge::execute_action(
                 &app,
                 &payload,
                 &plan.source_snapshot_id,
                 baseline.window_bounds.as_ref(),
-            ) {
+            );
+            // Cancellation can arrive while the helper is acting. Never let a
+            // late completion or guidance result revive a cancelled session.
+            if stop_if_requested(&app, manager, &mut session)? {
+                return Ok(session);
+            }
+            let outcome = match action_result {
                 Ok(value) => value,
                 Err(error) => {
                     return fail_execution(
@@ -335,7 +322,7 @@ pub async fn run_execution(
                         &app,
                         manager,
                         &mut session,
-                        format!("镜像辅助动作失败：{error}"),
+                        format!("无法确认镜像动作结果，已停止且不会重试；请重新盘点：{error}"),
                     )
                 }
             };
@@ -364,7 +351,7 @@ pub async fn run_execution(
             session.current_index += 1;
             session.guidance_message = None;
             session.updated_at = now_string();
-            storage::save_session(&app, &session)?;
+            save_execution_session(&app, manager, &mut session)?;
             emit_progress(
                 &window,
                 &session,
@@ -372,7 +359,11 @@ pub async fn run_execution(
             );
         }
 
-        let mut checkpoint = match bridge::capture_snapshot(&app, None) {
+        let checkpoint_result = bridge::capture_snapshot(&app, None);
+        if stop_if_requested(&app, manager, &mut session)? {
+            return Ok(session);
+        }
+        let mut checkpoint = match checkpoint_result {
             Ok(value) => value,
             Err(error) => {
                 return fail_execution(
@@ -385,6 +376,7 @@ pub async fn run_execution(
             }
         };
         checkpoint.inventory_hash = inventory_hash(&checkpoint.apps);
+        checkpoint.layout_hash = layout_hash(&checkpoint);
         if snapshot_contains_forbidden_text(&checkpoint) {
             return pause_for_guidance(
                 &window,
@@ -408,8 +400,11 @@ pub async fn run_execution(
                 false,
             );
         }
-        if !preflight_matches_expected_page(
-            &baseline,
+        let expected_after =
+            snapshot_after_operations(&baseline, &plan.operations[..session.current_index])
+                .map_err(|error| format!("无法构造动作后布局校验：{error}"))?;
+        if !matches_expected_page(
+            &expected_after,
             &checkpoint,
             &plan.operations[session.current_index.saturating_sub(1)],
         ) {
@@ -418,49 +413,36 @@ pub async fn run_execution(
                 &app,
                 manager,
                 &mut session,
-                "执行后可观测 App 集合发生变化，已禁止继续".to_string(),
+                "执行后 App 位置或识别结果与目标布局不一致，已停止；请重新盘点".to_string(),
             );
         }
 
         storage::save_snapshot(&app, &checkpoint)?;
         session.last_verified_snapshot_id = Some(checkpoint.id);
-        storage::save_session(&app, &session)?;
+        save_execution_session(&app, manager, &mut session)?;
+        if manager.paused.load(Ordering::SeqCst) {
+            return pause_for_guidance(
+                &window,
+                &app,
+                manager,
+                &mut session,
+                "执行已由用户暂停，当前动作的位置已验证".to_string(),
+                true,
+            );
+        }
     }
 
+    if stop_if_requested(&app, manager, &mut session)? {
+        return Ok(session);
+    }
     session.status = IosExecutionStatus::Completed;
     session.updated_at = now_string();
-    storage::save_session(&app, &session)?;
-    manager.clear(&session.id);
-    let _ = window.emit("ios-execution-completed", &session);
+    save_execution_session(&app, manager, &mut session)?;
+    if session.status == IosExecutionStatus::Completed {
+        manager.clear(&session.id);
+        let _ = window.emit("ios-execution-completed", &session);
+    } else if session.status == IosExecutionStatus::Paused {
+        let _ = window.emit("ios-execution-paused", &session);
+    }
     Ok(session)
-}
-
-fn operation_page(operation: &super::types::IosOperation) -> usize {
-    match operation {
-        super::types::IosOperation::MoveApp { from_page, .. }
-        | super::types::IosOperation::MoveToDock { from_page, .. } => *from_page,
-        super::types::IosOperation::CreateFolder { page, .. }
-        | super::types::IosOperation::RenameFolder { page, .. } => *page,
-    }
-}
-
-fn preflight_matches_expected_page(
-    baseline: &super::types::IosLayoutSnapshot,
-    actual: &super::types::IosLayoutSnapshot,
-    operation: &super::types::IosOperation,
-) -> bool {
-    if baseline.scan_scope == actual.scan_scope {
-        return inventory_matches(&baseline.apps, &actual.apps);
-    }
-
-    let expected_page = operation_page(operation);
-    let expected = baseline
-        .apps
-        .iter()
-        .filter(|app| {
-            app.current_page == Some(expected_page) && !app.in_dock && app.folder_name.is_none()
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    inventory_matches(&expected, &actual.apps)
 }

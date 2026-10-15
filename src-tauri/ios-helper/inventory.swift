@@ -2,19 +2,7 @@ import ApplicationServices
 import CoreGraphics
 import Foundation
 
-private let libraryTerms = ["app library", "资源库", "应用资源库", "app资源库"]
-private let searchTerms = ["search", "搜索"]
-private let ignoredLibraryLabels = Set([
-    "app library", "资源库", "应用资源库", "search", "搜索", "cancel", "取消",
-    "today", "今天", "suggestions", "建议", "recently added", "最近添加"
-])
-
-private func textContains(_ value: String, terms: [String]) -> Bool {
-    let normalized = value.lowercased().replacingOccurrences(of: " ", with: "")
-    return terms.contains {
-        normalized.contains($0.lowercased().replacingOccurrences(of: " ", with: ""))
-    }
-}
+let libraryTerms = Set(["applibrary", "资源库", "应用资源库", "app资源库"])
 
 private func visualFingerprint(
     _ image: CGImage,
@@ -84,11 +72,56 @@ private func fingerprint(_ image: CGImage) -> String? {
 }
 
 private func isAppLibrary(_ image: CGImage) -> Bool {
-    textContains(recognizeText(image).map(\.text).joined(separator: "\n"), terms: libraryTerms)
+    let hits = recognizeText(image)
+    guard let geometry = detectMirrorGeometry(image, hits: hits) else { return false }
+    return hits.contains { hit in
+        let y = (1 - hit.box.midY) * CGFloat(image.height)
+        return hit.confidence >= 0.90 && libraryTerms.contains(controlLabel(hit.text))
+            && y >= geometry.contentRect.minY
+            && y < geometry.contentRect.minY + geometry.contentRect.height * 0.20
+    }
 }
 
-private func postClick(_ target: WindowTarget, point: CGPoint) -> Bool {
-    guard prepareMirroringInputTarget(target, points: [point]) != nil else {
+func inventoryImageIsSafe(
+    _ image: CGImage, target: WindowTarget, hits: [TextHit]? = nil
+) -> Bool {
+    guard !inputWasCancelled() else { return false }
+    let hits = hits ?? recognizeText(image)
+    if containsForbiddenText(hits) {
+        dismissDangerousMenu(target: target)
+        return false
+    }
+    // A page swipe in edit mode can drag an icon. Check before every input,
+    // including the initial trip to the beginning of the Home Screen.
+    guard mirroringInputTargetStillMatches(target),
+          !mirrorConnectionBlocked(hits),
+          let geometry = detectMirrorGeometry(image, hits: hits),
+          geometry.confidence >= 0.90,
+          !editingModeActive(hits, image: image, geometry: geometry) else { return false }
+    return true
+}
+
+private func hasFirstHomePageEvidence(_ image: CGImage, hits: [TextHit]) -> Bool {
+    guard let geometry = detectMirrorGeometry(image, hits: hits) else { return false }
+    let searchPositions = hits.filter {
+        $0.confidence >= 0.90 && ["search", "搜索"].contains(controlLabel($0.text))
+    }.map {
+        ((1 - $0.box.midY) * CGFloat(image.height) - geometry.contentRect.minY)
+            / geometry.contentRect.height
+    }
+    // Today View and Spotlight have a top search field; they are not page zero.
+    guard !searchPositions.contains(where: { $0 < 0.22 }) else { return false }
+    if searchPositions.contains(where: { $0 >= 0.76 && $0 <= 0.90 }) { return true }
+    let positions = hits.filter { $0.confidence >= 0.90 && $0.box.width < 0.24 }
+        .compactMap { gridPosition($0, image: image, geometry: geometry) }
+    return positions.count >= 6
+        && Set(positions.map(\.column)).count >= 3
+        && Set(positions.map(\.row)).count >= 2
+}
+
+func postInventoryClick(_ target: WindowTarget, point: CGPoint) -> Bool {
+    guard !inputWasCancelled(),
+          prepareMirroringInputTarget(target, points: [point]) != nil else {
         return false
     }
     guard let down = CGEvent(
@@ -104,14 +137,16 @@ private func postClick(_ target: WindowTarget, point: CGPoint) -> Bool {
     ) else {
         return false
     }
-    down.postToPid(target.pid)
+    guard postInputUnlessCancelled({ down.postToPid(target.pid) }) else { return false }
     usleep(40_000)
+    // Cancellation still has to release the button already pressed above.
     up.postToPid(target.pid)
-    return true
+    return !inputWasCancelled()
 }
 
 private func swipePage(_ target: WindowTarget, image: CGImage, left: Bool) -> Bool {
-    guard let geometry = detectMirrorGeometry(image),
+    guard inventoryImageIsSafe(image, target: target),
+          let geometry = detectMirrorGeometry(image),
           geometry.confidence >= 0.90 else {
         return false
     }
@@ -130,8 +165,9 @@ private func swipePage(_ target: WindowTarget, image: CGImage, left: Bool) -> Bo
     )
 }
 
-private func swipeLibrary(_ target: WindowTarget, image: CGImage) -> Bool {
-    guard let geometry = detectMirrorGeometry(image),
+func swipeLibrary(_ target: WindowTarget, image: CGImage) -> Bool {
+    guard inventoryImageIsSafe(image, target: target),
+          let geometry = detectMirrorGeometry(image),
           geometry.confidence >= 0.90 else {
         return false
     }
@@ -140,26 +176,27 @@ private func swipeLibrary(_ target: WindowTarget, image: CGImage) -> Bool {
         target: target,
         from: CGPoint(
             x: bounds.minX + bounds.width * 0.52,
-            y: bounds.maxY - bounds.height * 0.12
+            // Search may have a keyboard open. Scroll only the list above it.
+            y: bounds.minY + bounds.height * 0.50
         ),
         to: CGPoint(
             x: bounds.minX + bounds.width * 0.52,
-            y: bounds.minY + bounds.height * 0.12
+            y: bounds.minY + bounds.height * 0.24
         )
     )
 }
 
 private func returnToFirstHomePage(_ target: WindowTarget) -> Bool {
     var previous: String?
+    var lastHomeFingerprint: String?
+    var unchanged = 0
     for _ in 0..<28 {
+        guard !inputWasCancelled() else { return false }
         guard let image = capture(target: target) else {
             return false
         }
         let hits = recognizeText(image)
-        if containsForbiddenText(hits) {
-            dismissDangerousMenu(target: target)
-            return false
-        }
+        guard inventoryImageIsSafe(image, target: target, hits: hits) else { return false }
         if isAppLibrary(image) {
             guard swipePage(target, image: image, left: false) else { return false }
             usleep(650_000)
@@ -168,10 +205,25 @@ private func returnToFirstHomePage(_ target: WindowTarget) -> Bool {
         guard let current = fingerprint(image) else {
             return false
         }
+        let looksLikeHome = hasFirstHomePageEvidence(image, hits: hits)
+        if looksLikeHome { lastHomeFingerprint = current }
         if current == previous {
-            // A right swipe that leaves the fingerprint unchanged confirms
-            // that the mirror is already on the first Home Screen page.
-            return true
+            unchanged += 1
+            if unchanged >= 2 {
+                if looksLikeHome { return true }
+                // The leftmost view may be Today View. Return to the exact
+                // neighboring Home Screen we just observed; never count Today
+                // View as a Home Screen or guess when starting in an unknown view.
+                guard let lastHomeFingerprint,
+                      swipePage(target, image: image, left: true) else { return false }
+                usleep(700_000)
+                guard let home = capture(target: target),
+                      inventoryImageIsSafe(home, target: target),
+                      fingerprint(home) == lastHomeFingerprint else { return false }
+                return hasFirstHomePageEvidence(home, hits: recognizeText(home))
+            }
+        } else {
+            unchanged = 0
         }
         previous = current
         guard swipePage(target, image: image, left: false) else {
@@ -207,118 +259,6 @@ private func pagePayload(
     return result
 }
 
-private func libraryApps(_ image: CGImage) -> [[String: Any]] {
-    let hits = recognizeText(image)
-    var apps = [[String: Any]]()
-    var seen = Set<String>()
-    for hit in hits {
-        let value = hit.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalized = value.lowercased()
-        guard hit.confidence >= 0.90,
-              value.count >= 2,
-              value.count <= 36,
-              !ignoredLibraryLabels.contains(normalized),
-              !textContains(value, terms: libraryTerms),
-              !containsForbiddenText([hit]) else {
-            continue
-        }
-        let id = normalizedId(value)
-        guard !seen.contains(id) else {
-            continue
-        }
-        seen.insert(id)
-        let (category, sensitive) = categoryFor(value)
-        apps.append([
-            "id": id,
-            "name": value,
-            "bundleId": NSNull(),
-            "category": category,
-            "sensitive": sensitive,
-            "confidence": Double(hit.confidence),
-            "source": "appLibraryVision",
-            "currentPage": NSNull(),
-            "currentRow": NSNull(),
-            "currentColumn": NSNull(),
-            "inDock": false,
-            "folderName": NSNull()
-        ])
-    }
-    return apps
-}
-
-private func scanAppLibrary(
-    _ target: WindowTarget,
-    libraryImage: CGImage
-) -> ([[String: Any]], Bool) {
-    let hits = recognizeText(libraryImage)
-    guard let geometry = detectMirrorGeometry(libraryImage, hits: hits),
-          geometry.confidence >= 0.90 else {
-        return ([], false)
-    }
-    guard let searchHit = hits.first(where: {
-        textContains($0.text, terms: libraryTerms)
-    }) else {
-        return ([], false)
-    }
-
-    let imagePoint = CGPoint(
-        x: searchHit.box.midX * CGFloat(libraryImage.width),
-        y: (1 - searchHit.box.midY) * CGFloat(libraryImage.height)
-    )
-    guard geometry.contentRect.contains(imagePoint) else {
-        return ([], false)
-    }
-    let point = globalPoint(
-        target: target,
-        image: libraryImage,
-        imagePoint: imagePoint
-    )
-    guard postClick(target, point: point) else {
-        return ([], false)
-    }
-    usleep(500_000)
-    guard let searchImage = capture(target: target),
-          recognizeText(searchImage).contains(where: {
-              textContains($0.text, terms: searchTerms)
-          }) else {
-        return ([], false)
-    }
-
-    var allApps = [[String: Any]]()
-    var seen = Set<String>()
-    var previous: String?
-    for _ in 0..<80 {
-        guard let image = capture(target: target) else {
-            return (allApps, false)
-        }
-        let currentHits = recognizeText(image)
-        if containsForbiddenText(currentHits) {
-            dismissDangerousMenu(target: target)
-            return (allApps, false)
-        }
-        for app in libraryApps(image) {
-            guard let id = app["id"] as? String, !seen.contains(id) else {
-                continue
-            }
-            seen.insert(id)
-            allApps.append(app)
-        }
-
-        let current = currentHits.map(\.text).joined(separator: "|")
-        if current == previous {
-            break
-        }
-        previous = current
-        guard swipeLibrary(target, image: image) else {
-            return (allApps, false)
-        }
-        usleep(650_000)
-    }
-
-    dismissDangerousMenu(target: target)
-    return (allApps, allApps.count >= 2)
-}
-
 func scanInventoryFromMirror(target: WindowTarget) -> [String: Any]? {
     guard AXIsProcessTrusted() else {
         diagnostic("Interactive inventory was blocked because Accessibility is not trusted")
@@ -343,14 +283,12 @@ func scanInventoryFromMirror(target: WindowTarget) -> [String: Any]? {
     var reachedLibrary = false
 
     for pageIndex in 0..<24 {
+        guard !inputWasCancelled() else { return nil }
         guard let image = capture(target: target) else {
             return nil
         }
         let hits = recognizeText(image)
-        if containsForbiddenText(hits) {
-            dismissDangerousMenu(target: target)
-            return nil
-        }
+        guard inventoryImageIsSafe(image, target: target, hits: hits) else { return nil }
         if isAppLibrary(image) {
             libraryImage = image
             reachedLibrary = true
@@ -385,7 +323,7 @@ func scanInventoryFromMirror(target: WindowTarget) -> [String: Any]? {
         (libraryAppsResult, complete) = scanAppLibrary(target, libraryImage: libraryImage)
     }
 
-    _ = returnToFirstHomePage(target)
+    let returnedToFirstPage = returnToFirstHomePage(target)
     let homeIdCounts = homeApps.reduce(into: [String: Int]()) { counts, app in
         guard let id = app["id"] as? String else { return }
         counts[id, default: 0] += 1
@@ -393,17 +331,22 @@ func scanInventoryFromMirror(target: WindowTarget) -> [String: Any]? {
     let ambiguousHomeIds = Set(
         homeIdCounts.compactMap { id, count in count > 1 ? id : nil }
     )
-    var allApps = [[String: Any]]()
-    var seenApps = Set<String>()
-    for var app in homeApps + libraryAppsResult {
-        guard let id = app["id"] as? String, !seenApps.contains(id) else {
+    var allApps = homeApps
+    let homeIds = Set(homeApps.compactMap { $0["id"] as? String })
+    // Home-screen entries are authoritative for position. App Library is only
+    // used to add apps that were not found on a Home Screen page; never collapse
+    // duplicate Home Screen labels into one identity.
+    for index in allApps.indices {
+        if let id = allApps[index]["id"] as? String,
+           ambiguousHomeIds.contains(id) {
+            allApps[index]["confidence"] = 0.0
+            allApps[index]["source"] = "ambiguousVision"
+        }
+    }
+    for app in libraryAppsResult {
+        guard let id = app["id"] as? String, !homeIds.contains(id) else {
             continue
         }
-        if ambiguousHomeIds.contains(id) {
-            app["confidence"] = 0.0
-            app["source"] = "ambiguousVision"
-        }
-        seenApps.insert(id)
         allApps.append(app)
     }
     let ids = allApps.compactMap { $0["id"] as? String }.sorted()
@@ -417,6 +360,7 @@ func scanInventoryFromMirror(target: WindowTarget) -> [String: Any]? {
         ? 0.0
         : confidenceValues.reduce(0, +) / Double(confidenceValues.count)
     let homePagesComplete = reachedLibrary && !pages.isEmpty
+    let fullInventoryComplete = complete && homePagesComplete && !allApps.isEmpty
     var warnings = [String]()
     if !homePagesComplete {
         warnings.append("未能可靠遍历到 App 资源库，当前清单只覆盖部分主屏幕页面，禁止用于全局整理方案。")
@@ -425,6 +369,12 @@ func scanInventoryFromMirror(target: WindowTarget) -> [String: Any]? {
     }
     if allApps.isEmpty {
         warnings.append("未识别到 App 名称，请确认镜像窗口没有被遮挡且屏幕录制权限有效。")
+    }
+    if !returnedToFirstPage {
+        warnings.append("盘点结束后未能确认已返回第一主屏幕，请在镜像中手动返回并重新确认当前页面。")
+    }
+    if homeApps.contains(where: { ($0["confidence"] as? Double) == 0 }) {
+        warnings.append("主屏幕存在同名 App 或同格位识别冲突，相关结果已降级为人工处理。")
     }
     if !ambiguousHomeIds.isEmpty {
         warnings.append(
@@ -443,12 +393,12 @@ func scanInventoryFromMirror(target: WindowTarget) -> [String: Any]? {
         "inventoryHash": String(format: "%016llx", hash),
         "confidence": confidence,
         "source": "iPhone Mirroring + Vision",
-        "scanScope": complete
+        "scanScope": fullInventoryComplete
             ? "homeScreenAndAppLibrary"
             : homePagesComplete
                 ? "homeScreenPages"
                 : "partialHomeScreenPages",
-        "inventoryComplete": complete,
+        "inventoryComplete": fullInventoryComplete,
         "warnings": warnings,
         "windowBounds": [
             "x": target.bounds.origin.x,

@@ -63,6 +63,7 @@ export interface IosLayoutSnapshot {
   pages: IosPageSnapshot[]
   dock: string[]
   inventoryHash: string
+  layoutHash: string
   confidence: number
   source: string
   scanScope: string
@@ -113,6 +114,7 @@ export interface IosLayoutPlan {
   template: string
   useAi: boolean
   operations: IosOperation[]
+  targetLayoutHash?: string
   warnings: string[]
   protectedAppIds: string[]
   createdAt: string
@@ -167,6 +169,39 @@ export function hasAllHomeScreenPages(snapshot: IosLayoutSnapshot | null | undef
     .sort((left, right) => left - right)
   return pageIndices.length === snapshot.pages.length
     && pageIndices.every((pageIndex, position) => pageIndex === position)
+}
+
+/** A preserved App set is necessary, but only the planned layout proves success. */
+export function getIosVerificationError(
+  source: IosLayoutSnapshot | null,
+  plan: IosLayoutPlan | null,
+  session: IosExecutionSession | null,
+  current: IosLayoutSnapshot,
+  sourceStale = false,
+) {
+  if (!source || !plan || plan.sourceSnapshotId !== source.id
+    || !session || session.planId !== plan.id || session.status !== 'completed'
+    || session.total !== plan.operations.length || session.currentIndex !== session.total) {
+    return sourceStale
+      ? 'iosOrganize.visual.snapshotStale' as const
+      : 'iosOrganize.error.verificationContext' as const
+  }
+  // A completed plan uses its source as historical evidence, not executable
+  // coordinates. Leaving manual interaction must not prevent a fresh full scan
+  // from verifying that immutable target, even though the source is now stale.
+  if (plan.operations.length === 0) return 'iosOrganize.error.noOperations' as const
+  if (!plan.targetLayoutHash?.trim()) return 'iosOrganize.error.verificationTarget' as const
+  if (!hasAllHomeScreenPages(source) || !hasAllHomeScreenPages(current)) {
+    return 'iosOrganize.error.verificationScope' as const
+  }
+  if (!source.inventoryHash || !current.inventoryHash
+    || source.inventoryHash !== current.inventoryHash) {
+    return 'iosOrganize.error.inventoryChanged' as const
+  }
+  if (!current.layoutHash || plan.targetLayoutHash !== current.layoutHash) {
+    return 'iosOrganize.error.layoutChanged' as const
+  }
+  return null
 }
 
 export async function getIosCapabilities() {

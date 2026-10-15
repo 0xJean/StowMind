@@ -52,7 +52,8 @@ func dockPoint(
 }
 
 func postDrag(target: WindowTarget, from: CGPoint, to: CGPoint) -> Bool {
-    guard prepareMirroringInputTarget(target, points: [from, to]) != nil else {
+    guard !inputWasCancelled(),
+          prepareMirroringInputTarget(target, points: [from, to]) != nil else {
         return false
     }
     guard let source = CGEvent(
@@ -75,20 +76,30 @@ func postDrag(target: WindowTarget, from: CGPoint, to: CGPoint) -> Bool {
     ) else {
         return false
     }
-    source.postToPid(target.pid)
+    guard postInputUnlessCancelled({ source.postToPid(target.pid) }) else { return false }
+    var lastPoint = from
+    defer {
+        // Even on cancellation, release only the button we already pressed,
+        // at its last position. Never jump to the intended destination.
+        release.location = lastPoint
+        release.postToPid(target.pid)
+    }
     usleep(80_000)
     for step in 1...12 {
+        guard !inputWasCancelled() else { return false }
         let progress = CGFloat(step) / 12.0
         let point = CGPoint(
             x: from.x + (to.x - from.x) * progress,
             y: from.y + (to.y - from.y) * progress
         )
-        move.location = point
-        move.postToPid(target.pid)
+        guard postInputUnlessCancelled({
+            move.location = point
+            move.postToPid(target.pid)
+            lastPoint = point
+        }) else { return false }
         usleep(35_000)
     }
-    release.postToPid(target.pid)
-    return true
+    return !inputWasCancelled()
 }
 
 func windowMatches(_ expected: [String: Any]?, target: WindowTarget) -> Bool {
@@ -97,7 +108,7 @@ func windowMatches(_ expected: [String: Any]?, target: WindowTarget) -> Bool {
           let y = expected["y"] as? Double,
           let width = expected["width"] as? Double,
           let height = expected["height"] as? Double else {
-        return true
+        return false
     }
     let tolerance = 2.0
     return abs(target.bounds.origin.x - x) <= tolerance
@@ -116,11 +127,26 @@ func guidance(_ message: String, canResume: Bool = false) -> [String: Any] {
     ]
 }
 
+private func actionLabels(
+    _ hits: [TextHit], image: CGImage, geometry: MirrorGeometry
+) -> [AppLabelEvidence] {
+    hits.compactMap { hit in
+        guard let position = gridPosition(hit, image: image, geometry: geometry) else {
+            return nil
+        }
+        return AppLabelEvidence(
+            id: normalizedId(hit.text), name: hit.text, confidence: Double(hit.confidence),
+            row: position.row, column: position.column
+        )
+    }
+}
+
 func executeAction(
     _ action: [String: Any],
     target: WindowTarget,
     expectedWindow: [String: Any]?
 ) -> [String: Any] {
+    guard !inputWasCancelled() else { return guidance("已紧急停止，未继续发送输入事件") }
     guard AXIsProcessTrusted() else {
         return guidance("当前镜像辅助组件没有辅助功能权限，未发送任何输入事件")
     }
@@ -134,13 +160,13 @@ func executeAction(
         return guidance("动作前安全截图失败，请检查屏幕录制权限")
     }
     let hits = recognizeText(before)
+    if containsForbiddenText(hits) {
+        dismissDangerousMenu(target: target)
+        return guidance("检测到删除、移除、隐藏或重置菜单，已关闭菜单并暂停")
+    }
     guard let beforeGeometry = detectMirrorGeometry(before, hits: hits),
           beforeGeometry.confidence >= 0.90 else {
         return guidance("无法以 90% 以上置信度定位 iPhone 屏幕，未发送任何输入事件")
-    }
-    if containsForbiddenText(hits) {
-        dismissDangerousMenu(target: target)
-        return guidance("检测到删除、移除或重置菜单，已关闭菜单并暂停")
     }
     guard editingModeActive(
         hits,
@@ -170,18 +196,11 @@ func executeAction(
           ) else {
         return guidance("来源 App 坐标无效，请重新盘点")
     }
-    let matches = hits.filter {
-        guard normalizedId($0.text) == appId,
-              let position = gridPosition(
-                  $0,
-                  image: before,
-                  geometry: beforeGeometry
-              ) else {
-            return false
-        }
-        return position.row == fromRow && position.column == fromColumn
-    }
-    guard matches.count == 1, matches[0].confidence >= 0.90 else {
+    guard hasUniqueAppEvidence(
+        labels: actionLabels(hits, image: before, geometry: beforeGeometry),
+        screenIds: hits.map { normalizedId($0.text) },
+        appId: appId, row: fromRow, column: fromColumn
+    ) else {
         return guidance("来源 App 识别不唯一或置信度低于 90%，请人工确认")
     }
 
@@ -224,37 +243,22 @@ func executeAction(
         return guidance("动作后安全截图失败，未确认 App 位置")
     }
     let afterHits = recognizeText(after)
+    guard mirroringInputTargetStillMatches(target) else {
+        return guidance("动作后镜像窗口已移动、缩放或失去焦点，实际结果未确认，请重新盘点")
+    }
+    if containsForbiddenText(afterHits) {
+        dismissDangerousMenu(target: target)
+        return guidance("动作后出现删除、移除或隐藏菜单，已关闭菜单并暂停验证")
+    }
     guard let afterGeometry = detectMirrorGeometry(after, hits: afterHits),
           afterGeometry.confidence >= 0.90 else {
         return guidance("动作后无法可靠定位 iPhone 屏幕，已暂停验证")
     }
-    if containsForbiddenText(afterHits) {
-        dismissDangerousMenu(target: target)
-        return guidance("动作后出现删除或移除菜单，已关闭菜单并暂停验证")
-    }
-    let atTarget = afterHits.contains {
-        guard normalizedId($0.text) == appId,
-              let position = gridPosition(
-                  $0,
-                  image: after,
-                  geometry: afterGeometry
-              ) else {
-            return false
-        }
-        return position.row == toRow && position.column == toColumn
-    }
-    let stillAtSource = afterHits.contains {
-        guard normalizedId($0.text) == appId,
-              let position = gridPosition(
-                  $0,
-                  image: after,
-                  geometry: afterGeometry
-              ) else {
-            return false
-        }
-        return position.row == fromRow && position.column == fromColumn
-    }
-    guard atTarget && !stillAtSource else {
+    guard hasUniqueAppEvidence(
+        labels: actionLabels(afterHits, image: after, geometry: afterGeometry),
+        screenIds: afterHits.map { normalizedId($0.text) },
+        appId: appId, row: toRow, column: toColumn
+    ) else {
         return guidance("动作后未能唯一确认目标位置，已暂停")
     }
     return [

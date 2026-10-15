@@ -30,7 +30,7 @@ export function IosOrganizerControlDeck({
   const { t } = useI18n()
 
   return (
-    <aside className="space-y-4">
+    <aside className="order-1 space-y-4 lg:order-2">
       <section className="ios-control-deck">
         <div className="flex items-start justify-between gap-4">
           <div>
