@@ -22,6 +22,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           autoClose={3000}
           hideProgressBar={false}
           newestOnTop
+          limit={3}
+          stacked
           closeOnClick
           pauseOnHover
           theme="colored"

@@ -1,4 +1,6 @@
 export interface MoleAnalyzeEntry {
+  scan_status?: string
+  reason?: string | null
   name: string
   path: string
   size: number
@@ -8,6 +10,8 @@ export interface MoleAnalyzeEntry {
 
 export interface MoleAnalyzeResult {
   path: string
+  scan_status?: string
+  reason?: string | null
   overview?: boolean
   entries: MoleAnalyzeEntry[]
   large_files?: MoleAnalyzeEntry[]

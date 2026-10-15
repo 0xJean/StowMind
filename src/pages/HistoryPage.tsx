@@ -20,6 +20,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import { MoleHistoryPanel } from './history/MoleHistoryPanel'
 
 type StatusFilter = 'all' | 'executed' | 'undone'
 type TypeFilter = 'all' | HistoryRecordType
@@ -178,6 +179,8 @@ export function HistoryPage() {
           </button>
         )}
       </div>
+
+      <MoleHistoryPanel />
 
       {history.length > 0 && (
         <div className="mb-6 space-y-3">

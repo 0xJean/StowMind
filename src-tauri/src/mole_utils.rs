@@ -21,6 +21,18 @@ pub fn mole_tokio_command() -> Result<tokio::process::Command, String> {
     Ok(command)
 }
 
+/// Return the update command bound to the exact Mole executable selected by
+/// StowMind. The UI runs this through its PTY so Homebrew/manual installs and
+/// STOWMIND_MO_PATH overrides cannot silently resolve a different `mo`.
+#[tauri::command]
+pub fn mole_update_command() -> Result<String, String> {
+    let executable = locate_mole_executable()?;
+    Ok(format!(
+        "{} update",
+        shell_quote(&executable.to_string_lossy())
+    ))
+}
+
 pub fn command_with_runtime_path<S: AsRef<OsStr>>(program: S) -> Command {
     let mut command = Command::new(program);
     command.env("PATH", runtime_path());

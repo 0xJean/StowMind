@@ -19,5 +19,15 @@ export default defineConfig({
     target: process.env.TAURI_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
     minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
     sourcemap: !!process.env.TAURI_DEBUG,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('/xterm/') || id.includes('/@xterm/')) return 'xterm'
+          if (id.includes('/lucide-react/')) return 'icons'
+          return undefined
+        },
+      },
+    },
   },
 })

@@ -53,7 +53,7 @@ Successful moves are **kept** if some items fail (no all-or-nothing rollback). C
 
 | Area | What you get |
 |------|----------------|
-| **System clean** | Native StowMind view powered by real `mo clean --dry-run` output for system caches, logs, browser caches, and dev tool caches |
+| **System clean** | Native StowMind view powered by real `mo clean --dry-run` output, with confirmed execution through Mole for system caches, logs, browser caches, and dev tool caches |
 | **Disk analysis** | Native StowMind view powered by real `mo analyze -json <path>` output |
 | **Build artifacts** | Mole purge preview and execution for a selected project directory |
 | **Installer cleanup** | Mole installer scan and cleanup functions for `.dmg`, `.pkg`, `.iso`, `.xip`, and installer-like `.zip` files |
@@ -208,9 +208,9 @@ Edit extensions and keywords per category, reorder categories, or **Reset defaul
 
 ### System Clean & Mole Console
 
-StowMind integrates [Mole](https://github.com/tw93/Mole) — an open-source (MIT) macOS/Windows deep cleaning tool by [@tw93](https://github.com/tw93) — as a source of system-level cleanup and maintenance capabilities.
+StowMind integrates [Mole](https://github.com/tw93/Mole) — an open-source macOS/Windows deep cleaning tool by [@tw93](https://github.com/tw93) — as a source of system-level cleanup and maintenance capabilities. Mole remains an external dependency; StowMind does not bundle a fixed Mole binary.
 
-Navigate to **System Clean** in the sidebar to run a real `mo clean --dry-run` preview. StowMind renders Mole's grouped preview, potential space, item count, categories, and raw output as a native page. This page is currently preview-only; execution still goes through `mo clean` in Mole Console.
+Navigate to **System Clean** in the sidebar to run a real `mo clean --dry-run` preview and execute the selected plan through Mole's `mo clean` command. StowMind renders Mole's grouped preview, potential space, item count, categories, and raw output as a native page; the destructive operation remains inside Mole.
 
 Navigate to **Build Artifacts** or **Installers** to reuse Mole `purge.sh` / `installer.sh` scanning and cleanup functions. Preview results come from Mole dry-run or scan functions; execution still calls Mole's own purge / installer cleanup logic. StowMind does not delete those files directly. Installer execution scans with Mole again and only cleans installer paths Mole still recognizes.
 
@@ -236,7 +236,9 @@ The console integration remains available as an execution path, advanced entry, 
 
 If Mole is not installed, StowMind shows an in-app installation guide with platform-specific instructions.
 
-> Mole is an independent open-source project by [@tw93](https://github.com/tw93), licensed under [MIT](https://github.com/tw93/Mole/blob/main/LICENSE). StowMind calls it as an external CLI tool and does not bundle or modify its source code.
+Mole updates are owned by Mole's installation channel. StowMind runs `mo update`, reports the detected executable path and version, and does not choose a release URL or pin a download. Use `brew upgrade mole` for Homebrew-managed installations or Mole's official installer flow for script-managed installations. StowMind detects available Mole capabilities at runtime so newer CLI flags can be enabled without silently assuming an older binary.
+
+> Mole is an independent open-source project by [@tw93](https://github.com/tw93), licensed under [GPL-3.0-or-later](https://github.com/tw93/Mole/blob/main/LICENSE). StowMind calls it as an external CLI tool and does not bundle or modify its source code.
 
 ---
 

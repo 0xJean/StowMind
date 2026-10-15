@@ -22,8 +22,8 @@ StowMind 的新定位是“以清理和系统维护为核心，AI 文件整理�
 
 | 模块 | Mole 能力 | 对 StowMind 的相关性 | 当前建议 |
 |---|---|---:|---|
-| 系统清理 | 清理系统缓存、应用日志、浏览器残留、开发工具缓存、AI 工具缓存等 | 高 | 原生页先做 `mo clean --dry-run` 预览，执行留在 Mole Console |
-| 软件 / 应用更新 | 查看应用更新、管理应用、清理卸载残留 | 高 | 目前已拆出卸载与安装包清理，更新检查仍缺专页 |
+| 系统清理 | 清理系统缓存、应用日志、浏览器残留、开发工具缓存、AI 工具缓存等 | 高 | 原生页使用 `mo clean --dry-run` 预览，并通过 Mole `mo clean` 执行确认后的计划 |
+| 软件 / 应用更新 | 查看应用更新、管理应用、清理卸载残留 | 高 | StowMind 保留自己的应用更新补充能力，并通过 Mole 诊断页展示工具更新来源和能力 |
 | 应用卸载 | 卸载 App 并清理偏好设置、Launch Agents、Containers 等残留 | 中 | 第二阶段包装，优先保留 Console |
 | 系统优化 | 重建 Quick Look、Spotlight、字体缓存、刷新 DNS 等 | 中 | 高级维护入口，优先保留 Console |
 | 磁盘分析 | Treemap/目录占用分析，定位大文件 | 高 | 使用 `mo analyze -json <path>` 原生展示 |
@@ -54,10 +54,10 @@ StowMind 的新定位是“以清理和系统维护为核心，AI 文件整理�
 
 当前边界：
 
-- `mo clean` 执行仍保留在 Mole Console，因为它涉及全局清理、白名单、sudo 和 Mole 自身交互确认。
+- `mo clean` 的复杂交互仍保留在 Mole Console；原生页面只执行经过预览和确认的 Mole 清理计划。
 - Purge / Installer 的删除动作在 Mole 脚本函数内部完成；StowMind 只传路径和记录结果。
 - 重复文件页只做扫描、选择和打开路径，不提供删除。
-- 软件更新检查、Doctor 诊断、状态页里的 GPU / 温度 / 符号化折线图 / pin / sort 仍未完全覆盖。
+- 软件更新检查仍由 StowMind 补充逻辑负责；Mole 工具更新、Doctor 诊断和状态页监控已经接入，Mole 新增字段继续通过兼容解析逐步覆盖。
 
 ## 集成方案
 
@@ -93,7 +93,7 @@ StowMind 的新定位是“以清理和系统维护为核心，AI 文件整理�
 
 ## 安全与合规
 
-- Mole 是 MIT 开源项目，当前 StowMind 声明为调用外部 CLI，不捆绑或修改源码。
+- Mole 是 GPL-3.0-or-later 开源项目，当前 StowMind 声明为调用外部 CLI，不捆绑或修改源码。
 - 如果未来捆绑 Mole 二进制，需要同步处理许可证、第三方声明、更新机制和安全审计。
 - 所有核心清理执行必须能追溯到 Mole 命令或 Mole 脚本函数。
 - StowMind 不提供自研废纸篓适配器或 `rm` 类执行路径作为核心清理能力。
@@ -122,16 +122,27 @@ StowMind 的新定位是“以清理和系统维护为核心，AI 文件整理�
 
 ## Mole 真实能力对接现状
 
-本机 Mole 1.35.0 已确认：
+本地适配基线应以运行时探测结果为准。历史记录中的本机 Mole 1.35.0 已过期；当前开发机已升级到 Homebrew Mole 1.60.0，并保留 1.57.0 的兼容验证记录。StowMind 不捆绑或硬编码 Mole 版本，而是通过可执行文件定位和 capability probe 选择可用能力。
+
+当前已确认：
 
 - `mo status -json`：可输出结构化系统状态，适合直接接入 Dashboard/Monitor。
+- `mo status --watch --interval 5s`：可输出持续的 NDJSON 状态流，适合系统监控长连接；应用在不支持该能力的版本上回退到单次 JSON 快照。
+- `mo history --json --limit N`：可输出 Mole 操作会话和删除记录，适合作为清理历史的真实来源。
 - `mo analyze -json <path>`：可输出结构化磁盘分析结果，已接入 Analyze 原生页面。
 - `mo clean --dry-run`：可真实预览系统清理，当前已通过适配器解析分组文本输出，接入“系统清理”原生 dry-run 预览页。
 - `mo purge --dry-run`：可真实预览构建产物清理；当前通过复用 Mole purge 脚本逻辑并限定 `PURGE_SEARCH_PATHS`，接入“构建产物”预览页。
 - Mole purge 执行：当前通过 source `purge.sh`、设置 `PURGE_SEARCH_PATHS`、调用 `start_purge; perform_purge` 完成。
 - `mo installer --dry-run`：公开 CLI 会进入选择型 TUI；当前通过 `MOLE_TEST_MODE=1` 复用 installer 扫描函数，接入“安装包”预览页。
 - Mole installer 执行：当前会先重新运行 Mole installer 扫描，将用户选择路径与 Mole 扫描结果取交集，再调用 Mole `delete_selected_installers` 和 `show_summary`。删除动作仍在 Mole 函数内，且可执行对象必须来自 Mole 扫描结果。
-- `mo uninstall --dry-run`、`mo optimize --dry-run`：适合第二阶段评估，优先保留 Console。
+- `mo uninstall --dry-run`：已接入应用管理页，并默认保留个人数据；只有明确勾选永久卸载时才传递 `--permanent`。`mo optimize --dry-run` 仍优先保留 Console。
+
+## 更新和诊断约束
+
+- 应用内更新只执行 Mole 的 `mo update`，更新源由 Homebrew 或 Mole 官方安装脚本决定。
+- `STOWMIND_MO_PATH` / `MO_PATH` 只影响 StowMind 使用的本地可执行文件；它们不选择发布版本。
+- 诊断不再依赖仓库中的旧 `scripts/check.sh` 路径。Homebrew 安装可能只提供运行时健康脚本，应用应通过 `mo --version`、`mo status -json` 和 capability probe 组成诊断结果。
+- 升级后至少验证 status、analyze、clean dry-run、purge dry-run 和 uninstall dry-run；失败时保留当前版本的兼容回退。
 
 ## 决策建议
 
@@ -139,7 +150,7 @@ StowMind 的新定位是“以清理和系统维护为核心，AI 文件整理�
 
 1. 保留 Mole Console，并继续作为高权限和复杂交互命令的执行入口。
 2. 优先把 `status`、`analyze`、`clean dry-run`、`purge`、`installer` 包装成稳定页面。
-3. Purge / Installer 可以通过 Mole 脚本函数执行；System Clean 执行暂留 Console。
+3. Purge / Installer 可以通过 Mole 脚本函数执行；System Clean 的复杂交互暂留 Console，确认后的计划由原生页面调用 Mole 执行。
 4. 重复文件保持辅助检查，不升级为删除功能，除非 Mole 后续提供对应能力。
 5. AI 文件整理保留为特色能力，负责处理“不该删除但需要归档”的用户文件。
 

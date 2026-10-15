@@ -4,6 +4,7 @@ import { useI18n } from '@/i18n'
 import { loadResultSnapshot, resultCacheKeys, saveResultSnapshot } from '@/lib/resultCache'
 import { formatDate, formatDecimal, formatFileSize } from '@/lib/utils'
 import { invoke } from '@tauri-apps/api/tauri'
+import { listen } from '@tauri-apps/api/event'
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -15,6 +16,7 @@ import { buildDiagnostics, findPrimaryDisk, sortProcesses } from './status/diagn
 import { buildHealthInsights } from './status/healthInsights'
 import { StatusHealthPanel } from './status/StatusHealthPanel'
 import { DIAGNOSTIC_VARIANT, formatMaybe, formatPercent, formatRate } from './status/utils'
+import { normalizeStatus } from './status/normalizeStatus'
 import {
   appendStatusHistory,
   createEmptyStatusHistory,
@@ -22,6 +24,8 @@ import {
   type ProcessSortKey,
   type StatusHistory,
 } from './status/StatusBento'
+
+const STATUS_REFRESH_INTERVAL_MS = 5_000
 
 export function StatusPage() {
   const { t } = useI18n()
@@ -44,7 +48,7 @@ export function StatusPage() {
     refreshInFlightRef.current = true
     setLoading(true)
     try {
-      const next = await invoke<MoleStatusRaw>('mole_status_raw_json')
+      const next = normalizeStatus(await invoke<unknown>('mole_status_raw_json'))
       setData(next)
       hasDataRef.current = true
       if (Date.now() - lastSnapshotWriteRef.current > 15_000) {
@@ -71,16 +75,89 @@ export function StatusPage() {
 
   useEffect(() => {
     if (!active) return
+    let cancelled = false
+    let watchStarted = false
+    let stopWatchListener: (() => void) | undefined
+    let stopWatchErrorListener: (() => void) | undefined
+    let fallbackTimer: number | undefined
+    const startFallback = () => {
+      if (cancelled || fallbackTimer !== undefined) return
+      fallbackTimer = window.setInterval(() => void refresh(), STATUS_REFRESH_INTERVAL_MS)
+    }
+
+    const applySnapshot = (payload: unknown) => {
+      try {
+        const next = normalizeStatus(payload)
+        setData(next)
+        hasDataRef.current = true
+        if (Date.now() - lastSnapshotWriteRef.current > 15_000) {
+          lastSnapshotWriteRef.current = Date.now()
+          void saveResultSnapshot(resultCacheKeys.statusRaw, next)
+        }
+        const nextPrimaryDisk = findPrimaryDisk(next.disks)
+        setHistory((current) => appendStatusHistory(current, next, nextPrimaryDisk))
+        setError(null)
+        lastErrorToastAtRef.current = 0
+      } catch (err) {
+        setError(String(err))
+      }
+    }
+
+    const setupWatch = async () => {
+      try {
+        stopWatchListener = await listen<unknown>('mole-status-watch', (event) => {
+          if (!cancelled) applySnapshot(event.payload)
+        })
+        if (cancelled) {
+          stopWatchListener()
+          return
+        }
+        stopWatchErrorListener = await listen<string>('mole-status-watch-error', (event) => {
+          if (cancelled) return
+          setError(event.payload)
+          void refresh()
+          startFallback()
+        })
+        if (cancelled) {
+          stopWatchErrorListener()
+          return
+        }
+        await invoke('mole_status_watch_start', { intervalMs: STATUS_REFRESH_INTERVAL_MS })
+        if (cancelled) {
+          void invoke('mole_status_watch_stop').catch(() => {})
+          return
+        }
+        watchStarted = true
+      } catch {
+        if (cancelled) return
+        // Older Mole versions may not support --watch. Keep the page usable
+        // with the existing snapshot command as a compatibility fallback.
+        startFallback()
+      }
+    }
+
     void (async () => {
       const snapshot = await loadResultSnapshot<MoleStatusRaw>(resultCacheKeys.statusRaw)
       if (snapshot) {
-        hasDataRef.current = true
-        setData(snapshot.payload)
+        try {
+          const cached = normalizeStatus(snapshot.payload)
+          hasDataRef.current = true
+          setData(cached)
+        } catch (err) {
+          setError(String(err))
+        }
       }
       await refresh()
+      await setupWatch()
     })()
-    const timer = window.setInterval(() => void refresh(), 1000)
-    return () => window.clearInterval(timer)
+
+    return () => {
+      cancelled = true
+      if (fallbackTimer !== undefined) window.clearInterval(fallbackTimer)
+      stopWatchListener?.()
+      stopWatchErrorListener?.()
+      if (watchStarted) void invoke('mole_status_watch_stop').catch(() => {})
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active])
 
@@ -113,11 +190,17 @@ export function StatusPage() {
         </div>
       </div>
 
-      {error && !data && (
+      {error && (
         <div className="iqon-card border-iqon-yellow/30 bg-iqon-yellow/10 p-4">
-          <div className="flex items-center gap-2 font-bold text-iqon-yellow">
-            <AlertTriangle className="h-5 w-5" />
-            {t('status.errorTitle')}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 font-bold text-iqon-yellow">
+              <AlertTriangle className="h-5 w-5" />
+              {t('status.errorTitle')}
+            </div>
+            <Button size="sm" variant="outline" onClick={() => void refresh()} disabled={loading}>
+              <RefreshCw className={`mr-2 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              {t('status.refresh')}
+            </Button>
           </div>
           <p className="mt-2 break-words text-xs text-muted-foreground">{error}</p>
         </div>

@@ -18,6 +18,7 @@ import { CleanCompletedPanel } from './clean/CleanCompletedPanel'
 import { CleanInteractionPrompt } from './clean/CleanInteractionPrompt'
 import { PendingCleanScanCard } from './clean/PendingCleanScanCard'
 import { CleanResultsPanel } from './clean/CleanResultsPanel'
+import { CleanScopeControls } from './clean/CleanScopeControls'
 import { CleanScanCard } from './clean/CleanScanCard'
 import {
   clearPendingCleanScan,
@@ -36,7 +37,6 @@ import {
   type MoleCleanPreviewOutput,
 } from './clean/types'
 import { useCleanPtyInteraction, type MoleCleanInteractionRequest } from './clean/useCleanPtyInteraction'
-
 const SCAN_IDLE_WARNING_MS = 30_000
 
 export function CleanPage() {
@@ -56,16 +56,15 @@ export function CleanPage() {
   const [completedClean, setCompletedClean] = useState<CleanCompletionResult | null>(null)
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [externalPath, setExternalPath] = useState('')
   const cancellingRef = useRef(false)
   const cleanInteraction = useCleanPtyInteraction()
-
   const sections = useMemo(() => sortCleanSectionsBySize(preview?.sections ?? []), [preview])
 
   const archiveCleanedPreview = (cleanedPreview: MoleCleanPreview, errors?: string[]) => {
     const timestamp = new Date().toISOString()
     const state = useAppStore.getState()
     const statistics = state.statistics
-
     state.addHistory(createCleanupHistoryRecord({
       type: 'clean',
       target: t('clean.title'),
@@ -84,7 +83,6 @@ export function CleanPage() {
       lastCleaned: timestamp,
     })
   }
-
   const finishCleanRun = ({
     status,
     previewToArchive,
@@ -138,7 +136,8 @@ export function CleanPage() {
     }
   }
 
-  const runPreview = async () => {
+  const runPreview = async (scopeOverride?: string) => {
+    const selectedExternalPath = scopeOverride ?? externalPath
     const startedAt = Date.now()
     const runId = `clean-${startedAt}-${Math.random().toString(36).slice(2)}`
     let unlistenOutput: (() => void) | null = null
@@ -171,15 +170,13 @@ export function CleanPage() {
         if (event.payload.run_id !== runId) return
         cleanInteraction.open(event.payload)
       })
-
-      const next = await invoke<MoleCleanPreview>('mole_clean_preview_pty', { runId })
+      const next = await invoke<MoleCleanPreview>('mole_clean_preview_pty', { runId, externalPath: selectedExternalPath.trim() || null })
       setPreview(next)
       setRawOpen(false)
       setScanOutput((current) => (
         current.length > 1 ? current : [...current, t('clean.scanStreamNoOutput')]
       ))
-
-      const savedSnapshot = await savePendingCleanScan(next)
+      const savedSnapshot = await savePendingCleanScan(next, selectedExternalPath)
       setPendingScan(hasCleanPreviewContent(next) ? savedSnapshot : null)
       setShowPendingChoice(false)
 
@@ -252,8 +249,7 @@ export function CleanPage() {
         if (event.payload.run_id !== runId) return
         cleanInteraction.open(event.payload)
       })
-
-      const result = await invoke<MoleCleanExecutionResult>('mole_clean_execute_pty', { runId })
+      const result = await invoke<MoleCleanExecutionResult>('mole_clean_execute_pty', { runId, externalPath: externalPath.trim() || null })
       if (pendingScan) {
         await clearPendingCleanScan(pendingScan.id)
       } else {
@@ -311,6 +307,7 @@ export function CleanPage() {
 
   const viewPendingScan = () => {
     if (!pendingScan) return
+    setExternalPath(pendingScan.externalPath ?? '')
     setCompletedClean(null)
     setPreview(pendingScan.preview)
     setRawOpen(false)
@@ -327,11 +324,13 @@ export function CleanPage() {
   const rescanPendingScan = () => {
     void (async () => {
       if (pendingScan) await clearPendingCleanScan(pendingScan.id)
+      const scope = pendingScan?.externalPath ?? ''
+      if (pendingScan) setExternalPath(scope)
       setPendingScan(null)
       setShowPendingChoice(false)
       setPreview(null)
       setCompletedClean(null)
-      await runPreview()
+      await runPreview(scope)
     })()
   }
 
@@ -417,6 +416,7 @@ export function CleanPage() {
   if (fullscreenScan) {
     return (
       <div className="stow-clean-fullscreen">
+        <CleanScopeControls externalPath={externalPath} onExternalPathChange={setExternalPath} disabled={loading} />
         <CleanScanCard
           fullScreen
           preview={preview}
@@ -448,6 +448,7 @@ export function CleanPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-8">
+        <CleanScopeControls externalPath={externalPath} onExternalPathChange={setExternalPath} disabled={loading} />
         <CleanScanCard
           preview={preview}
           loading={loading}

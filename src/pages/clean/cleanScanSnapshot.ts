@@ -11,6 +11,7 @@ export interface PendingCleanScanSnapshot {
   createdAt: string
   updatedAt: string
   status: 'pending'
+  externalPath?: string | null
   preview: MoleCleanPreview
 }
 
@@ -24,13 +25,14 @@ export async function loadPendingCleanScan() {
   return snapshot.payload
 }
 
-export async function savePendingCleanScan(preview: MoleCleanPreview) {
+export async function savePendingCleanScan(preview: MoleCleanPreview, externalPath?: string | null) {
   const now = new Date().toISOString()
   const snapshot: PendingCleanScanSnapshot = {
     id: `clean-scan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     createdAt: now,
     updatedAt: now,
     status: 'pending',
+    externalPath: externalPath?.trim() || null,
     preview,
   }
 

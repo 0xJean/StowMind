@@ -35,6 +35,7 @@ interface MoleExecuteOutcome {
 export function PurgePage() {
   const { t } = useI18n()
   const [directory, setDirectory] = useState('')
+  const [includeEmpty, setIncludeEmpty] = useState(false)
   const [preview, setPreview] = useState<MolePurgePreview | null>(null)
   const [loading, setLoading] = useState(false)
   const [executing, setExecuting] = useState(false)
@@ -63,7 +64,7 @@ export function PurgePage() {
       setPreview(null)
       return
     }
-    const snapshot = await loadResultSnapshot<MolePurgePreview>(resultCacheKeys.purgePreview(trimmed))
+    const snapshot = await loadResultSnapshot<MolePurgePreview>(resultCacheKeys.purgePreview(`${trimmed}::include-empty=${includeEmpty}`))
     setPreview(snapshot?.payload ?? null)
   }
 
@@ -78,9 +79,10 @@ export function PurgePage() {
     try {
       const next = await invoke<MolePurgePreview>('mole_purge_preview', {
         path: directory.trim(),
+        includeEmpty,
       })
       setPreview(next)
-      await saveResultSnapshot(resultCacheKeys.purgePreview(directory.trim()), next)
+      await saveResultSnapshot(resultCacheKeys.purgePreview(`${directory.trim()}::include-empty=${includeEmpty}`), next)
       addHistory(createCleanupHistoryRecord({
         type: 'purge',
         target: next.root || directory.trim(),
@@ -121,6 +123,7 @@ export function PurgePage() {
     try {
       const outcome = await invoke<MoleExecuteOutcome>('mole_purge_execute', {
         path: preview.root,
+        includeEmpty,
       })
       const itemCount = outcome.item_count || preview.items.length
       const totalSize = outcome.total_size || preview.total_size
@@ -146,7 +149,7 @@ export function PurgePage() {
       }
 
       setPreview(null)
-      await deleteResultSnapshot(resultCacheKeys.purgePreview(preview.root))
+      await deleteResultSnapshot(resultCacheKeys.purgePreview(`${preview.root}::include-empty=${includeEmpty}`))
       toast.success(t('purge.executeSuccess', { count: itemCount }))
     } catch (err) {
       toast.error(t('purge.executeFail', { error: String(err) }))
@@ -157,7 +160,7 @@ export function PurgePage() {
 
   useEffect(() => {
     void loadCachedPreview(directory)
-  }, [directory])
+  }, [directory, includeEmpty])
 
   const scanControls = (
     <div className="rounded-2xl border bg-surface-hover/60 p-4 text-left">
@@ -181,7 +184,9 @@ export function PurgePage() {
     </div>
   )
 
-  const fullscreenScan = !preview || loading
+  // A failed refresh can leave the previous preview in state. Show the scan
+  // card in that case so the error and retry action remain discoverable.
+  const fullscreenScan = !preview || loading || Boolean(scanError)
 
   if (fullscreenScan) {
     return (
@@ -190,7 +195,7 @@ export function PurgePage() {
           fullScreen
           actionDisabled={!directory.trim()}
           actionIcon={PackageX}
-          actionLabel={t('purge.preview')}
+          actionLabel={scanError ? t('purge.scanAgain') : t('purge.preview')}
           description={t('purge.scanIdleDesc')}
           elapsedLabel={t('clean.scanElapsed', { time: formatMaintenanceElapsed(scanElapsedMs) })}
           errorMessage={scanError}
@@ -226,6 +231,22 @@ export function PurgePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {scanControls}
+          <label className="flex items-start gap-3 rounded-2xl border border-border/70 bg-surface-hover/50 p-3 text-left text-sm">
+            <input
+              type="checkbox"
+              checked={includeEmpty}
+              onChange={(event) => {
+                setIncludeEmpty(event.target.checked)
+                setPreview(null)
+              }}
+              disabled={loading || executing}
+              className="mt-0.5 h-4 w-4 accent-primary"
+            />
+            <span>
+              <span className="block font-semibold">{t('purge.includeEmpty')}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">{t('purge.includeEmptyDesc')}</span>
+            </span>
+          </label>
           <Button onClick={() => void runPreview()} disabled={!directory.trim()}>
             <PackageX className="w-4 h-4 mr-2" />
             {t('purge.preview')}

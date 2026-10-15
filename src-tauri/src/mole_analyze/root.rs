@@ -129,6 +129,22 @@ pub async fn analyze_system_root(
 
     Ok(MoleAnalyzeResult {
         path: "/".to_string(),
+        scan_status: Some(
+            if warnings.is_empty() {
+                "complete"
+            } else {
+                "partial"
+            }
+            .to_string(),
+        ),
+        reason: if warnings.is_empty() {
+            None
+        } else {
+            Some(format!(
+                "{} path(s) could not be fully scanned",
+                warnings.len()
+            ))
+        },
         overview: false,
         entries,
         large_files,
@@ -157,6 +173,8 @@ fn emit_partial_result(
             run_id: run_id.to_string(),
             result: MoleAnalyzeResult {
                 path: "/".to_string(),
+                scan_status: Some("partial".to_string()),
+                reason: Some("System scan is still collecting root segments".to_string()),
                 overview: false,
                 entries,
                 large_files,
@@ -223,6 +241,8 @@ async fn run_root_segment(
 
 fn root_dir_entry(target: &RootScanTarget, size: u64) -> MoleAnalyzeEntry {
     MoleAnalyzeEntry {
+        scan_status: Some("complete".to_string()),
+        reason: None,
         name: target.name.clone(),
         path: target.path.to_string_lossy().to_string(),
         size,
@@ -233,6 +253,8 @@ fn root_dir_entry(target: &RootScanTarget, size: u64) -> MoleAnalyzeEntry {
 
 fn root_file_entry(target: &RootScanTarget) -> MoleAnalyzeEntry {
     MoleAnalyzeEntry {
+        scan_status: Some("complete".to_string()),
+        reason: None,
         name: target.name.clone(),
         path: target.path.to_string_lossy().to_string(),
         size: target.size,

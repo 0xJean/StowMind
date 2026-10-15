@@ -1,21 +1,26 @@
-import { useEffect, useMemo, useState, type ComponentType } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, type ComponentType } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { AnalyzePage } from './pages/AnalyzePage'
-import { ApplicationManagementPage } from './pages/ApplicationManagementPage'
-import { CleanPage } from './pages/CleanPage'
-import { DoctorPage } from './pages/DoctorPage'
-import { DuplicatesPage } from './pages/DuplicatesPage'
-import { HistoryPage } from './pages/HistoryPage'
-import { HomePage } from './pages/HomePage'
-import { InstallerPage } from './pages/InstallerPage'
-import { IosOrganizePage } from './pages/IosOrganizePage'
-import { OptimizePage } from './pages/OptimizePage'
-import { OrganizePage } from './pages/OrganizePage'
-import { PurgePage } from './pages/PurgePage'
-import { SettingsPage } from './pages/SettingsPage'
-import { SoftwareUpdatePage } from './pages/SoftwareUpdatePage'
-import { StatisticsPage } from './pages/StatisticsPage'
-import { StatusPage } from './pages/StatusPage'
+
+function lazyPage<T extends ComponentType>(loader: () => Promise<{ default: T }>) {
+  return lazy(loader)
+}
+
+const AnalyzePage = lazyPage(() => import('./pages/AnalyzePage').then((module) => ({ default: module.AnalyzePage })))
+const ApplicationManagementPage = lazyPage(() => import('./pages/ApplicationManagementPage').then((module) => ({ default: module.ApplicationManagementPage })))
+const CleanPage = lazyPage(() => import('./pages/CleanPage').then((module) => ({ default: module.CleanPage })))
+const DoctorPage = lazyPage(() => import('./pages/DoctorPage').then((module) => ({ default: module.DoctorPage })))
+const DuplicatesPage = lazyPage(() => import('./pages/DuplicatesPage').then((module) => ({ default: module.DuplicatesPage })))
+const HistoryPage = lazyPage(() => import('./pages/HistoryPage').then((module) => ({ default: module.HistoryPage })))
+const HomePage = lazyPage(() => import('./pages/HomePage').then((module) => ({ default: module.HomePage })))
+const InstallerPage = lazyPage(() => import('./pages/InstallerPage').then((module) => ({ default: module.InstallerPage })))
+const IosOrganizePage = lazyPage(() => import('./pages/IosOrganizePage').then((module) => ({ default: module.IosOrganizePage })))
+const OptimizePage = lazyPage(() => import('./pages/OptimizePage').then((module) => ({ default: module.OptimizePage })))
+const OrganizePage = lazyPage(() => import('./pages/OrganizePage').then((module) => ({ default: module.OrganizePage })))
+const PurgePage = lazyPage(() => import('./pages/PurgePage').then((module) => ({ default: module.PurgePage })))
+const SettingsPage = lazyPage(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })))
+const SoftwareUpdatePage = lazyPage(() => import('./pages/SoftwareUpdatePage').then((module) => ({ default: module.SoftwareUpdatePage })))
+const StatisticsPage = lazyPage(() => import('./pages/StatisticsPage').then((module) => ({ default: module.StatisticsPage })))
+const StatusPage = lazyPage(() => import('./pages/StatusPage').then((module) => ({ default: module.StatusPage })))
 
 interface KeepAliveRoute {
   path: string
@@ -89,7 +94,9 @@ export function AppRoutes() {
         const active = path === activePath
         return (
           <section key={path} hidden={!active} aria-hidden={!active}>
-            <Component />
+            <Suspense fallback={null}>
+              <Component />
+            </Suspense>
           </section>
         )
       })}

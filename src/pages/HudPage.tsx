@@ -3,6 +3,7 @@ import { useI18n } from '@/i18n'
 import { buildCleanupActivitySummary } from '@/lib/stowmind-supplements/cleanupActivity'
 import { formatDate, formatDecimal, formatFileSize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
+import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/tauri'
 import { appWindow } from '@tauri-apps/api/window'
 import {
@@ -22,7 +23,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { applyHudTraySettings, applyHudWindowMode, openHudPopover } from './hud/native'
-import { loadHudStatusCache, saveHudStatusCache } from './hud/cache'
+import { loadHudStatusCache, parseHudStatus, saveHudStatusCache } from './hud/cache'
 import { buildHudCpuAlert, notifyHudCpuAlert } from './hud/alerts'
 import { appendHudHistory, EMPTY_HUD_HISTORY, summarizeCleanupHistory, type HudHistory } from './hud/data'
 import { loadHudSettings, saveHudSettings, toggleHudMetric, type HudMetricKey, type HudSettings } from './hud/settings'
@@ -111,7 +112,7 @@ export function HudPage() {
     refreshInFlightRef.current = true
     setLoading(true)
     try {
-      const next = await invoke<MoleStatusRaw>('mole_status_raw_json')
+      const next = parseHudStatus(await invoke<unknown>('mole_status_raw_json'))
       setData(next)
       hasDataRef.current = true
       saveHudStatusCache(next)
@@ -119,7 +120,9 @@ export function HudPage() {
       setHudHistory((current) => appendHudHistory(current, next))
       setError(null)
       lastErrorToastAtRef.current = 0
-      await notifyHudCpuAlert(buildHudCpuAlert(next, t), settingsRef.current.cpuAlerts, t)
+      // Notifications are a side effect. Do not hold the monitor refresh open
+      // while the OS permission prompt is waiting for user input.
+      void notifyHudCpuAlert(buildHudCpuAlert(next, t), settingsRef.current.cpuAlerts, t)
     } catch (err) {
       const message = String(err)
       setError(message)
@@ -136,9 +139,72 @@ export function HudPage() {
 
   useEffect(() => {
     if (!active) return
+    let cancelled = false
+    let watchStarted = false
+    let stopWatchListener: (() => void) | undefined
+    let stopWatchErrorListener: (() => void) | undefined
+    let fallbackTimer: number | undefined
+    const startFallback = () => {
+      if (cancelled || fallbackTimer !== undefined) return
+      fallbackTimer = window.setInterval(() => void refresh(), 15_000)
+    }
+
+    const applySnapshot = (payload: unknown) => {
+      try {
+        const next = parseHudStatus(payload)
+        setData(next)
+        hasDataRef.current = true
+        saveHudStatusCache(next)
+        setCachedStatus(null)
+        setHudHistory((current) => appendHudHistory(current, next))
+        setError(null)
+        lastErrorToastAtRef.current = 0
+        void notifyHudCpuAlert(buildHudCpuAlert(next, t), settingsRef.current.cpuAlerts, t)
+      } catch (err) {
+        setError(String(err))
+      }
+    }
+
+    const setupWatch = async () => {
+      try {
+        stopWatchListener = await listen<unknown>('mole-status-watch', (event) => {
+          if (!cancelled) applySnapshot(event.payload)
+        })
+        if (cancelled) {
+          stopWatchListener()
+          return
+        }
+        stopWatchErrorListener = await listen<string>('mole-status-watch-error', (event) => {
+          if (cancelled) return
+          setError(event.payload)
+          void refresh()
+          startFallback()
+        })
+        if (cancelled) {
+          stopWatchErrorListener()
+          return
+        }
+        await invoke('mole_status_watch_start', { intervalMs: 5_000 })
+        if (cancelled) {
+          void invoke('mole_status_watch_stop').catch(() => {})
+          return
+        }
+        watchStarted = true
+      } catch {
+        if (cancelled) return
+        startFallback()
+      }
+    }
+
     void refresh()
-    const timer = window.setInterval(() => void refresh(), 15000)
-    return () => window.clearInterval(timer)
+    void setupWatch()
+    return () => {
+      cancelled = true
+      if (fallbackTimer !== undefined) window.clearInterval(fallbackTimer)
+      stopWatchListener?.()
+      stopWatchErrorListener?.()
+      if (watchStarted) void invoke('mole_status_watch_stop').catch(() => {})
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active])
 
@@ -167,8 +233,11 @@ export function HudPage() {
   }, [settings.alwaysOnTop, settings.compact, settings.hideDockIcon])
 
   useEffect(() => {
-    void applyHudTraySettings(settings, data, t, TRAY_ACTIVITY_FRAMES[trayFrameIndex]).catch(() => {})
-  }, [data, locale, settings, t, trayFrameIndex])
+    // The activity frame is rendered in the HUD itself. Rebuilding the native
+    // tray menu every second made the monitor feel unstable and was needlessly
+    // expensive, especially while the tray menu was open.
+    void applyHudTraySettings(settings, data, t).catch(() => {})
+  }, [data, locale, settings, t])
 
   useEffect(() => {
     const onMouseDown = (event: MouseEvent) => {
@@ -290,9 +359,14 @@ export function HudPage() {
             </div>
           )}
 
-          {error && !data && (
-            <div className="iqon-card p-5">
-              <h3 className="text-sm font-bold text-foreground">{t('hud.errorTitle')}</h3>
+          {error && (
+            <div className="iqon-card border-clean-yellow/30 bg-clean-yellow/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-sm font-bold text-clean-yellow">{t('hud.errorTitle')}</h3>
+                <Button type="button" variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
+                  {t('hud.refresh')}
+                </Button>
+              </div>
               <p className="mt-1 break-words text-xs text-muted-foreground">{error}</p>
             </div>
           )}

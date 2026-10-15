@@ -71,22 +71,28 @@ async fn load_uninstall_list(include_icons: bool) -> Result<MoleUninstallList, S
 pub async fn mole_uninstall_preview(
     uninstall_name: String,
     path: String,
+    permanent: Option<bool>,
 ) -> Result<MoleUninstallOperationOutput, String> {
     let item = validate_uninstall_target(uninstall_name, path).await?;
-    tokio::task::spawn_blocking(move || run_uninstall_command(&item, true))
-        .await
-        .map_err(|e| format!("Failed to join uninstall preview task: {e}"))?
+    tokio::task::spawn_blocking(move || {
+        run_uninstall_command(&item, true, permanent.unwrap_or(false))
+    })
+    .await
+    .map_err(|e| format!("Failed to join uninstall preview task: {e}"))?
 }
 
 #[tauri::command]
 pub async fn mole_uninstall_execute(
     uninstall_name: String,
     path: String,
+    permanent: Option<bool>,
 ) -> Result<MoleUninstallOperationOutput, String> {
     let item = validate_uninstall_target(uninstall_name, path).await?;
-    tokio::task::spawn_blocking(move || run_uninstall_command(&item, false))
-        .await
-        .map_err(|e| format!("Failed to join uninstall execute task: {e}"))?
+    tokio::task::spawn_blocking(move || {
+        run_uninstall_command(&item, false, permanent.unwrap_or(false))
+    })
+    .await
+    .map_err(|e| format!("Failed to join uninstall execute task: {e}"))?
 }
 
 async fn validate_uninstall_target(
@@ -125,11 +131,15 @@ async fn validate_uninstall_target(
 fn run_uninstall_command(
     item: &MoleUninstallItem,
     dry_run: bool,
+    permanent: bool,
 ) -> Result<MoleUninstallOperationOutput, String> {
     let mut command = mole_command()?;
     command.arg("uninstall");
     if dry_run {
         command.arg("--dry-run");
+    }
+    if permanent {
+        command.arg("--permanent");
     }
     command.arg(&item.uninstall_name);
     command.env("MO_NO_OPLOG", "1");

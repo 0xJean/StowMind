@@ -357,6 +357,17 @@ export function AnalyzePage() {
         onEntryContextMenu={openEntryContextMenu}
       />
 
+      {result?.scan_status && result.scan_status !== 'complete' && (
+        <div className="iqon-card border-iqon-yellow/30 bg-iqon-yellow/5 p-4">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-iqon-yellow">
+            <AlertTriangle className="h-4 w-4" />
+            {t('analyze.scanStatusPartial')}
+            <span className="iqon-pill border-iqon-yellow/30 text-iqon-yellow">{result.scan_status}</span>
+          </div>
+          {result.reason && <p className="mt-2 text-xs text-muted-foreground">{result.reason}</p>}
+        </div>
+      )}
+
       {scanError && (
         <div className="iqon-card border-iqon-yellow/30 bg-iqon-yellow/5 p-5">
           <div className="flex items-center gap-2 text-sm font-bold text-iqon-yellow">

@@ -10,6 +10,15 @@ export interface MoleDoctorCheck {
   section?: string
 }
 
+export interface MoleRuntimeInfo {
+  version?: string | null
+  executable?: string | null
+  install_method?: string
+  update_source?: string
+  update_command?: string
+  capabilities?: string[]
+}
+
 export interface MoleDoctorResult {
   collected_at: string
   platform: string
@@ -21,4 +30,5 @@ export interface MoleDoctorResult {
   update_message: string | null
   console_command: string
   raw_output: string
+  runtime?: MoleRuntimeInfo
 }

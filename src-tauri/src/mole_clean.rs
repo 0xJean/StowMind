@@ -38,12 +38,15 @@ pub struct MoleCleanPreviewOutput {
 }
 
 #[tauri::command]
-pub async fn mole_clean_preview() -> Result<MoleCleanPreview, String> {
-    let output = tokio::task::spawn_blocking(|| -> Result<std::process::Output, String> {
-        mole_command()?
-            .args(["clean", "--dry-run"])
-            .output()
-            .map_err(|e| e.to_string())
+pub async fn mole_clean_preview(external_path: Option<String>) -> Result<MoleCleanPreview, String> {
+    let external_path = normalize_external_path(external_path)?;
+    let output = tokio::task::spawn_blocking(move || -> Result<std::process::Output, String> {
+        let mut command = mole_command()?;
+        command.args(["clean", "--dry-run"]);
+        if let Some(path) = external_path.as_deref() {
+            command.args(["--external", path]);
+        }
+        command.output().map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| format!("Failed to join clean preview task: {e}"))?
@@ -71,9 +74,15 @@ pub async fn mole_clean_preview() -> Result<MoleCleanPreview, String> {
 pub async fn mole_clean_preview_stream(
     window: Window,
     run_id: String,
+    external_path: Option<String>,
 ) -> Result<MoleCleanPreview, String> {
-    let mut child = mole_tokio_command()?
-        .args(["clean", "--dry-run"])
+    let external_path = normalize_external_path(external_path)?;
+    let mut command = mole_tokio_command()?;
+    command.args(["clean", "--dry-run"]);
+    if let Some(path) = external_path.as_deref() {
+        command.args(["--external", path]);
+    }
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -141,6 +150,20 @@ pub async fn mole_clean_preview_stream(
     }
 
     Ok(parse_clean_preview(&raw_output))
+}
+
+pub(crate) fn normalize_external_path(path: Option<String>) -> Result<Option<String>, String> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let path = path.trim().to_string();
+    if path.is_empty() {
+        return Ok(None);
+    }
+    if !std::path::Path::new(&path).is_dir() {
+        return Err(format!("External clean path is not a directory: {path}"));
+    }
+    Ok(Some(path))
 }
 
 async fn read_clean_output_stream<R>(

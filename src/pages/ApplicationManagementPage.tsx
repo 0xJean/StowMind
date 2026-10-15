@@ -49,6 +49,7 @@ export function ApplicationManagementPage() {
   const [selected, setSelected] = useState<ManagedAppRow | null>(null)
   const [preview, setPreview] = useState<MoleUninstallOperationOutput | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const [permanentUninstall, setPermanentUninstall] = useState(false)
   const [loading, setLoading] = useState(false)
   const [updateLoading, setUpdateLoading] = useState(false)
   const [previewing, setPreviewing] = useState(false)
@@ -158,6 +159,7 @@ export function ApplicationManagementPage() {
     setSelected(row)
     setPreview(null)
     setConfirming(false)
+    setPermanentUninstall(false)
   }
 
   const reveal = (path: string) => {
@@ -171,6 +173,7 @@ export function ApplicationManagementPage() {
       const result = await invoke<MoleUninstallOperationOutput>('mole_uninstall_preview', {
         uninstallName: selected.uninstall.uninstall_name,
         path: selected.uninstall.path,
+        permanent: permanentUninstall,
       })
       setPreview(result)
       toast.success(t('apps.previewDone', { count: String(result.item_count || 1) }))
@@ -188,6 +191,7 @@ export function ApplicationManagementPage() {
       const result = await invoke<MoleUninstallOperationOutput>('mole_uninstall_execute', {
         uninstallName: selected.uninstall.uninstall_name,
         path: selected.uninstall.path,
+        permanent: permanentUninstall,
       })
       recordExecution(result)
       toast.success(t('apps.uninstallSuccess', { name: selected.uninstall.name }))
@@ -378,6 +382,19 @@ export function ApplicationManagementPage() {
           <div className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm">
             <p className="font-bold text-destructive">{t('apps.confirmTitle')}</p>
             <p className="mt-1 text-muted-foreground">{t('apps.confirmDesc', { name: selected.uninstall.name })}</p>
+            <label className="mt-3 flex items-start gap-3 rounded-xl border border-destructive/20 bg-background/30 p-3 text-left">
+              <input
+                type="checkbox"
+                checked={permanentUninstall}
+                onChange={(event) => setPermanentUninstall(event.target.checked)}
+                disabled={executing}
+                className="mt-0.5 h-4 w-4 accent-destructive"
+              />
+              <span>
+                <span className="block font-semibold">{t('apps.permanentUninstall')}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">{t('apps.permanentUninstallDesc')}</span>
+              </span>
+            </label>
             <div className="mt-3 flex gap-2">
               <Button variant="destructive" size="sm" onClick={() => void executeUninstall()} disabled={executing}>
                 {executing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

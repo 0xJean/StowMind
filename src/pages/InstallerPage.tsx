@@ -159,7 +159,10 @@ export function InstallerPage() {
   )
 
   const emptyPreview = Boolean(preview && items.length === 0)
-  const fullscreenScan = !preview || loading || emptyPreview
+  // Keep the scan state visible after a failed refresh, even when an older
+  // preview is still on screen. Otherwise the results view hides the error
+  // and leaves the user without an obvious way to retry.
+  const fullscreenScan = !preview || loading || emptyPreview || Boolean(scanError)
 
   if (fullscreenScan) {
     return (
@@ -167,7 +170,7 @@ export function InstallerPage() {
         <MaintenanceScanCard
           fullScreen
           actionIcon={Archive}
-          actionLabel={emptyPreview ? t('installer.scanAgain') : t('installer.preview')}
+          actionLabel={scanError || emptyPreview ? t('installer.scanAgain') : t('installer.preview')}
           description={emptyPreview ? t('installer.emptyDesc') : t('installer.scanIdleDesc')}
           elapsedLabel={t('clean.scanElapsed', { time: formatMaintenanceElapsed(scanElapsedMs) })}
           errorMessage={scanError}

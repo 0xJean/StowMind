@@ -26,6 +26,11 @@ export async function checkMoleInstallation() {
   }
 }
 
+/** Resolve `mo update` to the same executable selected by the Rust locator. */
+export async function resolveMoleUpdateCommand() {
+  return invoke<string>('mole_update_command')
+}
+
 export function fallbackMoleStatus(platform: MolePlatform = 'linux'): MoleInstallationStatus {
   return {
     installed: false,

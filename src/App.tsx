@@ -31,6 +31,10 @@ interface WatchFolderChangePayload {
   kind: string
 }
 
+const WATCH_TOAST_ID = 'watch-folder-change'
+const WATCH_TOAST_DEBOUNCE_MS = 750
+const WATCH_TOAST_COOLDOWN_MS = 8_000
+
 const LAST_ROUTE_KEY = 'stowmind.lastRoute.v1'
 const DISK_ACCESS_SETUP_KEY = 'stowmind.diskAccessSetup.v1'
 const MOLE_SETUP_KEY = 'stowmind.moleSetup.v1'
@@ -78,6 +82,9 @@ function App() {
   const previousPathRef = useRef(location.pathname)
   const restoredRouteRef = useRef(false)
   const startupUpdateCheckedRef = useRef(false)
+  const watchToastTimerRef = useRef<number | null>(null)
+  const watchToastLastShownAtRef = useRef(0)
+  const watchPendingChangesRef = useRef<{ kind: string; paths: Set<string> } | null>(null)
   const isHudRoute = location.pathname === '/hud'
   const [hudMounted, setHudMounted] = useState(() => isHudRoute)
   const [diskAccessPreference, setDiskAccessPreference] = useState<'done' | 'skipped' | null>(() => {
@@ -236,19 +243,60 @@ function App() {
   }, [location.pathname])
 
   useEffect(() => {
+    if (!watchFolderEnabled) return
+
     const unlisten = listen<WatchFolderChangePayload>('watch-folder-change', (event) => {
-      const sample = event.payload.paths[0] ?? ''
-      toast.info(
-        t('watch.notify', {
-          kind: event.payload.kind,
-          path: sample.length > 80 ? `${sample.slice(0, 80)}…` : sample,
-        })
-      )
+      // A save can produce several filesystem events. Collect a short burst
+      // into one notification, then suppress continuous activity for a while.
+      const now = Date.now()
+      if (now - watchToastLastShownAtRef.current < WATCH_TOAST_COOLDOWN_MS) return
+
+      const pending = watchPendingChangesRef.current ?? {
+        kind: event.payload.kind,
+        paths: new Set<string>(),
+      }
+      pending.kind = event.payload.kind
+      for (const path of event.payload.paths) pending.paths.add(path)
+      watchPendingChangesRef.current = pending
+
+      if (watchToastTimerRef.current !== null) return
+      watchToastTimerRef.current = window.setTimeout(() => {
+        watchToastTimerRef.current = null
+        const queued = watchPendingChangesRef.current
+        watchPendingChangesRef.current = null
+        if (!queued || queued.paths.size === 0) return
+
+        const shownAt = Date.now()
+        if (shownAt - watchToastLastShownAtRef.current < WATCH_TOAST_COOLDOWN_MS) return
+        watchToastLastShownAtRef.current = shownAt
+
+        const paths = Array.from(queued.paths).sort()
+        const rawSample = paths[0] ?? ''
+        const sample = rawSample.length > 80 ? `${rawSample.slice(0, 80)}…` : rawSample
+        const message = paths.length > 1
+          ? t('watch.notifyMany', {
+              kind: queued.kind,
+              path: sample,
+              count: paths.length - 1,
+            })
+          : t('watch.notify', { kind: queued.kind, path: sample })
+
+        if (toast.isActive(WATCH_TOAST_ID)) {
+          toast.update(WATCH_TOAST_ID, { render: message, type: 'info', autoClose: 3000 })
+        } else {
+          toast.info(message, { toastId: WATCH_TOAST_ID })
+        }
+      }, WATCH_TOAST_DEBOUNCE_MS)
     })
     return () => {
       unlisten.then((fn) => fn())
+      if (watchToastTimerRef.current !== null) {
+        window.clearTimeout(watchToastTimerRef.current)
+        watchToastTimerRef.current = null
+      }
+      watchPendingChangesRef.current = null
     }
-  }, [t])
+  }, [t, watchFolderEnabled])
 
   useEffect(() => {
     if (!diskAccessSetupResolved) return

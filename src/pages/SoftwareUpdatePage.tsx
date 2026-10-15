@@ -7,6 +7,7 @@ import {
   checkMoleInstallation,
   fallbackMoleStatus,
   MOLE_UPDATE_COMMAND,
+  resolveMoleUpdateCommand,
   type MoleInstallationStatus,
 } from '@/lib/mole'
 import { loadResultSnapshot, resultCacheKeys, saveResultSnapshot } from '@/lib/resultCache'
@@ -61,11 +62,19 @@ export function SoftwareUpdatePage() {
       setMoleStatus(status)
 
       if (!status.installed) {
+        setTerminalCommand(MOLE_UPDATE_COMMAND)
         setData(null)
         setError(null)
         clearMoleUpdate()
         await saveToolUpdateSnapshot(null, status)
         return
+      }
+
+      try {
+        setTerminalCommand(await resolveMoleUpdateCommand())
+      } catch {
+        // Keep the portable fallback for older/partially configured installs.
+        setTerminalCommand(MOLE_UPDATE_COMMAND)
       }
 
       setMoleUpdateChecking()
@@ -249,6 +258,13 @@ export function SoftwareUpdatePage() {
         <FieldRow label={t('softwareUpdate.field.version')} value={version} />
         <FieldRow label={t('softwareUpdate.field.platform')} value={formatMaybe(moleStatus?.platform)} />
         <FieldRow label={t('softwareUpdate.field.osVersion')} value={formatMaybe(data?.status.hardware.os_version)} />
+        <FieldRow label={t('softwareUpdate.field.installMethod')} value={formatMaybe(data?.runtime?.install_method)} />
+        <FieldRow label={t('softwareUpdate.field.updateSource')} value={formatMaybe(data?.runtime?.update_source)} />
+        <FieldRow label={t('softwareUpdate.field.executable')} value={formatMaybe(data?.runtime?.executable)} />
+        <FieldRow
+          label={t('softwareUpdate.field.capabilities')}
+          value={data?.runtime?.capabilities?.join(', ') || '—'}
+        />
         <FieldRow
           label={t('softwareUpdate.field.lastChecked')}
           value={checkedAt ? formatDate(checkedAt) : '—'}

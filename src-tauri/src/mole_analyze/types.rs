@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MoleAnalyzeResult {
     pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scan_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
     #[serde(default)]
     pub overview: bool,
     #[serde(default)]
@@ -17,6 +21,10 @@ pub struct MoleAnalyzeResult {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MoleAnalyzeEntry {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scan_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
     pub name: String,
     pub path: String,
     pub size: u64,

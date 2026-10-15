@@ -1,11 +1,19 @@
 use crate::mole_utils::mole_command;
-use serde::{Deserialize, Serialize};
+use serde::{de::Deserializer, Deserialize, Serialize};
 use std::process::{Child, Command, Output, Stdio};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 const MOLE_STATUS_TIMEOUT: Duration = Duration::from_secs(20);
 static MOLE_STATUS_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+fn deserialize_vec_or_default<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Ok(Option::<Vec<T>>::deserialize(deserializer)?.unwrap_or_default())
+}
 
 fn mole_status_lock() -> &'static tokio::sync::Mutex<()> {
     MOLE_STATUS_LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
@@ -32,12 +40,36 @@ pub struct MoleStatusMetrics {
     pub health_score_msg: String,
     pub cpu: MoleCpu,
     pub memory: MoleMemory,
+    #[serde(default, deserialize_with = "deserialize_vec_or_default")]
     pub disks: Vec<MoleDisk>,
     pub trash_size: u64,
     pub disk_io: MoleDiskIo,
+    #[serde(default, deserialize_with = "deserialize_vec_or_default")]
     pub network: Vec<MoleNetwork>,
+    #[serde(default, deserialize_with = "deserialize_vec_or_default")]
     pub batteries: Vec<MoleBattery>,
+    #[serde(default, deserialize_with = "deserialize_vec_or_default")]
     pub top_processes: Vec<MoleProcess>,
+    #[serde(default, deserialize_with = "deserialize_vec_or_default")]
+    pub gpu: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub trash_approx: bool,
+    #[serde(default)]
+    pub network_history: serde_json::Value,
+    #[serde(default)]
+    pub thermal: serde_json::Value,
+    #[serde(default)]
+    pub proxy: serde_json::Value,
+    #[serde(default, deserialize_with = "deserialize_vec_or_default")]
+    pub bluetooth: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub process_watch: serde_json::Value,
+    #[serde(default, deserialize_with = "deserialize_vec_or_default")]
+    pub process_alerts: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub sensors: serde_json::Value,
+    #[serde(default, deserialize_with = "deserialize_vec_or_default")]
+    pub zombie_parents: Vec<serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -59,7 +91,7 @@ pub struct MoleCpu {
     pub load15: f64,
     pub core_count: u64,
     pub logical_cpu: u64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_vec_or_default")]
     pub per_core: Vec<f64>,
     #[serde(default)]
     pub per_core_estimated: bool,
@@ -122,28 +154,6 @@ pub struct MoleProcess {
     pub command: String,
     pub cpu: f64,
     pub memory: f64,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct MoleStatusMetricsExtra {
-    #[serde(default)]
-    pub gpu: Vec<serde_json::Value>,
-    #[serde(default)]
-    pub trash_approx: bool,
-    #[serde(default)]
-    pub network_history: serde_json::Value,
-    #[serde(default)]
-    pub thermal: serde_json::Value,
-    #[serde(default)]
-    pub proxy: serde_json::Value,
-    #[serde(default)]
-    pub bluetooth: Vec<serde_json::Value>,
-    #[serde(default)]
-    pub process_watch: serde_json::Value,
-    #[serde(default)]
-    pub process_alerts: Vec<serde_json::Value>,
-    #[serde(default)]
-    pub sensors: serde_json::Value,
 }
 
 /// 获取当前平台标识

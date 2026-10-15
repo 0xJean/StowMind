@@ -16,10 +16,12 @@ mod mole_clean;
 mod mole_clean_execute_pty;
 mod mole_clean_pty;
 mod mole_doctor;
+mod mole_history;
 mod mole_installer;
 mod mole_optimize;
 mod mole_optimize_execute;
 mod mole_purge;
+mod mole_status_watch;
 mod mole_uninstall;
 mod mole_utils;
 mod organize_commands;
@@ -152,8 +154,12 @@ fn main() {
             result_cache::result_cache_delete,
             app_icons::app_icon_data_url_batch_json,
             deepclean::mole_check,
+            mole_utils::mole_update_command,
             deepclean::mole_status_json,
             deepclean::mole_status_raw_json,
+            mole_status_watch::mole_status_watch_start,
+            mole_status_watch::mole_status_watch_stop,
+            mole_history::mole_history_json,
             mole_analyze::process::mole_analyze_json,
             mole_analyze::mole_analyze_json_stream,
             mole_analyze::manager::mole_analyze_cancel,

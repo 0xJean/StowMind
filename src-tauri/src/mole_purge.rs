@@ -28,7 +28,10 @@ pub struct MoleExecuteOutcome {
 }
 
 #[tauri::command]
-pub async fn mole_purge_preview(path: String) -> Result<MolePurgePreview, String> {
+pub async fn mole_purge_preview(
+    path: String,
+    include_empty: Option<bool>,
+) -> Result<MolePurgePreview, String> {
     let root = path.trim().to_string();
     if root.is_empty() {
         return Err("Purge path is required".to_string());
@@ -37,10 +40,12 @@ pub async fn mole_purge_preview(path: String) -> Result<MolePurgePreview, String
         return Err(format!("Purge path is not a directory: {root}"));
     }
 
+    let include_empty = include_empty.unwrap_or(false);
     let root_for_task = root.clone();
-    let items = tokio::task::spawn_blocking(move || collect_purge_items(&root_for_task))
-        .await
-        .map_err(|e| format!("Failed to join purge preview task: {e}"))??;
+    let items =
+        tokio::task::spawn_blocking(move || collect_purge_items(&root_for_task, include_empty))
+            .await
+            .map_err(|e| format!("Failed to join purge preview task: {e}"))??;
 
     let total_size = items.iter().map(|item| item.size).sum();
     Ok(MolePurgePreview {
@@ -51,9 +56,10 @@ pub async fn mole_purge_preview(path: String) -> Result<MolePurgePreview, String
     })
 }
 
-fn collect_purge_items(root: &str) -> Result<Vec<MolePurgeItem>, String> {
+fn collect_purge_items(root: &str, include_empty: bool) -> Result<Vec<MolePurgeItem>, String> {
     let purge_script = locate_mole_script("purge.sh")?;
-    let output = Command::new("/bin/bash")
+    let mut command = Command::new("/bin/bash");
+    command
         .arg("-c")
         .arg(build_purge_collect_script(
             &purge_script.to_string_lossy(),
@@ -65,7 +71,11 @@ fn collect_purge_items(root: &str) -> Result<Vec<MolePurgeItem>, String> {
         .env(
             "XDG_CACHE_HOME",
             std::env::temp_dir().join("stowmind-mole-cache"),
-        )
+        );
+    if include_empty {
+        command.env("MOLE_PURGE_INCLUDE_EMPTY", "1");
+    }
+    let output = command
         .output()
         .map_err(|e| format!("Failed to run Mole purge preview: {e}"))?;
 
@@ -80,7 +90,7 @@ fn collect_purge_items(root: &str) -> Result<Vec<MolePurgeItem>, String> {
         });
     }
 
-    Ok(parse_purge_collect_records(&stdout))
+    Ok(parse_purge_collect_records(&stdout, include_empty))
 }
 
 fn build_purge_collect_script(purge_script: &str, root: &str) -> String {
@@ -106,7 +116,7 @@ fn build_purge_collect_script(purge_script: &str, root: &str) -> String {
     )
 }
 
-fn parse_purge_collect_records(raw: &str) -> Vec<MolePurgeItem> {
+fn parse_purge_collect_records(raw: &str, include_empty: bool) -> Vec<MolePurgeItem> {
     raw.split(RECORD_SEP)
         .filter_map(|record| {
             let record = record.trim_end_matches('\n');
@@ -117,7 +127,7 @@ fn parse_purge_collect_records(raw: &str) -> Vec<MolePurgeItem> {
             let mut parts = record.split(FIELD_SEP);
             let path = parts.next()?.trim().to_string();
             let size = parts.next()?.trim().parse::<u64>().ok()?;
-            if path.is_empty() || size == 0 {
+            if path.is_empty() || (!include_empty && size == 0) {
                 return None;
             }
 
@@ -127,7 +137,10 @@ fn parse_purge_collect_records(raw: &str) -> Vec<MolePurgeItem> {
 }
 
 #[tauri::command]
-pub async fn mole_purge_execute(path: String) -> Result<MoleExecuteOutcome, String> {
+pub async fn mole_purge_execute(
+    path: String,
+    include_empty: Option<bool>,
+) -> Result<MoleExecuteOutcome, String> {
     let root = path.trim().to_string();
     if root.is_empty() {
         return Err("Purge path is required".to_string());
@@ -136,6 +149,7 @@ pub async fn mole_purge_execute(path: String) -> Result<MoleExecuteOutcome, Stri
         return Err(format!("Purge path is not a directory: {root}"));
     }
 
+    let include_empty = include_empty.unwrap_or(false);
     let root_for_task = root.clone();
     let output = tokio::task::spawn_blocking(move || -> Result<Output, String> {
         let purge_script = locate_mole_script("purge.sh")?;
@@ -143,16 +157,22 @@ pub async fn mole_purge_execute(path: String) -> Result<MoleExecuteOutcome, Stri
             "export MOLE_SKIP_MAIN=1; \
              source {}; \
              PURGE_SEARCH_PATHS=({}); \
+             export MOLE_PURGE_INCLUDE_EMPTY={}; \
              unset MOLE_DRY_RUN; \
              start_purge; \
              perform_purge",
             shell_quote(&purge_script.to_string_lossy()),
-            shell_quote(&root_for_task)
+            shell_quote(&root_for_task),
+            if include_empty { "1" } else { "0" }
         );
         Command::new("/bin/bash")
             .arg("-c")
             .arg(script)
             .env("MOLE_SKIP_MAIN", "1")
+            .env(
+                "MOLE_PURGE_INCLUDE_EMPTY",
+                if include_empty { "1" } else { "0" },
+            )
             .output()
             .map_err(|e| e.to_string())
     })
@@ -218,12 +238,22 @@ mod tests {
     fn parses_purge_collect_records() {
         let raw = "/tmp/project/node_modules\x1f4096\x1e/tmp/project/target\x1f8192\x1e";
 
-        let items = parse_purge_collect_records(raw);
+        let items = parse_purge_collect_records(raw, false);
 
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].path, "/tmp/project/node_modules");
         assert_eq!(items[0].size, 4096);
         assert_eq!(items[1].path, "/tmp/project/target");
+    }
+
+    #[test]
+    fn includes_zero_size_purge_records_when_requested() {
+        let raw = "/tmp/project/empty0";
+
+        let items = parse_purge_collect_records(raw, true);
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].size, 0);
     }
 
     #[test]

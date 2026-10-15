@@ -125,18 +125,23 @@ impl ExecuteOutputEmitter {
 pub async fn mole_clean_execute_pty(
     window: Window,
     run_id: String,
+    external_path: Option<String>,
     state: State<'_, MoleCleanPtyManager>,
 ) -> Result<MoleCleanExecutionResult, String> {
     let manager = state.inner().clone();
-    tokio::task::spawn_blocking(move || run_mole_clean_execute_pty(window, run_id, manager))
-        .await
-        .map_err(|e| format!("Failed to join Mole clean PTY execution task: {e}"))?
+    let external_path = crate::mole_clean::normalize_external_path(external_path)?;
+    tokio::task::spawn_blocking(move || {
+        run_mole_clean_execute_pty(window, run_id, manager, external_path)
+    })
+    .await
+    .map_err(|e| format!("Failed to join Mole clean PTY execution task: {e}"))?
 }
 
 fn run_mole_clean_execute_pty(
     window: Window,
     run_id: String,
     manager: MoleCleanPtyManager,
+    external_path: Option<String>,
 ) -> Result<MoleCleanExecutionResult, String> {
     let command = locate_mole_executable()?.to_string_lossy().to_string();
     let pty_system = native_pty_system();
@@ -151,6 +156,9 @@ fn run_mole_clean_execute_pty(
 
     let mut cmd = CommandBuilder::new(&command);
     cmd.arg("clean");
+    if let Some(path) = external_path.as_deref() {
+        cmd.args(["--external", path]);
+    }
     for (key, value) in std::env::vars() {
         cmd.env(key, value);
     }

@@ -81,6 +81,16 @@ export interface MoleStatusMetrics {
   network: MoleNetwork[]
   batteries: MoleBattery[]
   top_processes: MoleProcess[]
+  gpu?: unknown[]
+  trash_approx?: boolean
+  network_history?: unknown
+  thermal?: unknown
+  proxy?: unknown
+  bluetooth?: unknown[]
+  process_watch?: unknown
+  process_alerts?: unknown[]
+  sensors?: unknown
+  zombie_parents?: unknown[]
 }
 
 export type DiagnosticLevel = 'success' | 'warning' | 'destructive'

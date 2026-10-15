@@ -52,7 +52,7 @@
 
 | 模块 | 说明 |
 |------|------|
-| **系统清理** | StowMind 原生页面，真实调用 `mo clean --dry-run` 预览系统缓存、日志、浏览器缓存和开发工具缓存 |
+| **系统清理** | StowMind 原生页面，真实调用 `mo clean --dry-run` 预览，并通过 Mole 执行确认后的系统缓存、日志、浏览器缓存和开发工具缓存清理 |
 | **磁盘分析** | StowMind 原生页面，真实调用 `mo analyze -json <path>` 输出 |
 | **构建产物** | 复用 Mole purge 逻辑，对用户选择的项目目录做 dry-run 预览，并通过 Mole purge 执行清理 |
 | **安装包清理** | 复用 Mole installer 的真实扫描与清理函数，处理 `.dmg`、`.pkg`、`.iso`、`.xip` 和安装型 `.zip` |
@@ -205,9 +205,9 @@ pnpm tauri build
 
 ### 系统清理与 Mole Console
 
-StowMind 集成 [Mole](https://github.com/tw93/Mole) — 由 [@tw93](https://github.com/tw93) 开发的开源（MIT）macOS/Windows 深度清理工具 — 作为系统级清理和维护能力来源。
+StowMind 集成 [Mole](https://github.com/tw93/Mole) — 由 [@tw93](https://github.com/tw93) 开发的开源 macOS/Windows 深度清理工具 — 作为系统级清理和维护能力来源。Mole 是外部依赖，StowMind 不内置固定版本的 Mole 二进制文件。
 
-在侧边栏进入 **系统清理**，StowMind 会真实调用 `mo clean --dry-run`，把 Mole 的分组预览、可释放空间、条目数和原始输出展示为原生页面。该页目前只读预览，执行仍通过 Mole Console 中的 `mo clean` 完成。
+在侧边栏进入 **系统清理**，StowMind 会真实调用 `mo clean --dry-run`，把 Mole 的分组预览、可释放空间、条目数和原始输出展示为原生页面，并通过 Mole 的 `mo clean` 执行确认后的清理计划。实际删除动作仍由 Mole 完成。
 
 进入 **构建产物** 或 **安装包**，StowMind 会复用 Mole `purge.sh` / `installer.sh` 的真实扫描与清理函数。预览由 Mole dry-run 或扫描函数产生；执行时仍调用 Mole 自己的 purge / installer 清理逻辑，StowMind 不直接删除文件。安装包执行前会重新运行 Mole installer 扫描，只清理 Mole 仍能识别的安装包路径。
 
@@ -225,6 +225,10 @@ StowMind 集成 [Mole](https://github.com/tw93/Mole) — 由 [@tw93](https://git
 | 安装包清理 | `mo installer` | 查找 `.dmg`、`.pkg` 等安装包文件 |
 
 控制台式集成会继续保留，作为执行入口、高级入口、兼容入口和排障入口。所有核心清理路径都必须对接 Mole 的真实能力；若 Mole 没有对应能力，例如重复文件删除，StowMind 只提供辅助检查，不把它包装成核心清理。
+
+Mole 的版本和更新源由安装渠道决定。StowMind 只执行 `mo update`，展示当前 Mole 的版本、路径和能力探测结果，不在应用内拼接版本下载地址，也不硬编码发布版本。Homebrew 安装使用 `brew upgrade mole`，脚本安装使用 Mole 官方安装流程。
+
+> Mole 是由 [@tw93](https://github.com/tw93/Mole) 开发的独立开源项目，使用 [GPL-3.0-or-later](https://github.com/tw93/Mole/blob/main/LICENSE) 许可证。StowMind 以外部 CLI 方式调用，不捆绑或修改其源码。
 
 ---
 
