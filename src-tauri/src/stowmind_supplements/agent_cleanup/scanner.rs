@@ -47,7 +47,21 @@ pub(super) fn scan(home: &Path, policy: AgentCleanupPolicy, now: i64) -> AgentCl
         let Ok(entries) = fs::read_dir(&root) else {
             continue;
         };
-        for entry in entries.flatten().take(MAX_ITEM_ENTRIES) {
+        let mut root_items = Vec::new();
+        let mut scanned_entries = 0usize;
+        let mut truncated = false;
+        for entry in entries {
+            if scanned_entries >= MAX_ITEM_ENTRIES {
+                // A large Crashpad directory can contain millions of dumps.
+                // Stop at a hard bound and surface a protected marker instead
+                // of presenting an incomplete scan as safe to clean.
+                truncated = true;
+                break;
+            }
+            scanned_entries += 1;
+            let Ok(entry) = entry else {
+                continue;
+            };
             let path = entry.path();
             if entry
                 .file_type()
@@ -57,14 +71,54 @@ pub(super) fn scan(home: &Path, policy: AgentCleanupPolicy, now: i64) -> AgentCl
                 continue;
             }
             if let Some(item) = inspect_item(&path, spec, &policy, now) {
-                items.push(item);
+                root_items.push(item);
             }
+        }
+        if truncated {
+            // Do not mix a partial list of executable entries with the
+            // protected marker. A user must receive a complete preview before
+            // any item from this root can be selected for cleanup.
+            items.push(scan_limit_marker(&root, spec, scanned_entries as u64));
+        } else {
+            items.extend(root_items);
         }
     }
     items.extend(git::scan(home, &policy, now));
     let mut agents = agent_summaries(specs, home);
     git::augment_agent_summaries(&mut agents, home);
     build_preview(policy, agents, items, now)
+}
+
+/// Build a non-selectable marker when an allow-listed directory exceeds the
+/// bounded scan budget.  The marker is intentionally not executable: deleting
+/// the directory would defeat per-file retention checks for Crashpad dumps.
+fn scan_limit_marker(
+    root: &Path,
+    spec: &super::types::AgentRootSpec,
+    scanned_entries: u64,
+) -> AgentCleanupItem {
+    let path = root.to_string_lossy().to_string();
+    let modified_at = fs::symlink_metadata(root)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or_default();
+    AgentCleanupItem {
+        id: format!("scan-limit:{path}"),
+        agent: spec.agent_id.to_string(),
+        category: spec.category.as_str().to_string(),
+        path,
+        size: 0,
+        entry_count: scanned_entries,
+        modified_at,
+        eligible: false,
+        default_selected: false,
+        protected: true,
+        reason: format!(
+            "Scan stopped after {MAX_ITEM_ENTRIES} entries; remaining files are protected and require manual inspection"
+        ),
+    }
 }
 
 pub(super) fn inspect_item(
@@ -294,6 +348,29 @@ pub(super) fn agent_process_running(agent_id: &str) -> bool {
     active
 }
 
+/// Git metadata can be written by any coding Agent, not only Codex. Keep the
+/// repository protected while one of the supported Agent processes is active.
+pub(super) fn any_agent_process_running() -> bool {
+    [
+        "codex",
+        "opencode",
+        "claude_code",
+        "kiro",
+        "devin",
+        "cursor",
+        "windsurf",
+        "gemini",
+        "antigravity",
+        "continue",
+        "copilot",
+        "amazon_q",
+        "cline",
+        "goose",
+    ]
+    .into_iter()
+    .any(agent_process_running)
+}
+
 pub(super) fn refresh_process_cache() {
     if let Some(cache) = PROCESS_CACHE.get() {
         if let Ok(mut entries) = cache.lock() {
@@ -337,95 +414,5 @@ pub(super) fn home_dir() -> Option<PathBuf> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{build_preview, contains_protected_descendant, protected_artifact_name, scan};
-    use crate::stowmind_supplements::agent_cleanup::types::AgentCleanupPolicy;
-    use std::fs;
-
-    #[test]
-    fn sensitive_application_state_is_protected_by_name() {
-        assert!(protected_artifact_name(std::path::Path::new("Cookies")));
-        assert!(protected_artifact_name(std::path::Path::new(
-            "session.json"
-        )));
-        assert!(!protected_artifact_name(std::path::Path::new("old-cache")));
-    }
-
-    #[test]
-    fn nested_sensitive_state_protects_the_whole_candidate() {
-        let root = std::env::temp_dir().join("stowmind-agent-sensitive-test");
-        let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(root.join("nested/IndexedDB")).unwrap();
-        assert!(contains_protected_descendant(&root));
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn scan_uses_leaf_roots_and_reports_missing_agents() {
-        let home = std::env::temp_dir().join("stowmind-agent-scan-test");
-        let _ = fs::remove_dir_all(&home);
-        fs::create_dir_all(home.join(".codex/cache/old")).unwrap();
-        fs::write(home.join(".codex/cache/old/payload"), "x").unwrap();
-        fs::create_dir_all(home.join("Library/Application Support/Codex/Crashpad/pending"))
-            .unwrap();
-        fs::write(
-            home.join("Library/Application Support/Codex/Crashpad/pending/report.dmp"),
-            "x",
-        )
-        .unwrap();
-        fs::create_dir_all(home.join(".continue/index")).unwrap();
-        fs::write(home.join(".continue/index/index.sqlite"), "x").unwrap();
-        fs::create_dir_all(home.join(".copilot/logs")).unwrap();
-        fs::write(home.join(".copilot/logs/process.log"), "x").unwrap();
-        fs::create_dir_all(home.join(".gemini/antigravity-cli/log")).unwrap();
-        fs::write(home.join(".gemini/antigravity-cli/log/cli.log"), "x").unwrap();
-        fs::create_dir_all(home.join(".cline/data/logs")).unwrap();
-        fs::write(home.join(".cline/data/logs/cline.log"), "x").unwrap();
-        fs::create_dir_all(home.join(".local/state/goose/logs")).unwrap();
-        fs::write(home.join(".local/state/goose/logs/cli.log"), "x").unwrap();
-        let preview = scan(
-            &home,
-            AgentCleanupPolicy {
-                min_age_days: 0,
-                ..Default::default()
-            },
-            super::epoch_now(),
-        );
-        assert!(preview
-            .agents
-            .iter()
-            .any(|agent| agent.id == "codex" && agent.available));
-        for agent_id in [
-            "opencode",
-            "kiro",
-            "devin",
-            "windsurf",
-            "gemini",
-            "antigravity",
-            "continue",
-            "copilot",
-            "amazon_q",
-            "cline",
-            "goose",
-        ] {
-            assert!(preview.agents.iter().any(|agent| agent.id == agent_id));
-        }
-        for agent_id in ["continue", "copilot", "gemini", "cline", "goose"] {
-            assert!(preview
-                .agents
-                .iter()
-                .any(|agent| agent.id == agent_id && agent.available));
-        }
-        assert!(preview.items.iter().any(|item| item.category == "cache"));
-        assert!(preview.items.iter().any(|item| {
-            item.category == "temporary" && item.path.ends_with("Crashpad/pending")
-        }));
-        let _ = fs::remove_dir_all(home);
-    }
-
-    #[test]
-    fn empty_preview_has_no_protected_items() {
-        let preview = build_preview(AgentCleanupPolicy::default(), Vec::new(), Vec::new(), 1);
-        assert!(preview.protected.is_empty());
-    }
-}
+#[path = "scanner_tests.rs"]
+mod tests;

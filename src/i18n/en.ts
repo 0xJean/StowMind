@@ -1192,6 +1192,9 @@ export const en = {
   'agentCleanup.cleanSuccess': 'Agent cleanup completed: {count} item(s), {size} freed',
   'agentCleanup.resultTitle': 'Cleanup completed',
   'agentCleanup.resultSummary': 'Removed {count} item(s) and freed {size}.',
+  'agentCleanup.resultSkipped': 'Skipped {skipped} item(s); {errors} error(s) recorded in history.',
+  'agentCleanup.gitPruneRisk': 'Git unreachable object pruning is irreversible; this warning was saved in history.',
+  'agentCleanup.gitPruneConfirm': 'This permanently prunes unreachable Git objects and removes reflog recovery points older than the retention period. Continue?',
   'agentCleanup.category.cache': 'Cache',
   'agentCleanup.category.log': 'Logs',
   'agentCleanup.category.temporary': 'Temporary files',
@@ -1667,6 +1670,7 @@ export const en = {
   'history.type.installer': 'Installers',
   'history.type.uninstall': 'App uninstall',
   'history.type.optimize': 'System optimize',
+  'history.type.agent-cleanup': 'Agent cleanup',
   'history.statusUndone': 'Undone',
   'history.statusExecuted': 'Executed',
   'history.partialErrors': 'Partial failures',
@@ -1677,6 +1681,7 @@ export const en = {
   'history.spaceFreed': '{size} freed',
   'history.spacePotential': '{size} potential',
   'history.cleanupErrors': 'Cleanup failures',
+  'history.cleanupSkipped': 'Skipped: {n}',
   'history.undo': 'Undo',
   'history.undoNoMoves': 'No move details — cannot undo',
   'history.undoAlready': 'Already undone',
@@ -1730,6 +1735,7 @@ export const en = {
   'stats.typeFreed': '{size} freed',
   'stats.typeFiles': '{n} files',
   'stats.typeNever': 'No history yet',
+  'stats.typeSkipped': '{n} skipped',
 
   // HistoryPage
   'history.filterTypeAll': 'All types',

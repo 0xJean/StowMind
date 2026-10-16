@@ -4,6 +4,7 @@ import { useAppStore, type HistoryRecord, type HistoryRecordType } from '@/store
 import {
   Archive,
   BarChart3,
+  Bot,
   CalendarDays,
   Copy,
   FolderOpen,
@@ -40,6 +41,7 @@ const TYPE_META: TypeMeta[] = [
   { type: 'installer', icon: Archive, tone: 'cyan' },
   { type: 'uninstall', icon: PackageX, tone: 'purple' },
   { type: 'optimize', icon: Zap, tone: 'green' },
+  { type: 'agent-cleanup', icon: Bot, tone: 'red' },
   { type: 'duplicates', icon: Copy, tone: 'cyan' },
 ]
 
@@ -66,13 +68,14 @@ export function StatisticsPage() {
   const executedHistory = useMemo(() => history.filter(isExecuted), [history])
 
   const byType = useMemo(() => {
-    const map = new Map<HistoryRecordType, { count: number; freed: number; items: number; latest?: string }>()
+    const map = new Map<HistoryRecordType, { count: number; freed: number; items: number; skipped: number; latest?: string }>()
     for (const record of executedHistory) {
       const type = record.type ?? 'organize'
-      const current = map.get(type) ?? { count: 0, freed: 0, items: 0 }
+      const current = map.get(type) ?? { count: 0, freed: 0, items: 0, skipped: 0 }
       current.count += 1
       current.freed += recordSize(record)
       current.items += recordItemCount(record)
+      current.skipped += record.cleanupSummary?.skippedCount ?? 0
       if (!current.latest || record.timestamp > current.latest) current.latest = record.timestamp
       map.set(type, current)
     }
@@ -293,7 +296,7 @@ function TypeBreakdownTile({
 }: {
   meta: TypeMeta
   label: string
-  stat: { count: number; freed: number; items: number; latest?: string } | undefined
+  stat: { count: number; freed: number; items: number; skipped: number; latest?: string } | undefined
   t: ReturnType<typeof useI18n>['t']
 }) {
   const tt = TONE[meta.tone]
@@ -316,6 +319,11 @@ function TypeBreakdownTile({
           {stat.freed > 0 && (
             <p className="mt-2 text-[10px] text-muted-foreground">
               {t('stats.typeFreed', { size: formatFileSize(stat.freed) })}
+            </p>
+          )}
+          {stat.skipped > 0 && (
+            <p className="mt-1 text-[10px] text-iqon-yellow">
+              {t('stats.typeSkipped', { n: stat.skipped })}
             </p>
           )}
           {meta.type === 'organize' && stat.items > 0 && (

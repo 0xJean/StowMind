@@ -1,8 +1,9 @@
 use super::super::types::AgentCleanupPolicy;
 use super::{
-    command_error, directory_size, inspect_ref, parse_prune_item_id, parse_ref_item_id, run_git,
+    command_error, inspect_ref, parse_prune_item_id, parse_ref_item_id, run_git,
     scan_unreachable_objects, validate_repository, PRUNE_ITEM_PREFIX, REF_ITEM_PREFIX,
 };
+use super::{objects, safety};
 use std::{path::Path, process::Command};
 
 pub fn is_git_item_id(id: &str) -> bool {
@@ -32,11 +33,23 @@ fn execute_ref(
 ) -> Result<(String, u64, String), String> {
     let payload = parse_ref_item_id(id)?;
     let repository = validate_repository(home, Path::new(&payload.git_dir))?;
-    let Some(item) = inspect_ref(&repository, &payload.refname, policy, now) else {
+    let Some(item) = inspect_ref(
+        &repository,
+        &payload.refname,
+        policy,
+        now,
+        safety::git_process_running_fresh(&repository),
+    ) else {
         return Err("Codex internal ref no longer exists".to_string());
     };
     if !item.eligible {
         return Err(item.reason);
+    }
+    let Some(current_oid) = super::ref_oid(&repository, &payload.refname) else {
+        return Err("Codex internal ref no longer exists".to_string());
+    };
+    if current_oid != payload.expected_oid {
+        return Err("Codex internal ref changed since preview; scan again".to_string());
     }
     let output = Command::new("git")
         .args([
@@ -45,6 +58,7 @@ fn execute_ref(
             "update-ref",
             "-d",
             &payload.refname,
+            &payload.expected_oid,
         ])
         .output()
         .map_err(|error| format!("Failed to remove Git ref: {error}"))?;
@@ -66,25 +80,35 @@ fn execute_prune(
 ) -> Result<(String, u64, String), String> {
     let payload = parse_prune_item_id(id)?;
     let repository = validate_repository(home, Path::new(&payload.git_dir))?;
-    let Some(item) = scan_unreachable_objects(&repository, policy, now) else {
+    let Some(item) = scan_unreachable_objects(
+        &repository,
+        policy,
+        now,
+        safety::git_process_running_fresh(&repository),
+    ) else {
         return Err("No unreachable Git objects remain".to_string());
     };
     if !item.eligible {
         return Err(item.reason);
     }
-    let before = directory_size(&repository.git_dir.join("objects"));
+    let before = objects::directory_size(&repository.git_dir.join("objects"));
+    let expiration = safety::git_expiration_arg(policy, now);
+    let expiration_unreachable = expiration.clone();
     run_git(
         &repository.git_dir,
         &[
             "reflog",
             "expire",
             "--all",
-            "--expire=now",
-            "--expire-unreachable=now",
+            &format!("--expire={expiration}"),
+            &format!("--expire-unreachable={expiration_unreachable}"),
         ],
     )?;
-    run_git(&repository.git_dir, &["gc", "--prune=now", "--quiet"])?;
-    let after = directory_size(&repository.git_dir.join("objects"));
+    run_git(
+        &repository.git_dir,
+        &["gc", &format!("--prune={expiration}"), "--quiet"],
+    )?;
+    let after = objects::directory_size(&repository.git_dir.join("objects"));
     Ok((
         item.path,
         before.saturating_sub(after),

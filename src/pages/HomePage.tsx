@@ -140,6 +140,7 @@ export function HomePage() {
   const organizeStat = stat('organize')
   const appsStat = stat('uninstall')
   const optimizeStat = stat('optimize')
+  const agentCleanupStat = stat('agent-cleanup')
 
   const doctorIssueCount = doctorSnapshot
     ? doctorSnapshot.checks.filter((c) => c.level !== 'success').length
@@ -320,7 +321,7 @@ export function HomePage() {
           icon={Bot}
           title={t('home.agentCleanupTitle')}
           subtitle={t('home.agentCleanupDesc')}
-          status={t('home.agentCleanupStatus')}
+          status={agentCleanupStat ? formatRunsAndFreed(agentCleanupStat) : t('home.agentCleanupStatus')}
           cta={t('home.action.agentCleanup')}
           onClick={() => navigate('/agent-cleanup')}
           colSpan={3}

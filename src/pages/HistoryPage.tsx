@@ -4,6 +4,7 @@ import { type HistoryRecord, type HistoryRecordType, useAppStore } from '@/store
 import { invoke } from '@tauri-apps/api/tauri'
 import {
   Archive,
+  Bot,
   Calendar,
   Copy,
   Loader2,
@@ -35,6 +36,7 @@ const HISTORY_TYPE_KEYS: Record<HistoryRecordType, HistoryTypeKey> = {
   installer: 'history.type.installer',
   uninstall: 'history.type.uninstall',
   optimize: 'history.type.optimize',
+  'agent-cleanup': 'history.type.agent-cleanup',
 }
 
 const HISTORY_ICONS: Record<HistoryRecordType, LucideIcon> = {
@@ -46,6 +48,7 @@ const HISTORY_ICONS: Record<HistoryRecordType, LucideIcon> = {
   installer: Archive,
   uninstall: PackageSearch,
   optimize: Zap,
+  'agent-cleanup': Bot,
 }
 
 const TYPE_FILTER_ORDER: TypeFilter[] = [
@@ -58,6 +61,7 @@ const TYPE_FILTER_ORDER: TypeFilter[] = [
   'uninstall',
   'optimize',
   'duplicates',
+  'agent-cleanup',
 ]
 
 export function HistoryPage() {
@@ -90,11 +94,13 @@ export function HistoryPage() {
           const type = r.type ?? 'organize'
           const typeLabel = t(HISTORY_TYPE_KEYS[type]).toLowerCase()
           const cleanupErrors = r.cleanupSummary?.errors ?? []
+          const riskNotes = r.cleanupSummary?.riskNotes ?? []
           return (
             r.directory.toLowerCase().includes(q) ||
             typeLabel.includes(q) ||
             Object.keys(r.categories).some((c) => c.toLowerCase().includes(q)) ||
-            cleanupErrors.some((error) => error.toLowerCase().includes(q))
+            cleanupErrors.some((error) => error.toLowerCase().includes(q)) ||
+            riskNotes.some((note) => note.toLowerCase().includes(q))
           )
         }
       )
@@ -332,7 +338,7 @@ function recordTone(record: HistoryRecord): TimelineTone {
   if (record.undone) return 'muted'
   const type = record.type ?? 'organize'
   if (!record.executed) return 'yellow'
-  if (type === 'clean' || type === 'purge' || type === 'uninstall') return 'red'
+  if (type === 'clean' || type === 'purge' || type === 'uninstall' || type === 'agent-cleanup') return 'red'
   if (type === 'optimize') return 'green'
   if (type === 'duplicates') return 'cyan'
   return 'green'
@@ -438,10 +444,23 @@ function TimelineItem({
           </p>
         )}
         {cleanupErrors.length > 0 && (
-          <p className="mt-2 whitespace-pre-wrap text-[10px] text-iqon-yellow">
-            {t('history.cleanupErrors')}: {cleanupErrors.length}
+          <details className="mt-2 text-[10px] text-iqon-yellow">
+            <summary className="cursor-pointer">{t('history.cleanupErrors')}: {cleanupErrors.length}</summary>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
+              {cleanupErrors.map((error) => <li key={error} className="break-all">{error}</li>)}
+            </ul>
+          </details>
+        )}
+        {(record.cleanupSummary?.skippedCount ?? 0) > 0 && (
+          <p className="mt-2 text-[10px] text-iqon-yellow">
+            {t('history.cleanupSkipped', { n: record.cleanupSummary?.skippedCount ?? 0 })}
           </p>
         )}
+        {record.cleanupSummary?.riskNotes?.map((note) => (
+          <p key={note} className="mt-2 text-[10px] font-semibold text-iqon-red">
+            {record.cleanupSummary?.irreversible ? '⚠ ' : ''}{note}
+          </p>
+        ))}
         <div className="mt-3 flex items-center justify-end gap-2">
           {canUndo && (
             <button

@@ -5,27 +5,30 @@
 
 use super::{
     adapters::{adapter_specs, root_path},
-    scanner::agent_process_running,
+    scanner::{agent_process_running, any_agent_process_running},
     types::{AgentCleanupAgent, AgentCleanupItem, AgentCleanupPolicy, CleanupCategory},
 };
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
-    io::Write,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    time::UNIX_EPOCH,
+    process::Command,
 };
-use walkdir::WalkDir;
 
 #[path = "git_execution.rs"]
 mod execution;
+#[path = "git_objects.rs"]
+mod objects;
+#[path = "git_safety.rs"]
+mod safety;
 #[cfg(test)]
 #[path = "git_tests.rs"]
 mod tests;
 
 pub(super) use execution::{execute_item, is_git_item_id};
+use objects::{object_stats, unreachable_object_ids};
+use safety::{git_process_running, has_git_lock, modified_at, old_enough};
 
 const INTERNAL_REF_PREFIX: &str = "refs/codex/turn-diffs/";
 const REF_ITEM_PREFIX: &str = "git-ref:";
@@ -42,6 +45,9 @@ struct Repository {
 struct RefItemPayload {
     git_dir: String,
     refname: String,
+    /// Object id observed during the preview. Execution supplies this as the
+    /// expected old value so a stale preview cannot delete a changed ref.
+    expected_oid: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -75,8 +81,12 @@ fn scan_repository(
     policy: &AgentCleanupPolicy,
     now: i64,
 ) -> Vec<AgentCleanupItem> {
-    let mut items = scan_codex_refs(repository, policy, now);
-    if let Some(item) = scan_unreachable_objects(repository, policy, now) {
+    // Process inspection is shared by all items in a repository. Running
+    // `ps` once per ref would make large Codex ref histories unnecessarily
+    // expensive to preview.
+    let git_process_active = git_process_running(repository);
+    let mut items = scan_codex_refs(repository, policy, now, git_process_active);
+    if let Some(item) = scan_unreachable_objects(repository, policy, now, git_process_active) {
         items.push(item);
     }
     items
@@ -86,6 +96,7 @@ fn scan_codex_refs(
     repository: &Repository,
     policy: &AgentCleanupPolicy,
     now: i64,
+    git_process_active: bool,
 ) -> Vec<AgentCleanupItem> {
     let output = git_output(
         &repository.git_dir,
@@ -97,7 +108,9 @@ fn scan_codex_refs(
     output
         .lines()
         .take(MAX_GIT_ITEMS)
-        .filter_map(|refname| inspect_ref(repository, refname.trim(), policy, now))
+        .filter_map(|refname| {
+            inspect_ref(repository, refname.trim(), policy, now, git_process_active)
+        })
         .collect()
 }
 
@@ -106,10 +119,12 @@ fn inspect_ref(
     refname: &str,
     policy: &AgentCleanupPolicy,
     now: i64,
+    git_process_active: bool,
 ) -> Option<AgentCleanupItem> {
     if !is_allowed_ref(refname) {
         return None;
     }
+    let expected_oid = ref_oid(repository, refname)?;
     let (size, modified_at) = ref_metadata(repository, refname, now);
     let age_ok = old_enough(modified_at, policy, now);
     let (eligible, reason) = if agent_process_running("codex") {
@@ -125,6 +140,16 @@ fn inspect_ref(
                 policy.min_age_days
             ),
         )
+    } else if any_agent_process_running() {
+        (
+            false,
+            "An Agent process is active; internal refs are protected".to_string(),
+        )
+    } else if git_process_active {
+        (
+            false,
+            "A Git process is active for this repository; internal refs are protected".to_string(),
+        )
     } else if has_git_lock(&repository.git_dir) {
         (
             false,
@@ -137,7 +162,7 @@ fn inspect_ref(
     };
     let display = format!("{} ({refname})", repository.git_dir.display());
     Some(AgentCleanupItem {
-        id: ref_item_id(&repository.git_dir, refname),
+        id: ref_item_id(&repository.git_dir, refname, &expected_oid),
         agent: "codex".to_string(),
         category: CleanupCategory::CodexRefs.as_str().to_string(),
         path: display,
@@ -155,6 +180,7 @@ fn scan_unreachable_objects(
     repository: &Repository,
     policy: &AgentCleanupPolicy,
     now: i64,
+    git_process_active: bool,
 ) -> Option<AgentCleanupItem> {
     let object_ids = unreachable_object_ids(&repository.git_dir);
     if object_ids.is_empty() {
@@ -175,6 +201,16 @@ fn scan_unreachable_objects(
         (
             false,
             "Codex is active; Git object cleanup is protected".to_string(),
+        )
+    } else if any_agent_process_running() {
+        (
+            false,
+            "An Agent process is active; Git object cleanup is protected".to_string(),
+        )
+    } else if git_process_active {
+        (
+            false,
+            "A Git process is active for this repository; object cleanup is protected".to_string(),
         )
     } else if has_git_lock(&repository.git_dir) {
         (
@@ -345,70 +381,18 @@ fn ref_metadata(repository: &Repository, refname: &str, fallback: i64) -> (u64, 
         .unwrap_or((0, fallback))
 }
 
-fn unreachable_object_ids(git_dir: &Path) -> Vec<String> {
-    let Ok(output) = Command::new("git")
-        .arg("--git-dir")
-        .arg(git_dir)
-        .args([
-            "fsck",
-            "--full",
-            "--unreachable",
-            "--no-reflogs",
-            "--no-progress",
-        ])
-        .output()
-    else {
-        return Vec::new();
-    };
-    let mut output_text = String::from_utf8_lossy(&output.stdout).into_owned();
-    output_text.push_str(&String::from_utf8_lossy(&output.stderr));
-    output_text
-        .lines()
-        .take(MAX_GIT_ITEMS + 1)
-        .filter_map(|line| {
-            let mut fields = line.split_whitespace();
-            if fields.next() != Some("unreachable") {
-                return None;
-            }
-            let _object_type = fields.next()?;
-            fields.next().map(str::to_string)
-        })
-        .filter(|id| id.len() >= 40 && id.chars().all(|character| character.is_ascii_hexdigit()))
-        .collect()
+fn ref_oid(repository: &Repository, refname: &str) -> Option<String> {
+    let oid = git_output(&repository.git_dir, &["rev-parse", "--verify", refname])
+        .ok()?
+        .trim()
+        .to_string();
+    is_valid_object_id(&oid).then_some(oid)
 }
 
-fn object_stats(git_dir: &Path, object_ids: &[String]) -> (u64, u64) {
-    let mut child = match Command::new("git")
-        .arg("--git-dir")
-        .arg(git_dir)
-        .args([
-            "cat-file",
-            "--batch-check=%(objectname) %(objecttype) %(objectsize)",
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-    {
-        Ok(child) => child,
-        Err(_) => return (0, 0),
-    };
-    if let Some(mut input) = child.stdin.take() {
-        let _ = input.write_all(object_ids.join("\n").as_bytes());
-        let _ = input.write_all(b"\n");
-    }
-    let Ok(output) = child.wait_with_output() else {
-        return (0, 0);
-    };
-    let mut count = 0_u64;
-    let mut bytes = 0_u64;
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let fields = line.split_whitespace().collect::<Vec<_>>();
-        if fields.len() >= 3 && fields[1] != "missing" {
-            count += 1;
-            bytes = bytes.saturating_add(fields[2].parse::<u64>().unwrap_or(0));
-        }
-    }
-    (count, bytes)
+fn is_valid_object_id(value: &str) -> bool {
+    (40..=128).contains(&value.len())
+        && value.len() % 2 == 0
+        && value.chars().all(|character| character.is_ascii_hexdigit())
 }
 
 fn repository_is_clean(repository: &Repository) -> bool {
@@ -424,22 +408,13 @@ fn object_store_modified_at(git_dir: &Path) -> Option<i64> {
     modified_at(&fs::symlink_metadata(git_dir.join("objects")).ok()?)
 }
 
-fn directory_size(path: &Path) -> u64 {
-    WalkDir::new(path)
-        .follow_links(false)
-        .into_iter()
-        .flatten()
-        .filter(|entry| entry.file_type().is_file())
-        .filter_map(|entry| entry.metadata().ok().map(|metadata| metadata.len()))
-        .sum()
-}
-
-fn ref_item_id(git_dir: &Path, refname: &str) -> String {
+fn ref_item_id(git_dir: &Path, refname: &str, expected_oid: &str) -> String {
     format!(
         "{REF_ITEM_PREFIX}{}",
         serde_json::to_string(&RefItemPayload {
             git_dir: git_dir.to_string_lossy().into_owned(),
             refname: refname.to_string(),
+            expected_oid: expected_oid.to_string(),
         })
         .unwrap_or_default()
     )
@@ -470,31 +445,4 @@ fn is_allowed_ref(refname: &str) -> bool {
         && !refname.contains("..")
         && !refname.contains('\0')
         && !refname.ends_with('/')
-}
-
-fn has_git_lock(git_dir: &Path) -> bool {
-    WalkDir::new(git_dir)
-        .follow_links(false)
-        .max_depth(5)
-        .into_iter()
-        .flatten()
-        .any(|entry| {
-            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
-            name == "index.lock"
-                || name == "packed-refs.lock"
-                || (name.ends_with(".lock") && entry.path().starts_with(git_dir.join("objects")))
-        })
-}
-
-fn modified_at(metadata: &fs::Metadata) -> Option<i64> {
-    metadata
-        .modified()
-        .ok()?
-        .duration_since(UNIX_EPOCH)
-        .ok()
-        .map(|duration| duration.as_secs() as i64)
-}
-
-fn old_enough(modified_at: i64, policy: &AgentCleanupPolicy, now: i64) -> bool {
-    now.saturating_sub(modified_at) >= policy.min_age_days.saturating_mul(86_400) as i64
 }

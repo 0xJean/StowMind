@@ -11,7 +11,7 @@ The scanner uses a fixed allowlist of leaf paths for Codex, OpenCode, Claude Cod
 - Kiro's default `$TMPDIR/kiro-log` CLI log directory, plus Kiro, Devin, Cursor, Windsurf, and Antigravity macOS Application Support cache/log leaves. Devin's CLI cache and log roots are also included.
 - Gemini CLI / Antigravity CLI logs and crash reports, Continue's rebuildable code index and Chromium utility cache, GitHub Copilot CLI and macOS Copilot logs/marketplace cache, and Amazon Q's default `$TMPDIR/qlog` logs.
 - Cline's `~/.cline/data/logs` and Goose's CLI/macOS application log directories. These are treated as logs because they can contain prompts, code snippets, or tool output and are never silently removed.
-- Crashpad `pending` directories for desktop agents are scanned as one bounded temporary-file item, so a crash-report backlog is visible without rendering millions of individual files.
+- Crashpad `pending` directories for desktop agents are scanned entry by entry so retention is applied to each dump. A directory that exceeds the bounded scan budget is represented by one protected marker; a partial scan can never produce executable cleanup items.
 - The current Git repository and repositories directly under the allowlisted Agent worktree roots are checked for Codex's `refs/codex/turn-diffs/*` refs and unreachable Git objects. Ref entries are listed individually; unreachable objects are summarized as one bounded item with an object count and byte estimate.
 - Claude and Codex application logs under `~/Library/Logs`.
 
@@ -21,7 +21,7 @@ Only entries older than the selected retention period are suggested. The preview
 
 The scanner always protects configuration, credentials, browser state, session data, generated images, lock and PID files, nested sensitive descendants, and every allowlisted item while the corresponding Agent process is running. A worktree is considered orphaned only when its `.git` link is stale or it is no longer present in Git's `worktree list --porcelain` output. Normal and registered worktrees stay protected.
 
-Git metadata follows stricter rules than ordinary cache files. Codex refs are eligible only when the Codex process is not running, the ref is older than the retention period, and no Git lock is present. Unreachable objects are eligible only when the repository has no tracked changes, no Agent or Git process is active, and the object store is older than the retention period. They are never selected by default.
+Git metadata follows stricter rules than ordinary cache files. Codex refs are eligible only when no supported Agent or Git process is running, the ref is older than the retention period, and no Git lock is present. Execution carries the previewed ref object ID into `git update-ref -d`, so a ref changed after the preview fails closed. Unreachable objects are eligible only when the repository has no tracked changes, no Agent or Git process is active, and the object store is older than the retention period. Reflog expiry and object pruning use the configured retention cutoff rather than `now`; they are never selected by bulk selection and require a second explicit confirmation.
 
 ## Execution safety
 
@@ -34,6 +34,6 @@ The preview is advisory. Before execution, the native command:
 
 Codex refs are removed with `git update-ref -d` after revalidation. An explicitly selected unreachable-object item first expires reflogs and then runs `git gc --prune=now`; this is a Git-native, irreversible operation and is blocked while the repository is dirty or locked.
 
-The command never calls `rm` or permanently deletes a selected filesystem path. Git object pruning is the one explicit irreversible exception and is opt-in. A second scan after execution refreshes the preview so entries changed while the confirmation dialog was open are skipped safely.
+The command never calls `rm` or permanently deletes a selected filesystem path. Git object pruning is the one explicit irreversible exception and is opt-in. A second scan after execution refreshes the preview so entries changed while the confirmation dialog was open are skipped safely. Every execution is recorded in the StowMind history and statistics, including successful items, skipped items, errors, category counts, and the Git pruning risk note.
 
 The API responses identify this behavior with `source = stowmind_supplement`. If Mole later exposes an equivalent structured capability, this supplement should be replaced or routed through that Mole API.

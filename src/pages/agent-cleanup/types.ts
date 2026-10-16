@@ -52,6 +52,14 @@ export interface AgentCleanupExecuteResult {
   skipped_count?: number
   errors?: string[]
   completed_at?: string
+  actions?: AgentCleanupAction[]
+}
+
+export interface AgentCleanupAction {
+  path: string
+  size_bytes: number
+  success: boolean
+  message: string
 }
 
 export const AGENT_CLEANUP_CATEGORIES: AgentCleanupCategory[] = [
