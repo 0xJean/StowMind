@@ -3,6 +3,7 @@
 
 mod adapter_roots;
 mod adapters;
+mod git;
 mod scanner;
 mod types;
 mod worktree;
@@ -65,10 +66,36 @@ fn execute(request: AgentCleanupExecuteRequest) -> Result<AgentCleanupResult, St
     .normalized();
     refresh_process_cache();
     let now = epoch_now();
-    let mut actions = Vec::with_capacity(request.item_ids.len());
+    let mut item_ids = request.item_ids;
+    // Remove Codex refs before pruning objects they may have kept reachable.
+    item_ids.sort_by_key(|item_id| {
+        if item_id.starts_with("git-ref:") {
+            0
+        } else if item_id.starts_with("git-prune:") {
+            1
+        } else {
+            2
+        }
+    });
+    let mut actions = Vec::with_capacity(item_ids.len());
     let mut freed_bytes: u64 = 0;
 
-    for item_id in request.item_ids {
+    for item_id in item_ids {
+        if git::is_git_item_id(&item_id) {
+            match git::execute_item(&item_id, &home, &policy, now) {
+                Ok((path, size_bytes, message)) => {
+                    freed_bytes = freed_bytes.saturating_add(size_bytes);
+                    actions.push(AgentCleanupAction {
+                        path,
+                        size_bytes,
+                        success: true,
+                        message,
+                    });
+                }
+                Err(error) => actions.push(skipped(item_id, &error)),
+            }
+            continue;
+        }
         let path = PathBuf::from(item_id.trim());
         let path_text = path.to_string_lossy().to_string();
         let Some(spec) = adapters::adapter_specs()

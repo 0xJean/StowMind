@@ -1,5 +1,6 @@
 use super::{
     adapters::{adapter_specs, agent_summaries, category_enabled, root_path},
+    git,
     types::{
         AgentCleanupItem, AgentCleanupPolicy, AgentCleanupPreview, AgentCleanupProtected,
         AgentCleanupSummary, CleanupCategory,
@@ -60,7 +61,10 @@ pub(super) fn scan(home: &Path, policy: AgentCleanupPolicy, now: i64) -> AgentCl
             }
         }
     }
-    build_preview(policy, agent_summaries(specs, home), items, now)
+    items.extend(git::scan(home, &policy, now));
+    let mut agents = agent_summaries(specs, home);
+    git::augment_agent_summaries(&mut agents, home);
+    build_preview(policy, agents, items, now)
 }
 
 pub(super) fn inspect_item(
@@ -219,7 +223,7 @@ fn contains_protected_descendant(path: &Path) -> bool {
         .any(|entry| !entry.file_type().is_symlink() && protected_artifact_name(entry.path()))
 }
 
-fn agent_process_running(agent_id: &str) -> bool {
+pub(super) fn agent_process_running(agent_id: &str) -> bool {
     let cache = PROCESS_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Ok(entries) = cache.lock() {
         if let Some((checked_at, active)) = entries.get(agent_id) {

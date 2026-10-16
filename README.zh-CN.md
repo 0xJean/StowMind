@@ -54,7 +54,7 @@
 | 模块 | 说明 |
 |------|------|
 | **系统清理** | StowMind 原生页面，真实调用 `mo clean --dry-run` 预览，并通过 Mole 执行确认后的系统缓存、日志、浏览器缓存和开发工具缓存清理 |
-| **Agent 清理** | 按固定白名单和保留规则预览 Codex、OpenCode、Claude Code、Kiro、Devin、Cursor、Windsurf、Gemini CLI、Antigravity、Continue、Copilot CLI、Amazon Q、Cline、Goose 的过期缓存、日志、临时文件与孤立 worktree，确认后移入系统废纸篓（详见 [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md)） |
+| **Agent 清理** | 按固定白名单和保留规则预览 Codex、OpenCode、Claude Code、Kiro、Devin、Cursor、Windsurf、Gemini CLI、Antigravity、Continue、Copilot CLI、Amazon Q、Cline、Goose 的过期缓存、日志、临时文件、孤立 worktree，以及当前仓库的 Codex 内部 refs 和不可达 Git 对象（详见 [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md)） |
 | **磁盘分析** | StowMind 原生页面，真实调用 `mo analyze -json <path>` 输出 |
 | **构建产物** | 复用 Mole purge 逻辑，对用户选择的项目目录做 dry-run 预览，并通过 Mole purge 执行清理 |
 | **安装包清理** | 复用 Mole installer 的真实扫描与清理函数，处理 `.dmg`、`.pkg`、`.iso`、`.xip` 和安装型 `.zip` |
@@ -75,7 +75,7 @@
 
 侧栏和欢迎页都提供 **Agent 清理** 入口。它只扫描 Codex、OpenCode、Claude Code、Kiro、Devin、Cursor、Windsurf、Gemini CLI / Antigravity、Continue、GitHub Copilot CLI、Amazon Q Developer、Cline、Goose 已记录的可重建路径。
 
-流程是先预览：选择保留天数，按缓存、日志、临时文件和孤立 worktree 分组检查，再确认要移入系统废纸篓的项目。固定白名单、运行中 Agent 保护、孤立 worktree 复核，以及会话和配置路径保护会在执行前再次校验。完整范围和排除项见 [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md)。
+流程是先预览：选择保留天数，按缓存、日志、临时文件、孤立 worktree 和 Git 元数据分组检查，再确认要清理的项目。普通文件移入系统废纸篓；Codex refs 使用 `git update-ref`，不可达 Git 对象只有在仓库干净且明确确认后才由 `git gc --prune=now` 修剪。固定白名单、运行中 Agent 保护、仓库状态复核、孤立 worktree 复核，以及会话和配置路径保护会在执行前再次校验。完整范围和排除项见 [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md)。
 
 ---
 
@@ -142,7 +142,7 @@ pnpm tauri dev
 
 开发模式下会启动带热更新的 Tauri 窗口。
 
-从欢迎页打开 **Agent 清理**，即可扫描本机开发 Agent 留下的可清理文件。默认保留 30 天；扫描结果需要先审核，确认后项目会移入系统废纸篓，不会永久删除。
+从欢迎页打开 **Agent 清理**，即可扫描本机开发 Agent 留下的可清理文件和当前仓库的 Git 元数据。默认保留 30 天；扫描结果需要先审核，普通文件会移入系统废纸篓，不可达 Git 对象的修剪需要单独确认且不可撤销。
 
 完成或跳过权限与 Mole 设置后，应用会显示一段简短的产品引导。引导可以随时关闭，也可以从 **设置 → 重新查看引导** 再次打开。
 

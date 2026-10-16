@@ -1,4 +1,10 @@
-export type AgentCleanupCategory = 'cache' | 'log' | 'temporary' | 'orphan_worktree'
+export type AgentCleanupCategory =
+  | 'cache'
+  | 'log'
+  | 'temporary'
+  | 'orphan_worktree'
+  | 'codex_internal_ref'
+  | 'git_unreachable_object'
 
 export interface AgentCleanupAgent {
   id: string
@@ -53,4 +59,6 @@ export const AGENT_CLEANUP_CATEGORIES: AgentCleanupCategory[] = [
   'log',
   'temporary',
   'orphan_worktree',
+  'codex_internal_ref',
+  'git_unreachable_object',
 ]

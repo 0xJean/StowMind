@@ -64,6 +64,7 @@ pub(super) fn category_enabled(
         CleanupCategory::Logs => policy.include_logs,
         CleanupCategory::Temporary => policy.include_temporary,
         CleanupCategory::Worktrees => policy.include_orphaned_worktrees,
+        CleanupCategory::CodexRefs | CleanupCategory::GitUnreachable => policy.include_git_metadata,
     }
 }
 
