@@ -92,7 +92,7 @@ export function MetricCard({
 }
 
 export function ActionCard({
-  tone, title, subtitle, status, cta, onClick, pulse, icon: Icon, colSpan = 4,
+  tone, title, subtitle, status, cta, onClick, pulse, icon: Icon, colSpan = 4, dataTour,
 }: {
   tone: ToneKey
   title: string
@@ -103,12 +103,14 @@ export function ActionCard({
   pulse?: boolean
   icon?: LucideIcon
   colSpan?: 3 | 4
+  dataTour?: string
 }) {
   const tt = TONE_CLASSES[tone]
   return (
     <button
       type="button"
       onClick={onClick}
+      data-tour={dataTour}
       className={cn(
         'iqon-card iqon-card-hover group relative col-span-12 flex flex-col justify-between overflow-hidden p-5 text-left',
         colSpan === 3 ? 'md:col-span-6 xl:col-span-3' : 'md:col-span-6 xl:col-span-4'

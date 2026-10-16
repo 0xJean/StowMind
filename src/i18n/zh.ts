@@ -45,6 +45,22 @@ export const zh = {
   'sidebar.noCleanYet': '尚未执行过清理',
   'sidebar.smartScan': '智能扫描',
 
+  // 产品引导
+  'tour.welcomeTitle': '欢迎使用 StowMind',
+  'tour.welcomeDesc': '用几步了解系统监控、预览式清理和 Agent 清理入口。',
+  'tour.healthTitle': '快速查看系统健康度',
+  'tour.healthDesc': '打开健康评分即可查看 CPU、内存、磁盘和最新系统状态。',
+  'tour.cleanTitle': '先预览，再执行清理',
+  'tour.cleanDesc': '系统清理采用先预览的流程，确认项目后才会由 Mole 执行操作。',
+  'tour.agentCleanupTitle': '安全清理 Agent 残留',
+  'tour.agentCleanupDesc': '检查本机开发 Agent 的过期缓存、日志、崩溃报告和孤立 worktree。',
+  'tour.settingsTitle': '可以在设置中重新查看',
+  'tour.settingsDesc': '随时从 StowMind 设置卡片重新打开这份引导。',
+  'tour.next': '下一步',
+  'tour.previous': '上一步',
+  'tour.done': '完成',
+  'tour.close': '关闭引导',
+
   // AI 启用流程
   'aiGuide.title': 'AI 启用流程',
   'aiGuide.step.enable': '启用 AI',
@@ -227,7 +243,7 @@ export const zh = {
 
   // HomePage
   'home.welcome': '欢迎使用 StowMind',
-  'home.subtitle': '智能清理、资源维护与 AI 文件整理',
+  'home.subtitle': '智能清理、系统维护、Agent 清理与 AI 文件整理',
   'home.spaceManaged': '已整理空间',
   'home.healthScore': '健康评分',
   'home.cpuMemory': 'CPU / 内存',
@@ -262,6 +278,9 @@ export const zh = {
   'home.cleanAnalyzeDesc': '查看目录空间占用并定位大文件',
   'home.cleanDuplicatesTitle': '重复文件辅助检查',
   'home.cleanDuplicatesDesc': '找出内容相同的文件，手动决定保留哪一份',
+  'home.agentCleanupTitle': 'Agent 清理',
+  'home.agentCleanupDesc': '检查开发 Agent 的过期缓存、日志、崩溃报告和孤立 worktree',
+  'home.agentCleanupStatus': '安全预览',
   'home.cleanOrganizeTitle': 'AI 文件整理',
   'home.cleanOrganizeDesc': '对不该删除的用户文件进行分类、归档和移动',
   'home.quickActions': '快捷操作',
@@ -280,6 +299,7 @@ export const zh = {
   'home.action.history': '历史记录',
   'home.action.stats': '查看统计',
   'home.action.duplicates': '重复文件',
+  'home.action.agentCleanup': '扫描 Agent',
   'home.action.analyze': '磁盘分析',
   'home.action.purge': '构建产物',
   'home.action.settings': '设置',
@@ -1716,6 +1736,8 @@ export const zh = {
   'settings.title': '设置',
   'settings.subtitle': '配置整理、安全、系统维护与分类规则',
   'settings.brandSubtitle': 'AI 文件整理工具',
+  'settings.productTourDesc': '了解主要功能区域',
+  'settings.productTourAction': '重新查看引导',
   'settings.scanExclude': '扫描排除',
   'settings.scanExcludeDesc': '路径中包含以下任一段则跳过（每行一条，不区分大小写）',
   'settings.scanExcludePlaceholder': 'node_modules\n.git',

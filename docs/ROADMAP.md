@@ -14,6 +14,17 @@
 
 **下一优先建议**：围绕 Mole-backed 清理主线扩展阶段 E（例如 Mole 清理预览自动刷新、清理历史统计、更多 Mole 命令适配）。重复文件保持辅助检查，不做自研删除。
 
+### Agent Cleanup（已完成）
+
+- [x] **多 Agent 扫描**：覆盖 Codex、OpenCode、Claude Code、Kiro、Devin、Cursor、Windsurf、Gemini CLI / Antigravity、Continue、GitHub Copilot CLI、Amazon Q Developer、Cline、Goose 的固定缓存、日志、崩溃报告与孤立 worktree 路径。
+- [x] **安全清理**：按保留天数预览，执行前复核白名单、运行状态和 worktree 注册状态，确认后移入系统废纸篓，不永久删除。
+- [x] **敏感数据保护**：会话、配置、凭据、浏览器状态和生成内容保持保护；未找到独立安全路径的 Agent 暂不加入扫描。
+
+### 产品引导（已完成）
+
+- [x] **首次运行引导**：权限与 Mole 设置完成或跳过后，展示首页产品 tour；不阻塞主功能。
+- [x] **可关闭与重开**：引导状态按版本保存，可随时从设置重新查看。
+
 ---
 
 ## 阶段 A：信任与范围（已完成）
