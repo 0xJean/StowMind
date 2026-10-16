@@ -45,6 +45,22 @@ export const en = {
   'sidebar.noCleanYet': 'No cleanup yet',
   'sidebar.smartScan': 'Smart Scan',
 
+  // Product tour
+  'tour.welcomeTitle': 'Welcome to StowMind',
+  'tour.welcomeDesc': 'This short tour shows where to monitor your system and start safe, preview-first cleanup.',
+  'tour.healthTitle': 'System health at a glance',
+  'tour.healthDesc': 'Open the health score to review CPU, memory, disk, and the latest system status.',
+  'tour.cleanTitle': 'Preview cleanup before running it',
+  'tour.cleanDesc': 'System Clean uses a preview-first flow so you can review items before Mole performs the confirmed action.',
+  'tour.agentCleanupTitle': 'Clean up Agent leftovers safely',
+  'tour.agentCleanupDesc': 'Review stale caches, logs, crash reports, and orphaned worktrees from local coding agents.',
+  'tour.settingsTitle': 'Replay this tour from Settings',
+  'tour.settingsDesc': 'You can reopen this guide any time from the StowMind settings card.',
+  'tour.next': 'Next',
+  'tour.previous': 'Back',
+  'tour.done': 'Done',
+  'tour.close': 'Close tour',
+
   // AI activation flow
   'aiGuide.title': 'AI activation flow',
   'aiGuide.step.enable': 'Enable AI',
@@ -227,7 +243,7 @@ export const en = {
 
   // HomePage
   'home.welcome': 'Welcome to StowMind',
-  'home.subtitle': 'Smart cleanup, system care, and AI file organization',
+  'home.subtitle': 'Smart cleanup, system care, Agent cleanup, and AI file organization',
   'home.spaceManaged': 'Space organized',
   'home.healthScore': 'Health score',
   'home.cpuMemory': 'CPU / Memory',
@@ -262,6 +278,9 @@ export const en = {
   'home.cleanAnalyzeDesc': 'Inspect directory usage and find large files',
   'home.cleanDuplicatesTitle': 'Duplicate file helper',
   'home.cleanDuplicatesDesc': 'Find identical files and decide which copy to keep',
+  'home.agentCleanupTitle': 'Agent cleanup',
+  'home.agentCleanupDesc': 'Review stale caches, logs, crash reports, and orphaned worktrees from coding agents',
+  'home.agentCleanupStatus': 'Safe preview',
   'home.cleanOrganizeTitle': 'AI file organization',
   'home.cleanOrganizeDesc': 'Classify, archive, and move user files that should not be deleted',
   'home.quickActions': 'Quick Actions',
@@ -280,6 +299,7 @@ export const en = {
   'home.action.history': 'History',
   'home.action.stats': 'Statistics',
   'home.action.duplicates': 'Duplicates',
+  'home.action.agentCleanup': 'Scan agents',
   'home.action.analyze': 'Analyze',
   'home.action.purge': 'Build Artifacts',
   'home.action.settings': 'Settings',
@@ -1716,6 +1736,8 @@ export const en = {
   'settings.title': 'Settings',
   'settings.subtitle': 'Configure organize, safety, system maintenance, and category rules',
   'settings.brandSubtitle': 'AI File Organizer',
+  'settings.productTourDesc': 'Learn the main areas',
+  'settings.productTourAction': 'Replay tour',
   'settings.scanExclude': 'Scan exclusions',
   'settings.scanExcludeDesc': 'Skip paths containing any line below (one per line, case-insensitive)',
   'settings.scanExcludePlaceholder': 'node_modules\n.git',

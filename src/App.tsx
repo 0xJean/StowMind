@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { AppRoutes } from './AppRoutes'
+import { ProductTour } from './components/ProductTour'
 import { Button } from './components/ui/button'
 import { Sidebar } from './components/Sidebar'
 import { useDashboardCacheSync } from './hooks/useDashboardCacheSync'
@@ -448,6 +449,7 @@ function App() {
                 />
               )}
               <AppRoutes />
+              <ProductTour enabled={diskAccessSetupResolved && !shouldShowMoleSetup} />
             </div>
           </main>
         </div>

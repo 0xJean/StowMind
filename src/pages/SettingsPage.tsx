@@ -11,10 +11,11 @@ import { open, save } from '@tauri-apps/api/dialog'
 import { listen } from '@tauri-apps/api/event'
 import { readTextFile, writeTextFile } from '@tauri-apps/api/fs'
 import { invoke } from '@tauri-apps/api/tauri'
-import { Archive, Bot, Eye, Globe, Loader2, Moon, RefreshCw, Save, Sun } from 'lucide-react'
+import { Archive, Bot, Compass, Eye, Globe, Loader2, Moon, RefreshCw, Save, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import { requestProductTour } from '@/lib/productTour'
 import { CategoryRulesSection } from './settings/CategoryRulesSection'
 import { MoleSystemSettingsSection } from './settings/MoleSystemSettingsSection'
 
@@ -232,9 +233,18 @@ export function SettingsPage() {
       </div>
 
       <SettingsCard title="StowMind" description={t('settings.brandSubtitle')}>
-        <div className="flex items-center gap-3">
-          <img src="/icon.svg" alt="StowMind" className="h-10 w-10 rounded-2xl" draggable={false} />
-          <div className="text-sm text-muted-foreground">{t('settings.brandSubtitle')}</div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/icon.svg" alt="StowMind" className="h-10 w-10 rounded-2xl" draggable={false} />
+            <div className="text-sm text-muted-foreground">{t('settings.brandSubtitle')}</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-muted-foreground">{t('settings.productTourDesc')}</p>
+            <Button variant="outline" size="sm" onClick={requestProductTour}>
+              <Compass className="mr-2 h-4 w-4" />
+              {t('settings.productTourAction')}
+            </Button>
+          </div>
         </div>
       </SettingsCard>
 

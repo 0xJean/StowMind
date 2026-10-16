@@ -181,6 +181,45 @@
     filter: none;
   }
 
+  .driver-popover.stowmind-tour-popover {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--iqon-border-soft));
+    border-radius: 16px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+    color: hsl(var(--foreground));
+    max-width: 340px;
+  }
+  .driver-popover.stowmind-tour-popover .driver-popover-title {
+    color: hsl(var(--foreground));
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .driver-popover.stowmind-tour-popover .driver-popover-description,
+  .driver-popover.stowmind-tour-popover .driver-popover-progress-text {
+    color: hsl(var(--muted-foreground));
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .driver-popover.stowmind-tour-popover .driver-popover-next-btn,
+  .driver-popover.stowmind-tour-popover .driver-popover-prev-btn {
+    border: 1px solid hsl(var(--iqon-border-soft));
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 800;
+    text-shadow: none;
+  }
+  .driver-popover.stowmind-tour-popover .driver-popover-next-btn {
+    background: hsl(var(--clean-green));
+    color: hsl(var(--background));
+  }
+  .driver-popover.stowmind-tour-popover .driver-popover-prev-btn {
+    background: hsl(var(--iqon-row));
+    color: hsl(var(--foreground));
+  }
+  .driver-popover.stowmind-tour-popover .driver-popover-close-btn {
+    color: hsl(var(--muted-foreground));
+  }
+
   .iqon-btn-secondary {
     display: inline-flex;
     align-items: center;

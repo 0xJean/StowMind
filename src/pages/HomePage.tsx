@@ -16,6 +16,7 @@ import { invoke } from '@tauri-apps/api/tauri'
 import {
   Archive,
   BarChart3,
+  Bot,
   Copy,
   Cpu,
   Download,
@@ -169,10 +170,11 @@ export function HomePage() {
 
   return (
     <div className="mx-auto w-full max-w-[1600px] p-6 md:p-8">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between" data-tour="home-welcome">
         <div>
           <p className="iqon-eyebrow mb-1">{t('home.eyebrow')}</p>
           <h1 className="text-2xl font-bold tracking-tight">{t('home.welcome')}</h1>
+          <p className="mt-1 text-xs text-muted-foreground">{t('home.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-iqon-border bg-iqon-card px-4 py-2">
           <span className="iqon-dot iqon-dot-green animate-pulse" />
@@ -193,6 +195,7 @@ export function HomePage() {
       <div className="mb-6 grid auto-rows-[minmax(140px,auto)] grid-cols-12 gap-4">
         <button
           type="button"
+          data-tour="home-health"
           className="iqon-card iqon-card-hover group relative col-span-12 flex flex-col justify-between overflow-hidden p-4 text-left md:col-span-6 xl:col-span-3"
           onClick={() => navigate('/status')}
         >
@@ -280,6 +283,7 @@ export function HomePage() {
           onClick={() => navigate('/clean')}
           pulse={!cleanStat || cleanStat.count === 0}
           colSpan={3}
+          dataTour="home-system-clean"
         />
         <ActionCard
           tone="cyan"
@@ -310,6 +314,17 @@ export function HomePage() {
           cta={t('home.action.duplicates')}
           onClick={() => navigate('/duplicates')}
           colSpan={3}
+        />
+        <ActionCard
+          tone="cyan"
+          icon={Bot}
+          title={t('home.agentCleanupTitle')}
+          subtitle={t('home.agentCleanupDesc')}
+          status={t('home.agentCleanupStatus')}
+          cta={t('home.action.agentCleanup')}
+          onClick={() => navigate('/agent-cleanup')}
+          colSpan={3}
+          dataTour="home-agent-cleanup"
         />
       </GroupSection>
 

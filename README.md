@@ -22,6 +22,7 @@
 
 - [Why StowMind](#why-stowmind)
 - [Features](#features)
+- [Agent Cleanup](#agent-cleanup)
 - [Roadmap](#roadmap)
 - [Screenshots](#screenshots)
 - [Download](#download)
@@ -67,8 +68,15 @@ Successful moves are **kept** if some items fail (no all-or-nothing rollback). C
 | **Organize** | **Preview** (dry-run) lists source → destination without writing disk; **execute** applies moves; per-item **category** override; **Skip this run** checkbox per file/folder |
 | **Safety** | Confirm before run; partial failures recorded, successes retained; **undo** last run from Organize banner or History |
 | **UX** | Drag a folder onto Organize; light / dark / system theme; **English & 中文** UI |
+| **Product tour** | Dismissible first-run guide for the dashboard, preview-first cleanup, Agent Cleanup, and Settings; replay it from Settings |
 | **Rules editor** | Collapsible categories, keywords, reorder, reset to defaults |
 | **Insights** | History search & filters; statistics & 7-day trend |
+
+### Agent Cleanup
+
+Agent Cleanup is available from the **Agent Cleanup** entry in the sidebar or the welcome page. It scans only documented, disposable paths for Codex, OpenCode, Claude Code, Kiro, Devin, Cursor, Windsurf, Gemini CLI / Antigravity, Continue, GitHub Copilot CLI, Amazon Q Developer, Cline, and Goose.
+
+The workflow is preview-first: choose a retention period, review grouped cache/log/temporary/worktree items, and confirm only the entries you want to move to the system Trash. Fixed allowlists, active-process protection, stale-worktree checks, and protected session/configuration paths are enforced again before execution. See [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md) for the exact scope and exclusions.
 
 ---
 
@@ -134,6 +142,10 @@ pnpm tauri dev
 ```
 
 The app opens in development mode with hot reload for the webview.
+
+From the welcome page, open **Agent Cleanup** to scan disposable files left by local coding agents. The default retention period is 30 days; scan results are reviewed before anything is moved, and approved items go to the system Trash rather than being permanently deleted.
+
+After the permission and Mole setup screens are completed or skipped, the app shows a short product tour. It can be closed at any time and replayed from **Settings → Replay tour**.
 
 ---
 

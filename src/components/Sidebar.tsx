@@ -123,7 +123,7 @@ export function Sidebar() {
         : aiProvider.type.toUpperCase()
 
   return (
-    <aside className="app-sidebar flex w-[240px] shrink-0 flex-col border-r border-iqon-border bg-iqon-bg py-6">
+    <aside className="app-sidebar flex w-[240px] shrink-0 flex-col border-r border-iqon-border bg-iqon-bg py-6" data-tour="sidebar">
       <div className="mb-6 flex items-center gap-2 px-6">
         <img src="/icon.svg" alt="StowMind" className="h-8 w-8" draggable={false} />
         <div className="flex items-center gap-2">
@@ -164,6 +164,7 @@ export function Sidebar() {
                   <NavLink
                     key={item.path}
                     to={item.path!}
+                    data-tour={item.path === '/' ? 'sidebar-home' : item.path === '/clean' ? 'sidebar-clean' : item.path === '/agent-cleanup' ? 'sidebar-agent-cleanup' : undefined}
                     end={item.path === '/'}
                     className={({ isActive }) =>
                       cn('iqon-nav-item w-full text-left', isActive && 'active')
@@ -213,6 +214,7 @@ export function Sidebar() {
           </div>
           <NavLink
             to="/settings"
+            data-tour="sidebar-settings"
             className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-iqon-row hover:text-foreground"
             aria-label={t('nav.settings')}
           >
