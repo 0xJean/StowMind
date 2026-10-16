@@ -12,13 +12,16 @@ The scanner uses a fixed allowlist of leaf paths for Codex, OpenCode, Claude Cod
 - Gemini CLI / Antigravity CLI logs and crash reports, Continue's rebuildable code index and Chromium utility cache, GitHub Copilot CLI and macOS Copilot logs/marketplace cache, and Amazon Q's default `$TMPDIR/qlog` logs.
 - Cline's `~/.cline/data/logs` and Goose's CLI/macOS application log directories. These are treated as logs because they can contain prompts, code snippets, or tool output and are never silently removed.
 - Crashpad `pending` directories for desktop agents are scanned as one bounded temporary-file item, so a crash-report backlog is visible without rendering millions of individual files.
+- The current Git repository and repositories directly under the allowlisted Agent worktree roots are checked for Codex's `refs/codex/turn-diffs/*` refs and unreachable Git objects. Ref entries are listed individually; unreachable objects are summarized as one bounded item with an object count and byte estimate.
 - Claude and Codex application logs under `~/Library/Logs`.
 
 Aider, Roo Code, Tabnine, and Ollama are intentionally not included in this allowlist. Their useful data is either stored inside project directories, mixed with sessions/configuration, or belongs to a model runtime rather than an Agent cache. They can be added later when an independent, documented cache or log leaf is available.
 
-Only entries older than the selected retention period are suggested. The preview groups entries by agent and category (`cache`, `log`, `temporary`, and `orphan_worktree`) and marks protected entries separately. Very large aggregate directories report that at least 100,000 entries were inspected instead of expanding every child into the preview. The UI defaults to 30 days; the native command caps the value at 3,650 days.
+Only entries older than the selected retention period are suggested. The preview groups entries by agent and category (`cache`, `log`, `temporary`, `orphan_worktree`, `codex_internal_ref`, and `git_unreachable_object`) and marks protected entries separately. Very large aggregate directories report that at least 100,000 entries were inspected instead of expanding every child into the preview. The UI defaults to 30 days; the native command caps the value at 3,650 days.
 
 The scanner always protects configuration, credentials, browser state, session data, generated images, lock and PID files, nested sensitive descendants, and every allowlisted item while the corresponding Agent process is running. A worktree is considered orphaned only when its `.git` link is stale or it is no longer present in Git's `worktree list --porcelain` output. Normal and registered worktrees stay protected.
+
+Git metadata follows stricter rules than ordinary cache files. Codex refs are eligible only when the Codex process is not running, the ref is older than the retention period, and no Git lock is present. Unreachable objects are eligible only when the repository has no tracked changes, no Agent or Git process is active, and the object store is older than the retention period. They are never selected by default.
 
 ## Execution safety
 
@@ -27,8 +30,10 @@ The preview is advisory. Before execution, the native command:
 1. Requires an explicit confirmation flag from the UI.
 2. Rechecks every selected item against the same fixed allowlist and retention policy.
 3. Rejects symlinks, paths outside the allowlist, newly changed items, active state, and registered worktrees.
-4. Moves approved paths to the operating system Trash or Recycle Bin through the shared StowMind safe-trash adapter.
+4. Moves approved filesystem paths to the operating system Trash or Recycle Bin through the shared StowMind safe-trash adapter.
 
-The command never calls `rm` or permanently deletes a selected path. A second scan after execution refreshes the preview so entries changed while the confirmation dialog was open are skipped safely.
+Codex refs are removed with `git update-ref -d` after revalidation. An explicitly selected unreachable-object item first expires reflogs and then runs `git gc --prune=now`; this is a Git-native, irreversible operation and is blocked while the repository is dirty or locked.
+
+The command never calls `rm` or permanently deletes a selected filesystem path. Git object pruning is the one explicit irreversible exception and is opt-in. A second scan after execution refreshes the preview so entries changed while the confirmation dialog was open are skipped safely.
 
 The API responses identify this behavior with `source = stowmind_supplement`. If Mole later exposes an equivalent structured capability, this supplement should be replaced or routed through that Mole API.

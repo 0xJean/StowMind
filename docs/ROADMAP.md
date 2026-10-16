@@ -18,6 +18,7 @@
 
 - [x] **多 Agent 扫描**：覆盖 Codex、OpenCode、Claude Code、Kiro、Devin、Cursor、Windsurf、Gemini CLI / Antigravity、Continue、GitHub Copilot CLI、Amazon Q Developer、Cline、Goose 的固定缓存、日志、崩溃报告与孤立 worktree 路径。
 - [x] **安全清理**：按保留天数预览，执行前复核白名单、运行状态和 worktree 注册状态，确认后移入系统废纸篓，不永久删除。
+- [x] **Git 元数据清理**：检测 Codex `refs/codex/turn-diffs/*` 和不可达 Git 对象；refs 用 `git update-ref` 清理，不可达对象只有在仓库干净且明确确认后才由 Git 原生 prune 处理。
 - [x] **敏感数据保护**：会话、配置、凭据、浏览器状态和生成内容保持保护；未找到独立安全路径的 Agent 暂不加入扫描。
 
 ### 产品引导（已完成）

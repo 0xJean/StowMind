@@ -16,6 +16,8 @@ pub struct AgentCleanupPolicy {
     pub include_temporary: bool,
     #[serde(default = "default_true")]
     pub include_orphaned_worktrees: bool,
+    #[serde(default = "default_true")]
+    pub include_git_metadata: bool,
 }
 
 impl Default for AgentCleanupPolicy {
@@ -26,6 +28,7 @@ impl Default for AgentCleanupPolicy {
             include_logs: true,
             include_temporary: true,
             include_orphaned_worktrees: true,
+            include_git_metadata: true,
         }
     }
 }
@@ -135,6 +138,8 @@ pub(super) enum CleanupCategory {
     Logs,
     Temporary,
     Worktrees,
+    CodexRefs,
+    GitUnreachable,
 }
 
 impl CleanupCategory {
@@ -144,6 +149,8 @@ impl CleanupCategory {
             Self::Logs => "log",
             Self::Temporary => "temporary",
             Self::Worktrees => "orphan_worktree",
+            Self::CodexRefs => "codex_internal_ref",
+            Self::GitUnreachable => "git_unreachable_object",
         }
     }
 }
