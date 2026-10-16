@@ -228,14 +228,27 @@ fn agent_process_running(agent_id: &str) -> bool {
             }
         }
     }
-    let process_name = match agent_id {
-        "codex" => "codex",
-        "opencode" => "opencode",
-        "claude_code" => "claude",
-        "kiro" => "kiro",
-        "devin" => "devin",
-        "cursor" => "cursor",
-        "windsurf" => "windsurf",
+    let (_process_name, process_pattern) = match agent_id {
+        "codex" => ("codex", "(^|/|[[:space:]])codex([._[:space:]/-]|$)"),
+        "opencode" => ("opencode", "(^|/|[[:space:]])opencode([._[:space:]/-]|$)"),
+        "claude_code" => ("claude", "(^|/|[[:space:]])claude([._[:space:]/-]|$)"),
+        "kiro" => ("kiro", "(^|/|[[:space:]])kiro([._[:space:]/-]|$)"),
+        "devin" => ("devin", "(^|/|[[:space:]])devin([._[:space:]/-]|$)"),
+        "cursor" => ("cursor", "(^|/|[[:space:]])cursor([._[:space:]/-]|$)"),
+        "windsurf" => ("windsurf", "(^|/|[[:space:]])windsurf([._[:space:]/-]|$)"),
+        "gemini" => ("gemini", "(^|/|[[:space:]])(gemini|agy)([._[:space:]/-]|$)"),
+        "antigravity" => (
+            "antigravity",
+            "(^|/|[[:space:]])antigravity([._[:space:]/-]|$)",
+        ),
+        "continue" => ("continue", "(^|/|[[:space:]])continue([._[:space:]/-]|$)"),
+        "copilot" => (
+            "copilot",
+            "(^|/|[[:space:]])(copilot|github-copilot)([._[:space:]/-]|$)",
+        ),
+        "amazon_q" => ("q", "^q$"),
+        "cline" => ("cline", "(^|/|[[:space:]])cline([._[:space:]/-]|$)"),
+        "goose" => ("goose", "(^|/|[[:space:]])goose([._[:space:]/-]|$)"),
         _ => return false,
     };
 
@@ -244,18 +257,33 @@ fn agent_process_running(agent_id: &str) -> bool {
         .args(["/FO", "CSV", "/NH"])
         .output()
         .map(|output| {
-            String::from_utf8_lossy(&output.stdout)
-                .to_ascii_lowercase()
-                .contains(process_name)
+            let process_list = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
+            if agent_id == "amazon_q" {
+                process_list.contains("amazon-q")
+                    || process_list.contains("qchat")
+                    || process_list.contains("q.exe")
+            } else {
+                process_list.contains(_process_name)
+            }
         })
         .unwrap_or(false);
 
     #[cfg(not(target_os = "windows"))]
-    let active = Command::new("pgrep")
-        .args(["-if", process_name])
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false);
+    let active = if agent_id == "amazon_q" {
+        ["q", "qchat", "chat_cli"].into_iter().any(|name| {
+            Command::new("pgrep")
+                .args(["-ix", name])
+                .output()
+                .map(|output| output.status.success())
+                .unwrap_or(false)
+        })
+    } else {
+        Command::new("pgrep")
+            .args(["-if", process_pattern])
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+    };
     if let Ok(mut entries) = cache.lock() {
         entries.insert(agent_id.to_string(), (std::time::Instant::now(), active));
     }
@@ -341,6 +369,16 @@ mod tests {
             "x",
         )
         .unwrap();
+        fs::create_dir_all(home.join(".continue/index")).unwrap();
+        fs::write(home.join(".continue/index/index.sqlite"), "x").unwrap();
+        fs::create_dir_all(home.join(".copilot/logs")).unwrap();
+        fs::write(home.join(".copilot/logs/process.log"), "x").unwrap();
+        fs::create_dir_all(home.join(".gemini/antigravity-cli/log")).unwrap();
+        fs::write(home.join(".gemini/antigravity-cli/log/cli.log"), "x").unwrap();
+        fs::create_dir_all(home.join(".cline/data/logs")).unwrap();
+        fs::write(home.join(".cline/data/logs/cline.log"), "x").unwrap();
+        fs::create_dir_all(home.join(".local/state/goose/logs")).unwrap();
+        fs::write(home.join(".local/state/goose/logs/cli.log"), "x").unwrap();
         let preview = scan(
             &home,
             AgentCleanupPolicy {
@@ -353,8 +391,26 @@ mod tests {
             .agents
             .iter()
             .any(|agent| agent.id == "codex" && agent.available));
-        for agent_id in ["opencode", "kiro", "devin", "windsurf"] {
+        for agent_id in [
+            "opencode",
+            "kiro",
+            "devin",
+            "windsurf",
+            "gemini",
+            "antigravity",
+            "continue",
+            "copilot",
+            "amazon_q",
+            "cline",
+            "goose",
+        ] {
             assert!(preview.agents.iter().any(|agent| agent.id == agent_id));
+        }
+        for agent_id in ["continue", "copilot", "gemini", "cline", "goose"] {
+            assert!(preview
+                .agents
+                .iter()
+                .any(|agent| agent.id == agent_id && agent.available));
         }
         assert!(preview.items.iter().any(|item| item.category == "cache"));
         assert!(preview.items.iter().any(|item| {

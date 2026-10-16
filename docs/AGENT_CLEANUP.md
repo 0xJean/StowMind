@@ -4,13 +4,17 @@ Agent Cleanup is a StowMind supplement for reclaiming disposable files left by l
 
 ## Scan and retention rules
 
-The scanner uses a fixed allowlist of leaf paths for Codex, OpenCode, Claude Code, Kiro, Devin, Cursor, and Windsurf. It does not recursively inspect an agent home, project directory, browser profile, or the whole macOS Application Support tree. The current allowlist covers:
+The scanner uses a fixed allowlist of leaf paths for Codex, OpenCode, Claude Code, Kiro, Devin, Cursor, Windsurf, Gemini CLI / Antigravity, Continue, GitHub Copilot CLI, Amazon Q Developer, Cline, and Goose. It does not recursively inspect an agent home, project directory, browser profile, or the whole macOS Application Support tree. The current allowlist covers:
 
 - Codex and Claude Code cache, debug, paste-cache, shell-snapshot, and registered worktree roots under the agent home.
 - OpenCode CLI cache/log roots and the cache/log leaves of its desktop application.
-- Kiro's default `$TMPDIR/kiro-log` CLI log directory, plus Kiro, Devin, Cursor, and Windsurf macOS Application Support cache/log leaves. Devin's CLI cache and log roots are also included.
+- Kiro's default `$TMPDIR/kiro-log` CLI log directory, plus Kiro, Devin, Cursor, Windsurf, and Antigravity macOS Application Support cache/log leaves. Devin's CLI cache and log roots are also included.
+- Gemini CLI / Antigravity CLI logs and crash reports, Continue's rebuildable code index and Chromium utility cache, GitHub Copilot CLI and macOS Copilot logs/marketplace cache, and Amazon Q's default `$TMPDIR/qlog` logs.
+- Cline's `~/.cline/data/logs` and Goose's CLI/macOS application log directories. These are treated as logs because they can contain prompts, code snippets, or tool output and are never silently removed.
 - Crashpad `pending` directories for desktop agents are scanned as one bounded temporary-file item, so a crash-report backlog is visible without rendering millions of individual files.
 - Claude and Codex application logs under `~/Library/Logs`.
+
+Aider, Roo Code, Tabnine, and Ollama are intentionally not included in this allowlist. Their useful data is either stored inside project directories, mixed with sessions/configuration, or belongs to a model runtime rather than an Agent cache. They can be added later when an independent, documented cache or log leaf is available.
 
 Only entries older than the selected retention period are suggested. The preview groups entries by agent and category (`cache`, `log`, `temporary`, and `orphan_worktree`) and marks protected entries separately. Very large aggregate directories report that at least 100,000 entries were inspected instead of expanding every child into the preview. The UI defaults to 30 days; the native command caps the value at 3,650 days.
 

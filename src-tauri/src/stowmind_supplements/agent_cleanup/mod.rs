@@ -1,6 +1,7 @@
 //! Agent Cleanup supplement.  The implementation is split into adapters,
 //! scanning and worktree safety so each policy surface stays reviewable.
 
+mod adapter_roots;
 mod adapters;
 mod scanner;
 mod types;
