@@ -6,6 +6,7 @@ import {
   Activity,
   AlertCircle,
   Archive,
+  Bot,
   BarChart3,
   Copy,
   Download,
@@ -68,6 +69,7 @@ export function Sidebar() {
         label: t('sidebar.group.cleaning'),
         items: [
           { path: '/clean', icon: Trash2, label: t('nav.clean') },
+          { path: '/agent-cleanup', icon: Bot, label: t('nav.agentCleanup') },
           { path: '/installers', icon: Archive, label: t('nav.installers') },
           { path: '/purge', icon: PackageX, label: t('nav.purge') },
           { path: '/duplicates', icon: Copy, label: t('nav.duplicates') },

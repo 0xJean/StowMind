@@ -196,6 +196,8 @@ fn main() {
             pty::pty_kill,
             stowmind_supplements::app_updates::stowmind_supplement_app_update_scan,
             stowmind_supplements::app_updates::stowmind_supplement_app_update_action,
+            stowmind_supplements::agent_cleanup::agent_cleanup_scan,
+            stowmind_supplements::agent_cleanup::agent_cleanup_execute,
             stowmind_supplements::safe_trash::stowmind_supplement_move_to_trash,
             system_settings::system_settings_state,
             system_settings::set_system_launch_at_login,

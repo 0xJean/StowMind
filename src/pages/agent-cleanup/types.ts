@@ -1,0 +1,56 @@
+export type AgentCleanupCategory = 'cache' | 'log' | 'temporary' | 'orphan_worktree'
+
+export interface AgentCleanupAgent {
+  id: string
+  name: string
+  available?: boolean
+  item_count?: number
+  total_size?: number
+}
+
+export interface AgentCleanupItem {
+  id: string
+  agent: string
+  category: AgentCleanupCategory
+  path: string
+  size: number
+  modified_at?: string | number | null
+  reason?: string | null
+  default_selected: boolean
+  protected: boolean
+}
+
+export interface AgentCleanupProtected {
+  path: string
+  agent: string
+  reason: string
+}
+
+export interface AgentCleanupScanResult {
+  scanned_at: string | number
+  retention_days: number
+  agents: AgentCleanupAgent[]
+  items: AgentCleanupItem[]
+  protected: AgentCleanupProtected[]
+}
+
+export interface AgentCleanupExecuteRequest {
+  itemIds: string[]
+  retentionDays: number
+  confirmed: boolean
+}
+
+export interface AgentCleanupExecuteResult {
+  removed_count: number
+  freed_bytes: number
+  skipped_count?: number
+  errors?: string[]
+  completed_at?: string
+}
+
+export const AGENT_CLEANUP_CATEGORIES: AgentCleanupCategory[] = [
+  'cache',
+  'log',
+  'temporary',
+  'orphan_worktree',
+]

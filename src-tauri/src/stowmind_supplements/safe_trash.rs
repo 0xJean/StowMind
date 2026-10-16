@@ -47,6 +47,13 @@ fn move_to_trash(path: String) -> Result<StowmindSupplementTrashResult, String> 
     })
 }
 
+/// Move a path through the same validated system-trash implementation used by
+/// the user-facing supplement command.  Agent Cleanup calls this only after
+/// revalidating the path against its fixed allow-list.
+pub(crate) fn move_path_to_trash(path: &Path) -> Result<StowmindSupplementTrashResult, String> {
+    move_to_trash(path.to_string_lossy().to_string())
+}
+
 fn validate_target(path: &str) -> Result<PathBuf, String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {

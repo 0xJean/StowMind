@@ -6,6 +6,7 @@ function lazyPage<T extends ComponentType>(loader: () => Promise<{ default: T }>
 }
 
 const AnalyzePage = lazyPage(() => import('./pages/AnalyzePage').then((module) => ({ default: module.AnalyzePage })))
+const AgentCleanupPage = lazyPage(() => import('./pages/AgentCleanupPage').then((module) => ({ default: module.AgentCleanupPage })))
 const ApplicationManagementPage = lazyPage(() => import('./pages/ApplicationManagementPage').then((module) => ({ default: module.ApplicationManagementPage })))
 const CleanPage = lazyPage(() => import('./pages/CleanPage').then((module) => ({ default: module.CleanPage })))
 const DoctorPage = lazyPage(() => import('./pages/DoctorPage').then((module) => ({ default: module.DoctorPage })))
@@ -35,6 +36,7 @@ const KEEP_ALIVE_ROUTES: KeepAliveRoute[] = [
   { path: '/statistics', Component: StatisticsPage },
   { path: '/duplicates', Component: DuplicatesPage },
   { path: '/clean', Component: CleanPage },
+  { path: '/agent-cleanup', Component: AgentCleanupPage },
   { path: '/installers', Component: InstallerPage },
   { path: '/optimize', Component: OptimizePage },
   { path: '/apps', Component: ApplicationManagementPage },

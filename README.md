@@ -54,6 +54,7 @@ Successful moves are **kept** if some items fail (no all-or-nothing rollback). C
 | Area | What you get |
 |------|----------------|
 | **System clean** | Native StowMind view powered by real `mo clean --dry-run` output, with confirmed execution through Mole for system caches, logs, browser caches, and dev tool caches |
+| **Agent cleanup** | Preview and safely move stale Codex, OpenCode, Claude Code, Kiro, Devin, Cursor, and Windsurf caches, logs, temporary files, and orphaned worktrees to the system Trash using fixed allowlists and retention rules ([details](docs/AGENT_CLEANUP.md)) |
 | **Disk analysis** | Native StowMind view powered by real `mo analyze -json <path>` output |
 | **Build artifacts** | Mole purge preview and execution for a selected project directory |
 | **Installer cleanup** | Mole installer scan and cleanup functions for `.dmg`, `.pkg`, `.iso`, `.xip`, and installer-like `.zip` files |

@@ -53,6 +53,7 @@
 | 模块 | 说明 |
 |------|------|
 | **系统清理** | StowMind 原生页面，真实调用 `mo clean --dry-run` 预览，并通过 Mole 执行确认后的系统缓存、日志、浏览器缓存和开发工具缓存清理 |
+| **Agent 清理** | 按固定白名单和保留规则预览 Codex、OpenCode、Claude Code、Kiro、Devin、Cursor、Windsurf 的过期缓存、日志、临时文件与孤立 worktree，确认后移入系统废纸篓（详见 [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md)） |
 | **磁盘分析** | StowMind 原生页面，真实调用 `mo analyze -json <path>` 输出 |
 | **构建产物** | 复用 Mole purge 逻辑，对用户选择的项目目录做 dry-run 预览，并通过 Mole purge 执行清理 |
 | **安装包清理** | 复用 Mole installer 的真实扫描与清理函数，处理 `.dmg`、`.pkg`、`.iso`、`.xip` 和安装型 `.zip` |
