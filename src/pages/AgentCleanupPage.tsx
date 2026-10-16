@@ -1,7 +1,9 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useI18n } from '@/i18n'
+import { createCleanupHistoryRecord } from '@/lib/historyRecords'
 import { formatFileSize } from '@/lib/utils'
+import { useAppStore } from '@/stores/app'
 import { invoke } from '@tauri-apps/api/tauri'
 import {
   AlertCircle,
@@ -37,6 +39,9 @@ function formatModifiedAt(value: string | number | null | undefined) {
 
 export function AgentCleanupPage() {
   const { t } = useI18n()
+  const addHistory = useAppStore((state) => state.addHistory)
+  const updateStatistics = useAppStore((state) => state.updateStatistics)
+  const statistics = useAppStore((state) => state.statistics)
   const [retentionInput, setRetentionInput] = useState(String(DEFAULT_RETENTION_DAYS))
   const [data, setData] = useState<AgentCleanupScanResult | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -45,11 +50,16 @@ export function AgentCleanupPage() {
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [result, setResult] = useState<AgentCleanupExecuteResult | null>(null)
+  const [gitPruneExecuted, setGitPruneExecuted] = useState(false)
 
   const retentionDays = Math.max(0, Number.parseInt(retentionInput, 10) || 0)
   const selectableItems = useMemo(
     () => (data?.items ?? []).filter((item) => !item.protected),
     [data]
+  )
+  const bulkSelectableItems = useMemo(
+    () => selectableItems.filter((item) => item.category !== 'git_unreachable_object'),
+    [selectableItems]
   )
   const selectedItems = useMemo(
     () => selectableItems.filter((item) => selectedIds.has(item.id)),
@@ -75,10 +85,10 @@ export function AgentCleanupPage() {
     setExpanded(new Set())
   }
 
-  const scan = async () => {
+  const scan = async (preserveResult = false) => {
     setLoading(true)
     setError(null)
-    setResult(null)
+    if (!preserveResult) setResult(null)
     try {
       const next = await invoke<AgentCleanupScanResult>('agent_cleanup_scan', { retentionDays })
       setData(next)
@@ -110,7 +120,9 @@ export function AgentCleanupPage() {
   }
 
   const toggleGroup = (items: AgentCleanupItem[]) => {
-    const ids = items.filter((item) => !item.protected).map((item) => item.id)
+    const ids = items
+      .filter((item) => !item.protected && item.category !== 'git_unreachable_object')
+      .map((item) => item.id)
     const allSelected = ids.length > 0 && ids.every((id) => selectedIds.has(id))
     setSelectedIds((current) => {
       const next = new Set(current)
@@ -123,8 +135,8 @@ export function AgentCleanupPage() {
   }
 
   const toggleAll = () => {
-    const allSelected = selectableItems.length > 0 && selectableItems.every((item) => selectedIds.has(item.id))
-    setSelectedIds(allSelected ? new Set() : new Set(selectableItems.map((item) => item.id)))
+    const allSelected = bulkSelectableItems.length > 0 && bulkSelectableItems.every((item) => selectedIds.has(item.id))
+    setSelectedIds(allSelected ? new Set() : new Set(bulkSelectableItems.map((item) => item.id)))
   }
 
   const execute = async () => {
@@ -134,6 +146,8 @@ export function AgentCleanupPage() {
       size: formatFileSize(selectedBytes),
     }))
     if (!confirmed) return
+    const includesGitPrune = selectedItems.some((item) => item.category === 'git_unreachable_object')
+    if (includesGitPrune && !window.confirm(t('agentCleanup.gitPruneConfirm'))) return
 
     setExecuting(true)
     setError(null)
@@ -145,8 +159,47 @@ export function AgentCleanupPage() {
           confirmed: true,
         },
       })
-      await scan()
+      const timestamp = next.completed_at
+        ? new Date(Number(next.completed_at) * 1000 || next.completed_at).toISOString()
+        : new Date().toISOString()
+      const categoryCounts = selectedItems.reduce<Record<string, number>>((counts, item) => {
+        const action = next.actions?.find((candidate) => candidate.path === item.path)
+        if (action?.success) {
+          const label = categoryLabel(item.category, t)
+          counts[label] = (counts[label] ?? 0) + 1
+        }
+        return counts
+      }, {})
+      const hasGitPrune = includesGitPrune
+      const cleanupErrors = next.errors ?? []
+      addHistory(createCleanupHistoryRecord({
+        type: 'agent-cleanup',
+        target: t('agentCleanup.title'),
+        label: t('history.type.agent-cleanup'),
+        itemCount: next.removed_count,
+        totalSize: next.freed_bytes,
+        action: 'execute',
+        executed: true,
+        errors: cleanupErrors,
+        skippedCount: next.skipped_count ?? cleanupErrors.length,
+        riskNotes: hasGitPrune ? [t('agentCleanup.gitPruneRisk')] : undefined,
+        irreversible: hasGitPrune,
+        categoryCounts: Object.keys(categoryCounts).length > 0 ? categoryCounts : undefined,
+        timestamp,
+      }))
+      updateStatistics({
+        agentCleanupItemsRemoved: (statistics.agentCleanupItemsRemoved ?? 0) + next.removed_count,
+        agentCleanupSizeFreed: (statistics.agentCleanupSizeFreed ?? 0) + next.freed_bytes,
+        agentCleanupOperationCount: (statistics.agentCleanupOperationCount ?? 0) + 1,
+        agentCleanupSkipped: (statistics.agentCleanupSkipped ?? 0) + (next.skipped_count ?? 0),
+        agentCleanupErrors: (statistics.agentCleanupErrors ?? 0) + cleanupErrors.length,
+        lastAgentCleanup: timestamp,
+      })
       setResult(next)
+      setGitPruneExecuted(includesGitPrune)
+      await scan(true)
+      // A successful refresh applies its normal defaults; after an execute
+      // operation the next action must be explicit rather than preselected.
       setSelectedIds(new Set())
       toast.success(t('agentCleanup.cleanSuccess', {
         count: next.removed_count,
@@ -217,14 +270,25 @@ export function AgentCleanupPage() {
       {result && (
         <div className="iqon-card flex items-start gap-3 border-iqon-green/30 bg-iqon-green/10 p-4">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-iqon-green" />
-          <div><p className="font-bold text-iqon-green">{t('agentCleanup.resultTitle')}</p><p className="mt-1 text-xs text-muted-foreground">{t('agentCleanup.resultSummary', { count: result.removed_count, size: formatFileSize(result.freed_bytes) })}</p></div>
+          <div>
+            <p className="font-bold text-iqon-green">{t('agentCleanup.resultTitle')}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('agentCleanup.resultSummary', { count: result.removed_count, size: formatFileSize(result.freed_bytes) })}</p>
+            {((result.skipped_count ?? 0) > 0 || (result.errors?.length ?? 0) > 0) && (
+              <p className="mt-1 text-xs text-iqon-yellow">
+                {t('agentCleanup.resultSkipped', { skipped: result.skipped_count ?? 0, errors: result.errors?.length ?? 0 })}
+              </p>
+            )}
+            {gitPruneExecuted && (
+              <p className="mt-1 text-xs text-iqon-red">{t('agentCleanup.gitPruneRisk')}</p>
+            )}
+          </div>
         </div>
       )}
 
       <Card>
         <CardHeader className="flex-row items-start justify-between space-y-0">
           <div><CardTitle className="text-base">{t('agentCleanup.previewTitle')}</CardTitle><CardDescription>{data ? t('agentCleanup.previewSummary', { count: data.items.length, agents: data.agents.filter((agent) => agent.available).length }) : t('agentCleanup.loading')}</CardDescription></div>
-          <Button variant="outline" size="sm" onClick={toggleAll} disabled={selectableItems.length === 0 || loading || executing}>{t('agentCleanup.toggleAll')}</Button>
+          <Button variant="outline" size="sm" onClick={toggleAll} disabled={bulkSelectableItems.length === 0 || loading || executing}>{t('agentCleanup.toggleAll')}</Button>
         </CardHeader>
         <CardContent className="space-y-3">
           {loading && !data ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{t('agentCleanup.loading')}</div> : groupedItems.length === 0 ? <div className="py-8 text-center text-sm text-muted-foreground">{t('agentCleanup.empty')}</div> : groupedItems.map(([groupId, items]) => {
@@ -245,7 +309,7 @@ export function AgentCleanupPage() {
                 {isOpen && <div className="border-t border-border/60 px-3 pb-3">{items.map((item) => (
                   <label key={item.id} className="flex items-start gap-3 border-b border-border/40 py-3 last:border-b-0">
                     <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleItem(item.id)} disabled={item.protected || executing} className="mt-1 h-4 w-4 accent-iqon-green" />
-                    <div className="min-w-0 flex-1"><p className="break-all text-xs font-semibold">{item.path}</p><p className="mt-1 text-[11px] text-muted-foreground">{item.protected ? t('agentCleanup.protected') : item.reason || t('agentCleanup.defaultReason')} · {formatFileSize(item.size)} · {formatModifiedAt(item.modified_at)}</p></div>
+                    <div className="min-w-0 flex-1"><p className="break-all text-xs font-semibold">{item.path}</p><p className="mt-1 text-[11px] text-muted-foreground">{item.protected ? item.reason || t('agentCleanup.protected') : item.reason || t('agentCleanup.defaultReason')} · {formatFileSize(item.size)} · {formatModifiedAt(item.modified_at)}</p></div>
                     {item.protected && <ShieldCheck className="h-4 w-4 shrink-0 text-iqon-green" />}
                   </label>
                 ))}</div>}

@@ -66,8 +66,12 @@ pub(super) const ADAPTER_ROOTS: &[AgentRootSpec] = &[
         CleanupCategory::Cache,
         "Library/Application Support/Codex/GraphiteDawnCache"
     ),
+    // Crashpad's pending directory can contain millions of independent dump
+    // files.  Keep the directory itself allow-listed, but scan and remove
+    // individual entries so a fresh dump cannot make an old directory look
+    // safe to delete as a whole.
     root!(
-        file "codex",
+        "codex",
         CleanupCategory::Temporary,
         "Library/Application Support/Codex/Crashpad/pending"
     ),
@@ -113,7 +117,7 @@ pub(super) const ADAPTER_ROOTS: &[AgentRootSpec] = &[
         "Library/Application Support/ai.opencode.desktop/logs"
     ),
     root!(
-        file "opencode",
+        "opencode",
         CleanupCategory::Temporary,
         "Library/Application Support/ai.opencode.desktop/Crashpad/pending"
     ),
@@ -192,7 +196,7 @@ pub(super) const ADAPTER_ROOTS: &[AgentRootSpec] = &[
         "Library/Application Support/Claude/fcache"
     ),
     root!(
-        file "claude_code",
+        "claude_code",
         CleanupCategory::Temporary,
         "Library/Application Support/Claude/Crashpad/pending"
     ),
@@ -234,7 +238,7 @@ pub(super) const ADAPTER_ROOTS: &[AgentRootSpec] = &[
         "Library/Application Support/Kiro/logs"
     ),
     root!(
-        file "kiro",
+        "kiro",
         CleanupCategory::Temporary,
         "Library/Application Support/Kiro/Crashpad/pending"
     ),
@@ -274,7 +278,7 @@ pub(super) const ADAPTER_ROOTS: &[AgentRootSpec] = &[
         "Library/Application Support/Devin/logs"
     ),
     root!(
-        file "devin",
+        "devin",
         CleanupCategory::Temporary,
         "Library/Application Support/Devin/Crashpad/pending"
     ),
@@ -315,7 +319,7 @@ pub(super) const ADAPTER_ROOTS: &[AgentRootSpec] = &[
         "Library/Application Support/Cursor/DawnGraphiteCache"
     ),
     root!(
-        file "cursor",
+        "cursor",
         CleanupCategory::Temporary,
         "Library/Application Support/Cursor/Crashpad/pending"
     ),
@@ -350,7 +354,7 @@ pub(super) const ADAPTER_ROOTS: &[AgentRootSpec] = &[
         "Library/Application Support/Windsurf/logs"
     ),
     root!(
-        file "windsurf",
+        "windsurf",
         CleanupCategory::Temporary,
         "Library/Application Support/Windsurf/Crashpad/pending"
     ),
@@ -395,7 +399,7 @@ pub(super) const ADAPTER_ROOTS: &[AgentRootSpec] = &[
         "Library/Application Support/Antigravity/logs"
     ),
     root!(
-        file "antigravity",
+        "antigravity",
         CleanupCategory::Temporary,
         "Library/Application Support/Antigravity/Crashpad/pending"
     ),

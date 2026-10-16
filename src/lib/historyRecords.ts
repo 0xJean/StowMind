@@ -11,6 +11,10 @@ interface CleanupHistoryInput {
   action: CleanupSummary['action']
   executed?: boolean
   errors?: string[]
+  skippedCount?: number
+  riskNotes?: string[]
+  irreversible?: boolean
+  categoryCounts?: Record<string, number>
   timestamp?: string
 }
 
@@ -28,7 +32,7 @@ export function createCleanupHistoryRecord(input: CleanupHistoryInput): HistoryR
     timestamp,
     directory: input.target,
     totalFiles: input.itemCount,
-    categories: { [input.label]: input.itemCount },
+    categories: input.categoryCounts ?? { [input.label]: input.itemCount },
     executed: input.executed ?? input.action !== 'preview',
     moves: [],
     cleanupSummary: {
@@ -36,6 +40,9 @@ export function createCleanupHistoryRecord(input: CleanupHistoryInput): HistoryR
       totalSize: input.totalSize,
       action: input.action,
       errors: input.errors && input.errors.length > 0 ? input.errors : undefined,
+      skippedCount: input.skippedCount,
+      riskNotes: input.riskNotes && input.riskNotes.length > 0 ? input.riskNotes : undefined,
+      irreversible: input.irreversible,
     },
   }
 }

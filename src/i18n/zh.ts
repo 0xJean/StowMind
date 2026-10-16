@@ -1191,6 +1191,9 @@ export const zh = {
   'agentCleanup.cleanSuccess': 'Agent 清理完成：{count} 项，释放 {size}',
   'agentCleanup.resultTitle': '清理完成',
   'agentCleanup.resultSummary': '已删除 {count} 项，释放 {size}。',
+  'agentCleanup.resultSkipped': '跳过 {skipped} 项；{errors} 个错误已记录到历史。',
+  'agentCleanup.gitPruneRisk': '不可达 Git 对象修剪不可撤销；该风险已保存到历史记录。',
+  'agentCleanup.gitPruneConfirm': '此操作会永久修剪不可达 Git 对象，并删除超过保留期的 reflog 恢复点。确定继续吗？',
   'agentCleanup.category.cache': '缓存',
   'agentCleanup.category.log': '日志',
   'agentCleanup.category.temporary': '临时文件',
@@ -1667,6 +1670,7 @@ export const zh = {
   'history.type.installer': '安装包',
   'history.type.uninstall': '应用卸载',
   'history.type.optimize': '系统优化',
+  'history.type.agent-cleanup': 'Agent 清理',
   'history.statusUndone': '已撤销',
   'history.statusExecuted': '已执行',
   'history.partialErrors': '部分失败',
@@ -1677,6 +1681,7 @@ export const zh = {
   'history.spaceFreed': '释放 {size}',
   'history.spacePotential': '预计 {size}',
   'history.cleanupErrors': '清理失败',
+  'history.cleanupSkipped': '跳过 {n} 项',
   'history.undo': '撤销',
   'history.undoNoMoves': '此记录无移动详情，无法撤销',
   'history.undoAlready': '此记录已撤销过',
@@ -1730,6 +1735,7 @@ export const zh = {
   'stats.typeFreed': '释放 {size}',
   'stats.typeFiles': '{n} 文件',
   'stats.typeNever': '暂无记录',
+  'stats.typeSkipped': '跳过 {n} 项',
 
   // HistoryPage
   'history.filterTypeAll': '全部类型',

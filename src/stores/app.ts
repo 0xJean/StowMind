@@ -57,13 +57,17 @@ export interface DuplicateGroup {
   paths: string[]
 }
 
-export type HistoryRecordType = 'organize' | 'ios-organize' | 'duplicates' | 'clean' | 'purge' | 'installer' | 'uninstall' | 'optimize'
+export type HistoryRecordType = 'organize' | 'ios-organize' | 'duplicates' | 'clean' | 'purge' | 'installer' | 'uninstall' | 'optimize' | 'agent-cleanup'
 
 export interface CleanupSummary {
   itemCount?: number
   totalSize?: number
   action?: 'execute' | 'preview'
   errors?: string[]
+  skippedCount?: number
+  /** Explicit safety warnings preserved in history for irreversible actions. */
+  riskNotes?: string[]
+  irreversible?: boolean
 }
 
 export interface HistoryRecord {
@@ -93,6 +97,12 @@ export interface Statistics {
   cleanSizeFreed?: number
   cleanOperationCount?: number
   lastCleaned?: string
+  agentCleanupItemsRemoved?: number
+  agentCleanupSizeFreed?: number
+  agentCleanupOperationCount?: number
+  agentCleanupSkipped?: number
+  agentCleanupErrors?: number
+  lastAgentCleanup?: string
 }
 
 interface AppState {
@@ -310,6 +320,11 @@ export const useAppStore = create<AppState>()(
         cleanItemsRemoved: 0,
         cleanSizeFreed: 0,
         cleanOperationCount: 0,
+        agentCleanupItemsRemoved: 0,
+        agentCleanupSizeFreed: 0,
+        agentCleanupOperationCount: 0,
+        agentCleanupSkipped: 0,
+        agentCleanupErrors: 0,
       },
       updateStatistics: (stats) => set((state) => ({
         statistics: { ...state.statistics, ...stats }

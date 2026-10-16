@@ -14,6 +14,7 @@ export const CLEANUP_TYPES: HistoryRecordType[] = [
   'installer',
   'uninstall',
   'optimize',
+  'agent-cleanup',
 ]
 
 export interface CleanupActivitySummary {
@@ -34,13 +35,14 @@ export function buildCleanupActivitySummary(
   const cleanup = history.filter((record) => isCleanupType(record.type ?? 'organize'))
   const executed = cleanup.filter((record) => record.executed)
   const latestExecuted = executed[0]
-  const statFreed = statistics.cleanSizeFreed ?? 0
+  const statFreed = (statistics.cleanSizeFreed ?? 0) + (statistics.agentCleanupSizeFreed ?? 0)
   const historyFreed = executed.reduce((sum, record) => sum + cleanupSize(record), 0)
+  const statOperations = (statistics.cleanOperationCount ?? 0) + (statistics.agentCleanupOperationCount ?? 0)
 
   return {
     source: STOWMIND_SUPPLEMENT_ACTIVITY_SOURCE,
     totalFreed: Math.max(statFreed, historyFreed),
-    executedCount: statistics.cleanOperationCount ?? executed.length,
+    executedCount: Math.max(statOperations, executed.length),
     previewCount: cleanup.length - executed.length,
     optimizedCount: cleanup.filter((record) => record.type === 'optimize').length,
     latest: cleanup[0],
