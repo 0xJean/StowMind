@@ -166,6 +166,8 @@ pnpm exec tsc --noEmit
 cd src-tauri && cargo test
 ```
 
+Pull requests run the required `frontend` and `macos` checks. See [CI validation and local commands](docs/CI.md).
+
 ### Icons
 
 Icons under `src-tauri/icons/` are generated from `public/icon.svg`. If the Tauri CLI cannot read your SVG, you can use the Node toolchain (`sharp`, `png-to-ico`) or a small script to emit PNG / ICO / ICNS.

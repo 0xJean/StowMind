@@ -165,6 +165,8 @@ pnpm exec tsc --noEmit
 cd src-tauri && cargo test
 ```
 
+PR 会自动运行 `frontend` 和 `macos` 两项必需检查，详见 [CI 验证与本地命令](docs/CI.md)。
+
 ### 应用图标
 
 `src-tauri/icons/` 下的资源通常由 `public/icon.svg` 生成。若 Tauri CLI 无法解析 SVG，可使用 Node（如 `sharp`、`png-to-ico`）或脚本生成 PNG / ICO / ICNS。
