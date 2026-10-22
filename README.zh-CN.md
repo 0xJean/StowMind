@@ -102,16 +102,9 @@ docs/screenshots/
 
 ## 下载安装
 
-通过 [GitHub Actions](.github/workflows/publish.yml) 在推送版本标签时构建各平台安装包：
+从 [GitHub 最新正式 Release](https://github.com/0xJean/StowMind/releases/latest) 下载安装包。请核对版本号和发布说明，确认它包含所需功能；代码合并到 `main` 或 PR 检查通过，不代表新版安装包已经发布。
 
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-Release 默认以**草稿**形式创建，请在 GitHub Releases 页面核对后再正式发布。
-
-**支持平台：** macOS（Apple Silicon / Intel）、Windows、Linux（CI 基于 Ubuntu 环境构建）。
+当前 [publish 工作流](.github/workflows/publish.yml) 构建适用于 Apple Silicon 和 Intel 的 universal macOS 安装包。发布资产前必须通过人工审批、Developer ID 签名检查、Apple 公证、staple 和 Gatekeeper 验证。维护者须遵循 [正式发布流程](docs/RELEASE_PROCESS.md)，并独立下载验收安装包。
 
 ---
 
@@ -179,7 +172,7 @@ PR 会自动运行 `frontend` 和 `macos` 两项必需检查，详见 [CI 验证
 pnpm tauri build
 ```
 
-产物位于 `src-tauri/target/release/bundle/`。多平台自动化构建请使用 **publish** 工作流（标签形如 `v*`）。
+本地开发产物位于 `src-tauri/target/release/bundle/`。正式 macOS 安装包只能按 [发布流程](docs/RELEASE_PROCESS.md) 通过 **publish** 工作流构建和上传，不能手工发布本地产物。
 
 ---
 

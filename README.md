@@ -105,16 +105,9 @@ docs/screenshots/
 
 ## Download
 
-Prebuilt binaries are produced by [GitHub Actions](.github/workflows/publish.yml) when you push a version tag:
+Download the available installer from the [latest published GitHub Release](https://github.com/0xJean/StowMind/releases/latest). Check its version and release notes to see which features it includes; changes on `main` or successful PR checks do not mean a new installer has been published.
 
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-Releases are created as **drafts**; publish them from the GitHub Releases page after review.
-
-**Platforms:** macOS (Apple Silicon & Intel), Windows, Linux (Ubuntu-friendly builds in CI).
+The current [publish workflow](.github/workflows/publish.yml) produces a universal macOS installer for Apple Silicon and Intel. It requires release approval, Developer ID signature checks, Apple notarization, stapling, and Gatekeeper verification before publishing assets. Maintainers must follow the [release process](docs/RELEASE_PROCESS.md), including independent verification of the downloaded installer.
 
 ---
 
@@ -182,7 +175,7 @@ Icons under `src-tauri/icons/` are generated from `public/icon.svg`. If the Taur
 pnpm tauri build
 ```
 
-Artifacts land under `src-tauri/target/release/bundle/`. For multi-platform CI builds, use the **publish** workflow (tags `v*`).
+Local development artifacts land under `src-tauri/target/release/bundle/`. Official macOS installers must be built and uploaded by the **publish** workflow under the [release process](docs/RELEASE_PROCESS.md); do not publish local artifacts manually.
 
 ---
 

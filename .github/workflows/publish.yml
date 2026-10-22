@@ -40,18 +40,10 @@ jobs:
           node-version: lts/*
           cache: pnpm
 
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-        with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          workspaces: "./src-tauri -> target"
-
-      - name: install frontend dependencies
-        run: pnpm install --frozen-lockfile
+      - name: verify release tag and version manifests
+        env:
+          TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: node scripts/check-release-manifest.mjs
 
       - name: require macOS release credentials
         shell: bash
@@ -85,27 +77,36 @@ jobs:
             exit 1
           fi
 
-          d="APPLE_EOF_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}_$(openssl rand -hex 8)"
-          {
-            echo "APPLE_CERTIFICATE<<${d}"
-            printf '%s\n' "${APPLE_CERTIFICATE}"
-            echo "${d}"
-            echo "APPLE_CERTIFICATE_PASSWORD<<${d}_P12"
-            printf '%s\n' "${APPLE_CERTIFICATE_PASSWORD}"
-            echo "${d}_P12"
-            echo "APPLE_SIGNING_IDENTITY<<${d}_ID"
-            printf '%s\n' "${APPLE_SIGNING_IDENTITY}"
-            echo "${d}_ID"
-            echo "APPLE_TEAM_ID<<${d}_TID"
-            printf '%s\n' "${APPLE_TEAM_ID}"
-            echo "${d}_TID"
-          } >> "${GITHUB_ENV}"
+      - name: preflight Apple notarization access
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: node scripts/notarize-macos.mjs preflight
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: install frontend dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: build universal macOS app
         env:
           IOS_HELPER_ARCHS: universal
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
+          umask 077
           keychain_path="${RUNNER_TEMP}/stowmind-signing.keychain-db"
           keychain_password="$(openssl rand -hex 24)"
           certificate_path="${RUNNER_TEMP}/stowmind-release-ci.p12"
@@ -165,36 +166,59 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           set -euo pipefail
-          key_path="${RUNNER_TEMP}/AuthKey_${APPLE_API_KEY_ID}.p8"
-          printf '%s\n' "${APPLE_API_KEY}" > "${key_path}"
-          chmod 600 "${key_path}"
-
-          dmg_path="$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name 'StowMind_*.dmg' -print -quit)"
-          if [ -z "${dmg_path}" ]; then
+          version="$(node -p "require('./package.json').version")"
+          dmg_path="src-tauri/target/universal-apple-darwin/release/bundle/dmg/StowMind_${version}_universal.dmg"
+          if [ ! -f "${dmg_path}" ]; then
             echo "::error::No StowMind DMG was produced."
             exit 1
           fi
 
-          xcrun notarytool submit "${dmg_path}" \
-            --key "${key_path}" \
-            --key-id "${APPLE_API_KEY_ID}" \
-            --issuer "${APPLE_API_ISSUER}" \
-            --wait \
-            --timeout 30m
-          xcrun stapler staple "${dmg_path}"
-          xcrun stapler validate "${dmg_path}"
-          spctl -a -t open --context context:primary-signature -v "${dmg_path}"
+          node scripts/notarize-macos.mjs notarize "${dmg_path}"
+
+      - name: clean temporary release credentials
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup_failed=0
+          keychain_path="${RUNNER_TEMP}/stowmind-signing.keychain-db"
+          if [ -f "${keychain_path}" ]; then
+            if ! security delete-keychain "${keychain_path}"; then
+              echo "::error::Could not delete the temporary signing keychain."
+              cleanup_failed=1
+            fi
+          fi
+          if ! rm -f "${RUNNER_TEMP}/stowmind-release-ci.p12"; then
+            echo "::error::Could not delete the temporary signing certificate."
+            cleanup_failed=1
+          fi
+          for key_directory in "${RUNNER_TEMP}"/stowmind-notary-*; do
+            [ -d "${key_directory}" ] || continue
+            if [ -L "${key_directory}" ]; then
+              echo "::error::Unexpected symbolic link in temporary notarization credentials."
+              cleanup_failed=1
+              continue
+            fi
+            if ! rm -f "${key_directory}/AuthKey.p8"; then
+              cleanup_failed=1
+            fi
+            if ! rmdir "${key_directory}"; then
+              cleanup_failed=1
+            fi
+          done
+          exit "${cleanup_failed}"
 
       - name: collect release assets
         shell: bash
         run: |
           set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          dmg_name="StowMind_${version}_universal.dmg"
           mkdir -p release-assets
-          find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name 'StowMind_*.dmg' -exec cp {} release-assets/ \;
-          find src-tauri/target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app.tar.gz' -exec cp {} release-assets/ \;
+          cp "src-tauri/target/universal-apple-darwin/release/bundle/dmg/${dmg_name}" "release-assets/${dmg_name}"
           (
             cd release-assets
-            shasum -a 256 -- * | tee SHA256SUMS.txt
+            shasum -a 256 -- "${dmg_name}" | tee SHA256SUMS.txt
           )
 
       - name: publish GitHub release
@@ -203,70 +227,5 @@ jobs:
           TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         with:
           script: |
-            const fs = require('fs')
-            const path = require('path')
-            const tagName = process.env.TAG_NAME
-            const owner = context.repo.owner
-            const repo = context.repo.repo
-            const defaultBody = 'Developer ID signed and notarized universal macOS build.'
-            const notesPath = path.join('.github', 'release-notes', `${tagName}.md`)
-            const releaseBody = fs.existsSync(notesPath)
-              ? fs.readFileSync(notesPath, 'utf8')
-              : defaultBody
-
-            let release = null
-            for await (const response of github.paginate.iterator(
-              github.rest.repos.listReleases,
-              { owner, repo, per_page: 100 },
-            )) {
-              release = response.data.find((item) => item.tag_name === tagName)
-              if (release) break
-            }
-
-            if (!release) {
-              const created = await github.rest.repos.createRelease({
-                owner,
-                repo,
-                tag_name: tagName,
-                name: `StowMind ${tagName}`,
-                body: releaseBody,
-                draft: true,
-                prerelease: false,
-              })
-              release = created.data
-            }
-
-            for (const asset of release.assets) {
-              await github.rest.repos.deleteReleaseAsset({
-                owner,
-                repo,
-                asset_id: asset.id,
-              })
-            }
-
-            const assetDir = 'release-assets'
-            for (const fileName of fs.readdirSync(assetDir)) {
-              const filePath = path.join(assetDir, fileName)
-              const data = fs.readFileSync(filePath)
-              await github.rest.repos.uploadReleaseAsset({
-                owner,
-                repo,
-                release_id: release.id,
-                name: fileName,
-                headers: {
-                  'content-type': 'application/octet-stream',
-                  'content-length': data.length,
-                },
-                data,
-              })
-            }
-
-            await github.rest.repos.updateRelease({
-              owner,
-              repo,
-              release_id: release.id,
-              name: `StowMind ${tagName}`,
-              body: releaseBody,
-              draft: false,
-              prerelease: false,
-            })
+            const { publishRelease } = require('./scripts/lib/publish-release.cjs')
+            await publishRelease({ github, context, core, tagName: process.env.TAG_NAME })
