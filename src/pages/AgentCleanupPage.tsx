@@ -16,8 +16,11 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import { SystemCacheCard } from './system-cache/SystemCacheCard'
+import { useSystemCache } from './system-cache/useSystemCache'
 import {
   type AgentCleanupCategory,
   type AgentCleanupExecuteResult,
@@ -39,6 +42,8 @@ function formatModifiedAt(value: string | number | null | undefined) {
 
 export function AgentCleanupPage() {
   const { t } = useI18n()
+  const active = useLocation().pathname === '/agent-cleanup'
+  const systemCache = useSystemCache(active)
   const addHistory = useAppStore((state) => state.addHistory)
   const updateStatistics = useAppStore((state) => state.updateStatistics)
   const statistics = useAppStore((state) => state.statistics)
@@ -51,6 +56,7 @@ export function AgentCleanupPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [result, setResult] = useState<AgentCleanupExecuteResult | null>(null)
   const [gitPruneExecuted, setGitPruneExecuted] = useState(false)
+  const scanningRef = useRef(false)
 
   const retentionDays = Math.max(0, Number.parseInt(retentionInput, 10) || 0)
   const selectableItems = useMemo(
@@ -85,7 +91,9 @@ export function AgentCleanupPage() {
     setExpanded(new Set())
   }
 
-  const scan = async (preserveResult = false) => {
+  const scanAgent = async (preserveResult = false) => {
+    if (scanningRef.current) return
+    scanningRef.current = true
     setLoading(true)
     setError(null)
     if (!preserveResult) setResult(null)
@@ -100,15 +108,29 @@ export function AgentCleanupPage() {
       setError(message)
       toast.error(t('agentCleanup.scanFailed', { error: message }))
     } finally {
+      scanningRef.current = false
       setLoading(false)
     }
   }
 
+  const scan = (preserveResult = false) => {
+    // The shared system probe has its own result and authorization flow. It
+    // must not delay Agent results or enter their selections and statistics.
+    void systemCache.scan()
+    return scanAgent(preserveResult)
+  }
+
   useEffect(() => {
-    void scan()
+    void scanAgent()
     // Scan once on entry. Changes to the retention rule require an explicit rescan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (active) void systemCache.scan()
+    // Invalidate old cache authorization when returning to this keep-alive page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active])
 
   const toggleItem = (id: string) => {
     setSelectedIds((current) => {
@@ -284,6 +306,8 @@ export function AgentCleanupPage() {
           </div>
         </div>
       )}
+
+      <SystemCacheCard cache={systemCache} active={active} shared />
 
       <Card>
         <CardHeader className="flex-row items-start justify-between space-y-0">

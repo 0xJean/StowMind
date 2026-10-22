@@ -1,9 +1,16 @@
 # System cache diagnostics
 
-System cache diagnostics lives in Doctor. The first adapter covers only
+System cache diagnostics is available in Doctor and as a shared system cache card
+in Agent Cleanup. The first adapter covers only
 `/Library/Caches/com.apple.iconservices.store` on macOS. This is shared system
-state, so it is separate from Agent Cleanup even when development tools may
-contribute to its growth.
+state; it is not attributed to an individual Agent, and its growth does not prove
+that an Agent caused it.
+
+Agent scans start an independent, read-only system-cache probe. An Agent scan
+failure does not suppress the system-cache result. The card is separate from
+Agent item selection, retention rules, bulk execution, and Agent cleanup size
+totals. Both entry points reuse the same authorization, Mole cleanup, recheck,
+and system-cache history workflow.
 
 ## Detection and authorization
 
@@ -55,6 +62,7 @@ change, not proof of physically reclaimed disk space; unknown measurements stay
 unknown. System-cache statistics preserve this distinction from other cleanup
 space totals.
 
-No administrator action is performed merely by opening Doctor. Tests use
+No administrator action is performed merely by opening Doctor or Agent Cleanup.
+Tests use
 temporary fixtures and mocked authorization/Mole execution; they must not remove
 the development machine's real system cache.

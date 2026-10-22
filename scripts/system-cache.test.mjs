@@ -29,6 +29,7 @@ function createHook(invoke, { confirm = true, listen } = {}) {
   const calls = []
   const listeners = new Map()
   const stopped = []
+  const updates = []
   const pendingEffects = []
   let cursor = 0
   let id = 0
@@ -36,7 +37,10 @@ function createHook(invoke, { confirm = true, listen } = {}) {
     useState(initial) {
       const index = cursor++
       if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial
-      return [states[index], (next) => { states[index] = typeof next === 'function' ? next(states[index]) : next }]
+      return [states[index], (next) => {
+        updates.push(index)
+        states[index] = typeof next === 'function' ? next(states[index]) : next
+      }]
     },
     useRef(initial) {
       const index = cursor++
@@ -49,7 +53,7 @@ function createHook(invoke, { confirm = true, listen } = {}) {
       if (!previous || dependencies.some((value, offset) => value !== previous.dependencies[offset])) {
         pendingEffects.push(() => {
           previous?.cleanup?.()
-          states[index] = { dependencies, cleanup: effect(), effect: true }
+          states[index] = { dependencies, cleanup: effect(), effect }
         })
       }
     },
@@ -73,7 +77,7 @@ function createHook(invoke, { confirm = true, listen } = {}) {
     window: { confirm: () => confirm },
   })
   return {
-    history, successes, calls, listeners, stopped,
+    history, successes, calls, listeners, stopped, updates,
     render(active = true) {
       cursor = 0
       const hook = useSystemCache(active)
@@ -81,6 +85,11 @@ function createHook(invoke, { confirm = true, listen } = {}) {
       return hook
     },
     unmount() { states.filter((state) => state?.effect).forEach((state) => state.cleanup?.()) },
+    replayEffects() {
+      const effects = states.filter((state) => state?.effect)
+      effects.forEach((state) => state.cleanup?.())
+      effects.forEach((state) => { state.cleanup = state.effect() })
+    },
   }
 }
 
@@ -101,25 +110,62 @@ test('unknown measurements render as unknown, without a zero-sized cleanup affor
     outcome: null, activity: null, interaction: null, input: '',
     scan() {}, review() {}, clean() {}, cancel() {}, submit() {}, setInput() {},
   }
-  const { SystemCachePanel } = loadTypeScript('../src/pages/system-cache/SystemCachePanel.tsx', {
+  const { SystemCacheCard } = loadTypeScript('../src/pages/system-cache/SystemCacheCard.tsx', {
     'react/jsx-runtime': { jsx, jsxs: jsx },
-    react: { useEffect() {} },
-    'react-router-dom': { useLocation: () => ({ pathname: '/doctor' }) },
+    react: { useId: () => 'cache-title' },
     'lucide-react': new Proxy({}, { get: (_, name) => name }),
     '@/i18n': { useI18n: () => ({ t }) },
     '@/lib/utils': { cn: (...values) => values.join(' '), formatDate: String, formatFileSize: (n) => `${n} bytes` },
     '@/components/ui/button': { Button: 'Button' },
     '../clean/CleanInteractionPrompt': { CleanInteractionPrompt: 'Prompt' },
     './helpers': helpers,
-    './useSystemCache': { useSystemCache: () => cache },
   })
-  const tree = SystemCachePanel()
+  const tree = SystemCacheCard({ cache, active: true })
   assert.ok(renderedText(tree).includes(t('systemCache.unknownSize')))
   const size = findElements(tree, (element) => element.props?.className === 'text-2xl font-bold tabular-nums')[0]
   assert.equal(renderedText(size), t('systemCache.unknownSize'))
   const clean = findElements(tree, (element) => element.type === 'Button' && renderedText(element).includes(t('systemCache.clean')))[0]
   assert.equal(clean.props.disabled, true)
 })
+
+test('StrictMode setup-cleanup-setup preserves a pending read-only scan without duplicating it', async () => {
+  let finishScan
+  const hook = createHook((command) => {
+    assert.equal(command, 'system_cache_scan')
+    return new Promise((resolve) => { finishScan = resolve })
+  })
+  const scanning = hook.render().scan()
+  hook.replayEffects()
+  await hook.render().scan()
+  assert.equal(hook.calls.length, 1)
+  assert.equal(hook.listeners.size, 0)
+  const report = { ...complete, authorized: false, review_token: null }
+  finishScan(report)
+  await scanning
+  assert.equal(hook.render().report, report)
+  assert.equal(hook.render().activity, null)
+  assert.equal(hook.history.length, 0)
+})
+
+for (const result of ['resolve', 'reject']) {
+  test(`a read-only scan that ${result}s after real unmount cannot update React state`, async () => {
+    let finishScan
+    const hook = createHook((command) => {
+      assert.equal(command, 'system_cache_scan')
+      return new Promise((resolve, reject) => { finishScan = result === 'resolve' ? resolve : reject })
+    })
+    const scanning = hook.render().scan()
+    hook.unmount()
+    const updatesBeforeResolution = hook.updates.length
+    finishScan(result === 'resolve' ? complete : new Error('Scan failed after unmount'))
+    await scanning
+    assert.equal(hook.updates.length, updatesBeforeResolution)
+    assert.equal(hook.calls.length, 1, 'Read-only scans must not invoke PTY cancellation')
+    assert.equal(hook.listeners.size, 0)
+    assert.equal(hook.history.length, 0)
+    assert.equal(hook.successes.length, 0)
+  })
+}
 
 test('declining confirmation does not invoke Mole cleanup', async () => {
   const hook = createHook(async (command) => {
@@ -174,6 +220,25 @@ test('duplicate review and clean clicks cannot launch concurrent operations', as
   assert.equal(hook.history.length, 1)
 })
 
+test('effect replay still cancels an active PTY review and rejects its late authorization', async () => {
+  let finishReview
+  const hook = createHook((command) => {
+    if (command === 'system_cache_review') return new Promise((resolve) => { finishReview = resolve })
+    assert.equal(command, 'mole_clean_preview_pty_cancel')
+  })
+  const review = hook.render().review()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(hook.listeners.size, 2)
+  hook.replayEffects()
+  assert.equal(hook.listeners.size, 0)
+  assert.equal(hook.calls.filter(({ command }) => command === 'mole_clean_preview_pty_cancel').length, 1)
+  finishReview(complete)
+  await review
+  assert.equal(hook.render().report, null)
+  assert.equal(hook.render().activity, null)
+  assert.equal(hook.history.length, 0)
+})
+
 test('cancellation during the first listener registration releases it and never starts native review', async () => {
   let finishListener
   const hook = createHook(async (command) => {
@@ -225,6 +290,7 @@ for (const exit of ['leave', 'unmount']) {
     else hook.unmount()
     assert.equal(hook.listeners.size, 0)
     assert.equal(hook.calls.filter(({ command }) => command === 'mole_clean_preview_pty_cancel').length, 1)
+    const updatesBeforeResolution = hook.updates.length
     finishCleanup(outcome)
     await cleanup
     assert.equal(hook.history.length, 1)
@@ -232,5 +298,6 @@ for (const exit of ['leave', 'unmount']) {
     assert.equal(hook.successes.length, 0)
     assert.equal(hook.listeners.size, 0)
     if (exit === 'leave') assert.equal(hook.render(false).input, '')
+    else assert.equal(hook.updates.length, updatesBeforeResolution, 'Persist cleanup history without updating an unmounted component')
   })
 }
