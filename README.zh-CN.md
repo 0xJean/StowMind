@@ -54,6 +54,7 @@
 | 模块 | 说明 |
 |------|------|
 | **系统清理** | StowMind 原生页面，真实调用 `mo clean --dry-run` 预览，并通过 Mole 执行确认后的系统缓存、日志、浏览器缓存和开发工具缓存清理 |
+| **系统缓存异常检测** | 系统诊断页优先检测 iconservices 缓存，区分未知大小与权限不足；管理员复核后确认由 Mole 清理，复查前后占用并记录历史（详见 [系统缓存诊断](docs/SYSTEM_CACHE_DIAGNOSTICS.md)） |
 | **Agent 清理** | 按固定白名单和保留规则预览 Codex、OpenCode、Claude Code、Kiro、Devin、Cursor、Windsurf、Gemini CLI、Antigravity、Continue、Copilot CLI、Amazon Q、Cline、Goose 的过期缓存、日志、临时文件、孤立 worktree，以及当前仓库的 Codex 内部 refs 和不可达 Git 对象（详见 [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md)） |
 | **磁盘分析** | StowMind 原生页面，真实调用 `mo analyze -json <path>` 输出 |
 | **构建产物** | 复用 Mole purge 逻辑，对用户选择的项目目录做 dry-run 预览，并通过 Mole purge 执行清理 |

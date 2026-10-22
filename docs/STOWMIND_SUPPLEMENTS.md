@@ -12,6 +12,7 @@
 | 执行后对比回填 | `src/lib/stowmind-supplements/reconciliation.ts` | Mole Console 暂无结构化执行结果；StowMind 用执行前后 dry-run / list / health 对比做估算或状态对比。 |
 | App 更新扫描 | `src-tauri/src/stowmind_supplements/app_updates.rs`、`src/lib/stowmind-supplements/appUpdates.ts` | Mole 尚未暴露 App Store / Sparkle / Electron 更新扫描 CLI / JSON；StowMind supplement 扫描本机应用元数据，macOS 尝试 Sparkle appcast 对比，Windows 先做注册表库存，不把未知状态伪装成已确认更新。 |
 | Agent Cleanup | `src-tauri/src/stowmind_supplements/agent_cleanup/`、`src/pages/AgentCleanupPage.tsx` | Mole 尚未暴露 Agent 缓存、日志、worktree 和 Git 元数据的结构化清理 API；StowMind 仅扫描固定白名单，按保留规则预览，文件移入系统废纸篓 / 回收站，Codex refs 用 `git update-ref`，不可达 Git 对象需明确确认后由 `git gc --prune=now` 修剪。 |
+| 系统缓存异常检测 | `src-tauri/src/stowmind_supplements/system_cache/`、`src/pages/system-cache/` | 在系统诊断页检测 iconservices，明确权限不足、超时和未知大小；管理员复核后仅调用所选 Mole 的安全函数处理固定路径，保留其保护规则。清理后复查和历史中的目录大小变化属于 StowMind 观测值。详见 [系统缓存诊断](SYSTEM_CACHE_DIAGNOSTICS.md)。 |
 | 清理活动摘要 | `src/lib/stowmind-supplements/cleanupActivity.ts` | Mole 暂无统一 activity log / 累计清理量 JSON；StowMind 只汇总本地历史和统计，用于 HUD、首页和侧边栏角标。 |
 | 卸载洞察提示 | `src/lib/stowmind-supplements/uninstallInsights.ts` | Mole 暂无细粒度卸载报告 JSON；StowMind 只给残留类型、外置盘、个人数据风险和厂商卸载器提示，不执行删除。 |
 

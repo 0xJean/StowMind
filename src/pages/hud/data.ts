@@ -38,7 +38,7 @@ export function appendHudHistory(current: HudHistory, data: MoleStatusRaw): HudH
 
 export function summarizeCleanupHistory(history: HistoryRecord[]) {
   const cleanup = history.filter((record) =>
-    ['clean', 'purge', 'installer', 'uninstall', 'optimize'].includes(record.type ?? 'organize')
+    ['clean', 'purge', 'installer', 'uninstall', 'optimize', 'agent-cleanup', 'system-cache'].includes(record.type ?? 'organize')
   )
   const executed = cleanup.filter((record) => record.executed)
   return {

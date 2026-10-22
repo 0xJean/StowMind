@@ -55,6 +55,7 @@ Successful moves are **kept** if some items fail (no all-or-nothing rollback). C
 | Area | What you get |
 |------|----------------|
 | **System clean** | Native StowMind view powered by real `mo clean --dry-run` output, with confirmed execution through Mole for system caches, logs, browser caches, and dev tool caches |
+| **System cache diagnostics** | Doctor detects oversized iconservices caches, distinguishes unknown sizes and access errors, supports administrator review and confirmed Mole cleanup, and records before/after observations ([details](docs/SYSTEM_CACHE_DIAGNOSTICS.md)) |
 | **Agent cleanup** | Preview and safely clean stale Agent caches/logs, Codex internal refs, unreachable Git objects, and orphaned worktrees using fixed allowlists and retention rules ([details](docs/AGENT_CLEANUP.md)) |
 | **Disk analysis** | Native StowMind view powered by real `mo analyze -json <path>` output |
 | **Build artifacts** | Mole purge preview and execution for a selected project directory |

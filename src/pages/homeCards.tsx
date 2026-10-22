@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import type { HistoryRecord } from '@/stores/app'
-import { Activity, Archive, ArrowRight, Copy, Cpu, History, PackageSearch, PackageX, Sparkles, Trash2, Zap, type LucideIcon } from 'lucide-react'
+import { Activity, Archive, ArrowRight, Copy, Cpu, HardDrive, History, PackageSearch, PackageX, Sparkles, Trash2, Zap, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 export type ToneKey = 'green' | 'cyan' | 'purple' | 'red' | 'yellow'
@@ -176,6 +176,7 @@ export function RecentActivityCard({ history, onSeeAll }: { history: HistoryReco
               : recordType === 'installer' ? Archive
               : recordType === 'purge' ? PackageX
               : recordType === 'duplicates' ? Copy
+              : recordType === 'system-cache' ? HardDrive
               : Activity
             const isExecuted = record.executed
             const dotClass = record.undone ? 'iqon-dot-muted' : isExecuted ? 'iqon-dot-green' : 'iqon-dot-yellow'

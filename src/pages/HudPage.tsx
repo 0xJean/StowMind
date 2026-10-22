@@ -14,7 +14,6 @@ import {
   HardDrive,
   MemoryStick,
   Thermometer,
-  Trash2,
   Wifi,
   X,
   Zap,
@@ -25,9 +24,10 @@ import { toast } from 'react-toastify'
 import { applyHudTraySettings, applyHudWindowMode, openHudPopover } from './hud/native'
 import { loadHudStatusCache, parseHudStatus, saveHudStatusCache } from './hud/cache'
 import { buildHudCpuAlert, notifyHudCpuAlert } from './hud/alerts'
-import { appendHudHistory, EMPTY_HUD_HISTORY, summarizeCleanupHistory, type HudHistory } from './hud/data'
+import { appendHudHistory, EMPTY_HUD_HISTORY, type HudHistory } from './hud/data'
 import { loadHudSettings, saveHudSettings, toggleHudMetric, type HudMetricKey, type HudSettings } from './hud/settings'
-import { HudChip, HudMetricTile, HudRoundStat, HudWatchStat } from './hud/HudWidgets'
+import { HudChip, HudMetricTile, HudRoundStat } from './hud/HudWidgets'
+import { HudCleanupSummary, HudProcessSummary } from './hud/HudActivityPanels'
 import { HudSettingsPanel } from './hud/HudSettingsPanel'
 import type { MoleStatusRaw } from './status/advancedTypes'
 import { findPrimaryDisk, findPrimaryNetwork, sortProcesses } from './status/diagnostics'
@@ -258,7 +258,6 @@ export function HudPage() {
   const primaryTemperature = getPrimaryTemperature(thermal)
   const fanSpeed = getValidFanSpeed(thermal)
   const topProcesses = useMemo(() => sortProcesses(data?.top_processes).slice(0, 5), [data])
-  const cleanWatch = useMemo(() => summarizeCleanupHistory(historyRecords), [historyRecords])
   const cleanupActivity = useMemo(
     () => buildCleanupActivitySummary(historyRecords, statistics),
     [historyRecords, statistics]
@@ -486,46 +485,8 @@ export function HudPage() {
             </div>
           </div>
 
-          <div className="iqon-row p-3">
-            <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">
-              <span>{t('hud.processTitle')}</span>
-              <span className="grid grid-cols-2 gap-5 normal-case tracking-normal">
-                <span>CPU</span>
-                <span>{t('hud.field.memory')}</span>
-              </span>
-            </div>
-            <div className="space-y-2">
-              {topProcesses.length ? topProcesses.map((process) => (
-                <div key={process.pid} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 text-xs">
-                  <span className="truncate font-semibold text-foreground">{process.name}</span>
-                  <span className="tabular-nums text-muted-foreground">{formatPercent(process.cpu)}</span>
-                  <span className="tabular-nums text-muted-foreground">{formatPercent(process.memory)}</span>
-                </div>
-              )) : (
-                <p className="text-xs text-muted-foreground">{t('hud.emptyProcess')}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-clean-green/20 bg-clean-green/10 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-normal text-clean-green">
-                <Trash2 className="h-3.5 w-3.5" />
-                {t('hud.cleanWatch')}
-              </p>
-              <span className="text-sm font-bold tabular-nums text-foreground">{formatFileSize(data?.trash_size ?? 0)}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <HudWatchStat label={t('hud.cleanWatch.cleaned')} value={formatFileSize(cleanupActivity.totalFreed || cleanWatch.cleaned)} />
-              <HudWatchStat label={t('hud.cleanWatch.scans')} value={String(cleanupActivity.executedCount + cleanupActivity.previewCount || cleanWatch.scans)} />
-              <HudWatchStat label={t('hud.cleanWatch.optimized')} value={String(cleanupActivity.optimizedCount || cleanWatch.optimized)} />
-            </div>
-            <p className="mt-2 truncate text-[11px] text-muted-foreground">
-              {cleanupActivity.latest
-                ? t('hud.cleanWatch.latest', { target: cleanupActivity.latest.directory })
-                : t('hud.cleanWatch.empty')}
-            </p>
-          </div>
+          <HudProcessSummary processes={topProcesses} />
+          <HudCleanupSummary activity={cleanupActivity} trashSize={data?.trash_size ?? 0} />
         </div>
       </div>
     </div>

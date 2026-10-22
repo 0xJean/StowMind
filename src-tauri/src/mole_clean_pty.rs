@@ -2,12 +2,10 @@ use crate::mole_clean::{
     format_clean_process_failure, parse_clean_preview, MoleCleanPreview, MoleCleanPreviewOutput,
 };
 use crate::mole_utils::{locate_mole_executable, runtime_path, strip_ansi};
-use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, PtySize};
+use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Serialize;
-use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::sync::mpsc::{self, RecvTimeoutError};
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{State, Window};
 
@@ -21,66 +19,9 @@ enum PtyReadEvent {
     Done,
 }
 
-struct MoleCleanPtySession {
-    writer: Box<dyn Write + Send>,
-    killer: Box<dyn ChildKiller + Send + Sync>,
-}
-
-#[derive(Clone, Default)]
-pub struct MoleCleanPtyManager {
-    sessions: Arc<Mutex<HashMap<String, MoleCleanPtySession>>>,
-}
-
-impl MoleCleanPtyManager {
-    pub(crate) fn insert(
-        &self,
-        run_id: String,
-        writer: Box<dyn Write + Send>,
-        killer: Box<dyn ChildKiller + Send + Sync>,
-    ) -> Result<(), String> {
-        let mut sessions = self
-            .sessions
-            .lock()
-            .map_err(|e| format!("Lock error: {e}"))?;
-        sessions.insert(run_id, MoleCleanPtySession { writer, killer });
-        Ok(())
-    }
-
-    pub(crate) fn write(&self, run_id: &str, input: &[u8]) -> Result<(), String> {
-        let mut sessions = self
-            .sessions
-            .lock()
-            .map_err(|e| format!("Lock error: {e}"))?;
-        let session = sessions
-            .get_mut(run_id)
-            .ok_or_else(|| "Mole clean scan is no longer running".to_string())?;
-        session
-            .writer
-            .write_all(input)
-            .map_err(|e| format!("Failed to write to Mole clean PTY: {e}"))?;
-        session
-            .writer
-            .flush()
-            .map_err(|e| format!("Failed to flush Mole clean PTY: {e}"))
-    }
-
-    pub(crate) fn cancel(&self, run_id: &str) -> Result<(), String> {
-        let mut sessions = self
-            .sessions
-            .lock()
-            .map_err(|e| format!("Lock error: {e}"))?;
-        if let Some(mut session) = sessions.remove(run_id) {
-            let _ = session.killer.kill();
-        }
-        Ok(())
-    }
-
-    pub(crate) fn remove(&self, run_id: &str) {
-        if let Ok(mut sessions) = self.sessions.lock() {
-            sessions.remove(run_id);
-        }
-    }
-}
+#[path = "mole_clean_pty_session.rs"]
+mod session;
+pub use session::MoleCleanPtyManager;
 
 struct SessionCleanup {
     manager: MoleCleanPtyManager,

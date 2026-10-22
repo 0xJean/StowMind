@@ -15,6 +15,7 @@ export const CLEANUP_TYPES: HistoryRecordType[] = [
   'uninstall',
   'optimize',
   'agent-cleanup',
+  'system-cache',
 ]
 
 export interface CleanupActivitySummary {
@@ -23,6 +24,7 @@ export interface CleanupActivitySummary {
   executedCount: number
   previewCount: number
   optimizedCount: number
+  observedCacheReduction: number
   latest?: HistoryRecord
   latestExecuted?: HistoryRecord
   recent: HistoryRecord[]
@@ -37,14 +39,19 @@ export function buildCleanupActivitySummary(
   const latestExecuted = executed[0]
   const statFreed = (statistics.cleanSizeFreed ?? 0) + (statistics.agentCleanupSizeFreed ?? 0)
   const historyFreed = executed.reduce((sum, record) => sum + cleanupSize(record), 0)
-  const statOperations = (statistics.cleanOperationCount ?? 0) + (statistics.agentCleanupOperationCount ?? 0)
+  const statOperations = (statistics.cleanOperationCount ?? 0) + (statistics.agentCleanupOperationCount ?? 0) + (statistics.systemCacheCleanupCount ?? 0)
+  const observedCacheReduction = Math.max(
+    statistics.systemCacheObservedBytes ?? 0,
+    executed.reduce((sum, record) => sum + Math.max(0, record.cleanupSummary?.systemCache?.observedDeltaBytes ?? 0), 0)
+  )
 
   return {
     source: STOWMIND_SUPPLEMENT_ACTIVITY_SOURCE,
     totalFreed: Math.max(statFreed, historyFreed),
     executedCount: Math.max(statOperations, executed.length),
-    previewCount: cleanup.length - executed.length,
+    previewCount: cleanup.filter((record) => record.cleanupSummary?.action === 'preview' || (!record.executed && !record.cleanupSummary?.outcome)).length,
     optimizedCount: cleanup.filter((record) => record.type === 'optimize').length,
+    observedCacheReduction,
     latest: cleanup[0],
     latestExecuted,
     recent: cleanup.slice(0, 5),

@@ -34,6 +34,15 @@ interface TypeMeta {
   tone: Tone
 }
 
+interface TypeStat {
+  count: number
+  freed: number
+  items: number
+  skipped: number
+  observed: number | null
+  latest?: string
+}
+
 const TYPE_META: TypeMeta[] = [
   { type: 'organize', icon: Sparkles, tone: 'green' },
   { type: 'clean', icon: Trash2, tone: 'red' },
@@ -42,6 +51,7 @@ const TYPE_META: TypeMeta[] = [
   { type: 'uninstall', icon: PackageX, tone: 'purple' },
   { type: 'optimize', icon: Zap, tone: 'green' },
   { type: 'agent-cleanup', icon: Bot, tone: 'red' },
+  { type: 'system-cache', icon: HardDrive, tone: 'yellow' },
   { type: 'duplicates', icon: Copy, tone: 'cyan' },
 ]
 
@@ -68,19 +78,29 @@ export function StatisticsPage() {
   const executedHistory = useMemo(() => history.filter(isExecuted), [history])
 
   const byType = useMemo(() => {
-    const map = new Map<HistoryRecordType, { count: number; freed: number; items: number; skipped: number; latest?: string }>()
+    const map = new Map<HistoryRecordType, TypeStat>()
     for (const record of executedHistory) {
       const type = record.type ?? 'organize'
-      const current = map.get(type) ?? { count: 0, freed: 0, items: 0, skipped: 0 }
+      const current = map.get(type) ?? { count: 0, freed: 0, items: 0, skipped: 0, observed: null }
       current.count += 1
       current.freed += recordSize(record)
       current.items += recordItemCount(record)
       current.skipped += record.cleanupSummary?.skippedCount ?? 0
+      const delta = record.cleanupSummary?.systemCache?.observedDeltaBytes
+      if (typeof delta === 'number') current.observed = (current.observed ?? 0) + Math.max(0, delta)
       if (!current.latest || record.timestamp > current.latest) current.latest = record.timestamp
       map.set(type, current)
     }
+    if ((statistics.systemCacheCleanupCount ?? 0) > 0) {
+      const cached = map.get('system-cache') ?? { count: 0, freed: 0, items: 0, skipped: 0, observed: null }
+      cached.count = Math.max(cached.count, statistics.systemCacheCleanupCount ?? 0)
+      cached.items = Math.max(cached.items, statistics.systemCacheItemsRemoved ?? 0)
+      if ((statistics.systemCacheMeasuredRuns ?? 0) > 0) cached.observed = Math.max(cached.observed ?? 0, statistics.systemCacheObservedBytes ?? 0)
+      cached.latest = statistics.lastSystemCacheCleanup ?? cached.latest
+      map.set('system-cache', cached)
+    }
     return map
-  }, [executedHistory])
+  }, [executedHistory, statistics])
 
   const totalFreed = Array.from(byType.values()).reduce((sum, v) => sum + v.freed, 0)
   const totalOps = executedHistory.length
@@ -296,7 +316,7 @@ function TypeBreakdownTile({
 }: {
   meta: TypeMeta
   label: string
-  stat: { count: number; freed: number; items: number; skipped: number; latest?: string } | undefined
+  stat: TypeStat | undefined
   t: ReturnType<typeof useI18n>['t']
 }) {
   const tt = TONE[meta.tone]
@@ -319,6 +339,11 @@ function TypeBreakdownTile({
           {stat.freed > 0 && (
             <p className="mt-2 text-[10px] text-muted-foreground">
               {t('stats.typeFreed', { size: formatFileSize(stat.freed) })}
+            </p>
+          )}
+          {meta.type === 'system-cache' && (
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              {stat.observed === null ? t('stats.cacheUnknown') : t('stats.cacheObserved', { size: formatFileSize(stat.observed) })}
             </p>
           )}
           {stat.skipped > 0 && (
