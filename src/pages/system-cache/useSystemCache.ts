@@ -58,9 +58,11 @@ export function useSystemCache(active: boolean) {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      cancelledRef.current = true
       unlistenRef.current.splice(0).forEach((unlisten) => unlisten())
+      // Read-only scans can survive StrictMode's effect replay; mountedRef
+      // still blocks their results after a real unmount.
       if (runRef.current) {
+        cancelledRef.current = true
         void invoke('mole_clean_preview_pty_cancel', { runId: runRef.current }).catch(() => {})
       }
     }
@@ -168,3 +170,5 @@ export function useSystemCache(active: boolean) {
     scan: () => run('scan'), review: () => run('review'), clean, cancel, submit, setInput,
   }
 }
+
+export type SystemCacheController = ReturnType<typeof useSystemCache>

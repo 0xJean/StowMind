@@ -55,7 +55,7 @@ Successful moves are **kept** if some items fail (no all-or-nothing rollback). C
 | Area | What you get |
 |------|----------------|
 | **System clean** | Native StowMind view powered by real `mo clean --dry-run` output, with confirmed execution through Mole for system caches, logs, browser caches, and dev tool caches |
-| **System cache diagnostics** | Doctor detects oversized iconservices caches, distinguishes unknown sizes and access errors, supports administrator review and confirmed Mole cleanup, and records before/after observations ([details](docs/SYSTEM_CACHE_DIAGNOSTICS.md)) |
+| **System cache diagnostics** | Doctor and Agent Cleanup detect oversized iconservices caches, distinguish unknown sizes and access errors, and provide separate administrator review, confirmed Mole cleanup, and before/after history ([details](docs/SYSTEM_CACHE_DIAGNOSTICS.md)) |
 | **Agent cleanup** | Preview and safely clean stale Agent caches/logs, Codex internal refs, unreachable Git objects, and orphaned worktrees using fixed allowlists and retention rules ([details](docs/AGENT_CLEANUP.md)) |
 | **Disk analysis** | Native StowMind view powered by real `mo analyze -json <path>` output |
 | **Build artifacts** | Mole purge preview and execution for a selected project directory |
@@ -76,6 +76,8 @@ Successful moves are **kept** if some items fail (no all-or-nothing rollback). C
 ### Agent Cleanup
 
 Agent Cleanup is available from the **Agent Cleanup** entry in the sidebar or the welcome page. It scans only documented, disposable paths for Codex, OpenCode, Claude Code, Kiro, Devin, Cursor, Windsurf, Gemini CLI / Antigravity, Continue, GitHub Copilot CLI, Amazon Q Developer, Cline, and Goose.
+
+It also checks the macOS iconservices cache in a separate **System shared cache** card. This cache is excluded from Agent selections, retention rules, and totals; cleanup requires its own administrator review and confirmation, with a separate history record.
 
 The workflow is preview-first: choose a retention period, review grouped cache/log/temporary/worktree/Git metadata items, and confirm only the entries you want to clean. Files still move to the system Trash; Codex refs use `git update-ref`, and unreachable Git objects require a separate explicit opt-in for reflog expiry and `git gc --prune=now`. Fixed allowlists, active-process protection, repository-clean checks, stale-worktree checks, and protected session/configuration paths are enforced again before execution. See [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md) for the exact scope and exclusions.
 

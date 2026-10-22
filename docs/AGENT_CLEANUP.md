@@ -23,6 +23,23 @@ The scanner always protects configuration, credentials, browser state, session d
 
 Git metadata follows stricter rules than ordinary cache files. Codex refs are eligible only when no supported Agent or Git process is running, the ref is older than the retention period, and no Git lock is present. Execution carries the previewed ref object ID into `git update-ref -d`, so a ref changed after the preview fails closed. Unreachable objects are eligible only when the repository has no tracked changes, no Agent or Git process is active, and the object store is older than the retention period. Reflog expiry and object pruning use the configured retention cutoff rather than `now`; they are never selected by bulk selection and require a second explicit confirmation.
 
+## Shared system cache detection
+
+Agent scans also start a separate, read-only check of the macOS iconservices cache
+at `/Library/Caches/com.apple.iconservices.store`. The shared system cache card
+reports its own measurement or access error even when the Agent scan fails. It
+does not attribute the cache or its growth to any Agent.
+
+The system cache is excluded from Agent cleanup items, default selection, bulk
+selection, retention rules, and the Agent cleanup size. Clearing the Agent
+selection or changing its retention period never authorizes system-cache removal.
+
+The card reuses the [system cache diagnostics](SYSTEM_CACHE_DIAGNOSTICS.md)
+workflow: separate administrator review, explicit confirmation, scoped Mole
+cleanup, and a follow-up measurement. Results use the existing system-cache
+history and statistics rather than Agent cleanup totals. Opening or rescanning
+Agent Cleanup does not request administrator access or delete the system cache.
+
 ## Execution safety
 
 The preview is advisory. Before execution, the native command:
