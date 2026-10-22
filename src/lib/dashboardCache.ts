@@ -50,6 +50,7 @@ export function hasDashboardSnapshotData(payload: DashboardSnapshotPayload) {
       (stats.cleanItemsRemoved ?? 0) > 0 ||
       (stats.cleanSizeFreed ?? 0) > 0 ||
       (stats.cleanOperationCount ?? 0) > 0 ||
+      (stats.systemCacheCleanupCount ?? 0) > 0 ||
       stats.lastOrganized ||
       stats.lastCleaned
   )

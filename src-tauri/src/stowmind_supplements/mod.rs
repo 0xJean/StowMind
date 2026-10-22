@@ -7,3 +7,4 @@
 pub mod agent_cleanup;
 pub mod app_updates;
 pub mod safe_trash;
+pub mod system_cache;

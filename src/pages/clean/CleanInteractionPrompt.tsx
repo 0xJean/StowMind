@@ -15,6 +15,7 @@ interface CleanInteractionPromptProps {
   onChange: (value: string) => void
   onSubmit: (input?: string) => void
   onCancel: () => void
+  cancelLabel?: string
 }
 
 export function CleanInteractionPrompt({
@@ -26,10 +27,12 @@ export function CleanInteractionPrompt({
   onChange,
   onSubmit,
   onCancel,
+  cancelLabel,
 }: CleanInteractionPromptProps) {
   const { t } = useI18n()
   const inputRef = useRef<HTMLInputElement>(null)
   const needsInput = kind === 'password' || kind === 'text'
+  const cancelText = cancelLabel ?? t('clean.interactionCancel')
 
   useEffect(() => {
     if (!open || !needsInput) return
@@ -66,7 +69,7 @@ export function CleanInteractionPrompt({
               type="button"
               variant="ghost"
               size="icon"
-              aria-label={t('clean.interactionCancel')}
+              aria-label={cancelText}
               onClick={onCancel}
               disabled={submitting}
             >
@@ -96,7 +99,7 @@ export function CleanInteractionPrompt({
                 </Button>
               ) : (
                 <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
-                  {t('clean.interactionCancel')}
+                  {cancelText}
                 </Button>
               )}
               <Button type="button" onClick={() => onSubmit('__ENTER__')} disabled={submitting}>
@@ -117,7 +120,7 @@ export function CleanInteractionPrompt({
               />
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
-                  {t('clean.interactionCancel')}
+                  {cancelText}
                 </Button>
                 <Button type="submit" disabled={submitting || value.length === 0}>
                   {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Icon className="mr-2 h-4 w-4" />}

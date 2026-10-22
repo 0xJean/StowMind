@@ -7,6 +7,7 @@ import {
   Bot,
   Calendar,
   Copy,
+  HardDrive,
   Loader2,
   PackageSearch,
   PackageX,
@@ -22,6 +23,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { MoleHistoryPanel } from './history/MoleHistoryPanel'
+import { SystemCacheHistoryDetail } from './history/SystemCacheHistoryDetail'
 
 type StatusFilter = 'all' | 'executed' | 'undone'
 type TypeFilter = 'all' | HistoryRecordType
@@ -37,6 +39,7 @@ const HISTORY_TYPE_KEYS: Record<HistoryRecordType, HistoryTypeKey> = {
   uninstall: 'history.type.uninstall',
   optimize: 'history.type.optimize',
   'agent-cleanup': 'history.type.agent-cleanup',
+  'system-cache': 'history.type.system-cache',
 }
 
 const HISTORY_ICONS: Record<HistoryRecordType, LucideIcon> = {
@@ -49,6 +52,7 @@ const HISTORY_ICONS: Record<HistoryRecordType, LucideIcon> = {
   uninstall: PackageSearch,
   optimize: Zap,
   'agent-cleanup': Bot,
+  'system-cache': HardDrive,
 }
 
 const TYPE_FILTER_ORDER: TypeFilter[] = [
@@ -62,6 +66,7 @@ const TYPE_FILTER_ORDER: TypeFilter[] = [
   'optimize',
   'duplicates',
   'agent-cleanup',
+  'system-cache',
 ]
 
 export function HistoryPage() {
@@ -363,7 +368,8 @@ function TimelineItem({
   const canUndo =
     type === 'organize' && record.executed && !record.undone && (record.moves?.length ?? 0) > 0
   const cleanupErrors = record.cleanupSummary?.errors ?? []
-  const isPreview = record.cleanupSummary?.action === 'preview' || !record.executed
+  const outcome = record.cleanupSummary?.outcome
+  const isPreview = record.cleanupSummary?.action === 'preview' || (!record.executed && !outcome)
   const tone = recordTone(record)
   const totalSize = record.cleanupSummary?.totalSize
   const itemCount = type === 'organize' ? record.totalFiles : record.cleanupSummary?.itemCount ?? record.totalFiles
@@ -405,6 +411,8 @@ function TimelineItem({
             >
               {record.undone
                 ? t('history.statusUndone')
+                : outcome === 'failed' ? t('history.statusFailed')
+                : outcome === 'skipped' ? t('history.statusSkipped')
                 : record.executed
                   ? t('history.statusExecuted')
                   : t('history.statusPreview')}
@@ -426,6 +434,7 @@ function TimelineItem({
             </>
           )}
         </p>
+        {record.cleanupSummary?.systemCache && <SystemCacheHistoryDetail details={record.cleanupSummary.systemCache} />}
         {Object.keys(record.categories).length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {Object.entries(record.categories).map(([cat, count]) => (

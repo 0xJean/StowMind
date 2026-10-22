@@ -403,6 +403,9 @@ export function HomePage() {
       </GroupSection>
 
       {/* Group: 工具与记录 */}
+      {cleanupActivity.observedCacheReduction > 0 && (
+        <p className="mb-3 text-xs text-muted-foreground">{t('home.cacheObserved', { size: formatFileSize(cleanupActivity.observedCacheReduction) })}</p>
+      )}
       <GroupSection label={t('home.group.tools')}>
         <ActionCard
           tone="cyan"

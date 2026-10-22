@@ -92,6 +92,15 @@ pub fn locate_mole_script(script_name: &str) -> Result<PathBuf, String> {
     ))
 }
 
+/// Resolve a script only from the runtime selected by StowMind. A scoped,
+/// privileged operation must not silently borrow libraries from another Mole
+/// installation when a configured executable is incomplete or incompatible.
+pub(crate) fn locate_selected_mole_script(script_name: &str) -> Result<PathBuf, String> {
+    let executable = locate_mole_executable()?;
+    find_mole_script_in_roots(script_name, mole_script_roots_from_executable(&executable))
+        .ok_or_else(|| format!("The selected Mole runtime does not expose {script_name}"))
+}
+
 fn find_mole_script_in_roots<I>(script_name: &str, roots: I) -> Option<PathBuf>
 where
     I: IntoIterator<Item = PathBuf>,

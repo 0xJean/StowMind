@@ -57,7 +57,28 @@ export interface DuplicateGroup {
   paths: string[]
 }
 
-export type HistoryRecordType = 'organize' | 'ios-organize' | 'duplicates' | 'clean' | 'purge' | 'installer' | 'uninstall' | 'optimize' | 'agent-cleanup'
+export type HistoryRecordType = 'organize' | 'ios-organize' | 'duplicates' | 'clean' | 'purge' | 'installer' | 'uninstall' | 'optimize' | 'agent-cleanup' | 'system-cache'
+
+export interface CacheMeasurementHistory {
+  status: string
+  sizeBytes: number | null
+  scannedAt: number
+  modifiedAt: number | null
+  authorized: boolean
+  message: string
+}
+
+export interface SystemCacheHistoryDetails {
+  targetId: string
+  path: string
+  source: 'mole'
+  attempted: boolean
+  before: CacheMeasurementHistory
+  after: CacheMeasurementHistory
+  /** Change in measured directory usage, not physical disk space freed. */
+  observedDeltaBytes: number | null
+  moleMessage: string
+}
 
 export interface CleanupSummary {
   itemCount?: number
@@ -68,6 +89,8 @@ export interface CleanupSummary {
   /** Explicit safety warnings preserved in history for irreversible actions. */
   riskNotes?: string[]
   irreversible?: boolean
+  outcome?: 'success' | 'failed' | 'skipped'
+  systemCache?: SystemCacheHistoryDetails
 }
 
 export interface HistoryRecord {
@@ -103,6 +126,12 @@ export interface Statistics {
   agentCleanupSkipped?: number
   agentCleanupErrors?: number
   lastAgentCleanup?: string
+  systemCacheCleanupCount?: number
+  systemCacheItemsRemoved?: number
+  /** Positive observed directory-usage reductions; excluded from cleanSizeFreed. */
+  systemCacheObservedBytes?: number
+  systemCacheMeasuredRuns?: number
+  lastSystemCacheCleanup?: string
 }
 
 interface AppState {
@@ -325,6 +354,10 @@ export const useAppStore = create<AppState>()(
         agentCleanupOperationCount: 0,
         agentCleanupSkipped: 0,
         agentCleanupErrors: 0,
+        systemCacheCleanupCount: 0,
+        systemCacheItemsRemoved: 0,
+        systemCacheObservedBytes: 0,
+        systemCacheMeasuredRuns: 0,
       },
       updateStatistics: (stats) => set((state) => ({
         statistics: { ...state.statistics, ...stats }

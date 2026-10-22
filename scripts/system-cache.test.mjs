@@ -1,0 +1,236 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { findElements, jsx, loadTypeScript, renderedText } from './ios-organizer-test-harness.mjs'
+
+const { zh } = loadTypeScript('../src/i18n/zh.ts', {})
+const t = (key, parameters = {}) => {
+  assert.ok(key in zh, `Missing translation: ${key}`)
+  return zh[key].replace(/\{(\w+)\}/g, (_, name) => String(parameters[name] ?? `{${name}}`))
+}
+const helpers = loadTypeScript('../src/pages/system-cache/helpers.ts', {})
+const complete = {
+  source: 'stowmind_supplement', target_id: 'iconservices',
+  path: '/Library/Caches/com.apple.iconservices.store', scanned_at: 1700000000,
+  status: 'complete', size_bytes: 30 * 1024 ** 3, modified_at: 1700000000,
+  authorized: true, anomaly: true, threshold_bytes: 10 * 1024 ** 3,
+  message: '', mole_supported: true, mole_message: '', review_token: 'review-token',
+}
+const outcome = {
+  source: 'mole', before: complete,
+  after: { ...complete, review_token: null, size_bytes: null, status: 'permission_denied' },
+  success: false, attempted: true, errors: ['Mole protected the target'],
+  measured_delta_bytes: null, completed_at: 1700000010,
+}
+
+function createHook(invoke, { confirm = true, listen } = {}) {
+  const states = []
+  const history = []
+  const successes = []
+  const calls = []
+  const listeners = new Map()
+  const stopped = []
+  const pendingEffects = []
+  let cursor = 0
+  let id = 0
+  const react = {
+    useState(initial) {
+      const index = cursor++
+      if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial
+      return [states[index], (next) => { states[index] = typeof next === 'function' ? next(states[index]) : next }]
+    },
+    useRef(initial) {
+      const index = cursor++
+      if (!(index in states)) states[index] = { current: initial }
+      return states[index]
+    },
+    useEffect(effect, dependencies) {
+      const index = cursor++
+      const previous = states[index]
+      if (!previous || dependencies.some((value, offset) => value !== previous.dependencies[offset])) {
+        pendingEffects.push(() => {
+          previous?.cleanup?.()
+          states[index] = { dependencies, cleanup: effect(), effect: true }
+        })
+      }
+    },
+  }
+  const { useSystemCache } = loadTypeScript('../src/pages/system-cache/useSystemCache.ts', {
+    react,
+    '@/i18n': { useI18n: () => ({ t }) },
+    '@/lib/stowmind-supplements/systemCacheHistory': { recordSystemCacheCleanup: (...args) => history.push(args) },
+    '@tauri-apps/api/tauri': { invoke: async (command, args) => { calls.push({ command, args }); return invoke(command, args) } },
+    '@tauri-apps/api/event': { listen: async (event, callback) => {
+      const register = () => {
+        listeners.set(event, callback)
+        return () => { stopped.push(event); listeners.delete(event) }
+      }
+      return listen ? listen(event, callback, register) : register()
+    } },
+    'react-toastify': { toast: { success: (message) => successes.push(message) } },
+    './helpers': helpers,
+  }, {
+    crypto: { randomUUID: () => `run-${++id}` },
+    window: { confirm: () => confirm },
+  })
+  return {
+    history, successes, calls, listeners, stopped,
+    render(active = true) {
+      cursor = 0
+      const hook = useSystemCache(active)
+      pendingEffects.splice(0).forEach((effect) => effect())
+      return hook
+    },
+    unmount() { states.filter((state) => state?.effect).forEach((state) => state.cleanup?.()) },
+  }
+}
+
+test('incomplete measurements and missing authorization never enable cleanup', () => {
+  for (const report of [
+    null, { ...complete, size_bytes: null }, { ...complete, status: 'partial' },
+    { ...complete, status: 'permission_denied' }, { ...complete, authorized: false },
+    { ...complete, review_token: null }, { ...complete, mole_supported: false },
+    { ...complete, size_bytes: 0 },
+  ]) assert.equal(helpers.canCleanSystemCache(report), false)
+  assert.equal(helpers.canCleanSystemCache(complete), true)
+  assert.equal(helpers.measurementDeltaLabel(-123, t, String), t('systemCache.increased', { size: '123' }))
+})
+
+test('unknown measurements render as unknown, without a zero-sized cleanup affordance', () => {
+  const cache = {
+    report: { ...complete, status: 'permission_denied', size_bytes: null, review_token: null },
+    outcome: null, activity: null, interaction: null, input: '',
+    scan() {}, review() {}, clean() {}, cancel() {}, submit() {}, setInput() {},
+  }
+  const { SystemCachePanel } = loadTypeScript('../src/pages/system-cache/SystemCachePanel.tsx', {
+    'react/jsx-runtime': { jsx, jsxs: jsx },
+    react: { useEffect() {} },
+    'react-router-dom': { useLocation: () => ({ pathname: '/doctor' }) },
+    'lucide-react': new Proxy({}, { get: (_, name) => name }),
+    '@/i18n': { useI18n: () => ({ t }) },
+    '@/lib/utils': { cn: (...values) => values.join(' '), formatDate: String, formatFileSize: (n) => `${n} bytes` },
+    '@/components/ui/button': { Button: 'Button' },
+    '../clean/CleanInteractionPrompt': { CleanInteractionPrompt: 'Prompt' },
+    './helpers': helpers,
+    './useSystemCache': { useSystemCache: () => cache },
+  })
+  const tree = SystemCachePanel()
+  assert.ok(renderedText(tree).includes(t('systemCache.unknownSize')))
+  const size = findElements(tree, (element) => element.props?.className === 'text-2xl font-bold tabular-nums')[0]
+  assert.equal(renderedText(size), t('systemCache.unknownSize'))
+  const clean = findElements(tree, (element) => element.type === 'Button' && renderedText(element).includes(t('systemCache.clean')))[0]
+  assert.equal(clean.props.disabled, true)
+})
+
+test('declining confirmation does not invoke Mole cleanup', async () => {
+  const hook = createHook(async (command) => {
+    assert.equal(command, 'system_cache_review')
+    return complete
+  }, { confirm: false })
+  await hook.render().review()
+  await hook.render().clean()
+  assert.equal(hook.calls.length, 1)
+  assert.equal(hook.history.length, 0)
+})
+
+test('Mole failure records before and after, without a success toast; failed refresh preserves the outcome', async () => {
+  const hook = createHook(async (command) => {
+    if (command === 'system_cache_review') return complete
+    if (command === 'system_cache_clean') return outcome
+    throw new Error('Scan unavailable')
+  })
+  await hook.render().review()
+  await hook.render().clean()
+  assert.equal(hook.history.length, 1)
+  assert.equal(hook.history[0][0], outcome)
+  assert.equal(hook.render().outcome, outcome)
+  assert.equal(hook.render().error, 'Mole protected the target')
+  assert.equal(hook.successes.length, 0)
+  await hook.render().scan()
+  assert.equal(hook.render().outcome, outcome)
+  assert.equal(hook.history.length, 1)
+  assert.equal(hook.render().error, 'Error: Scan unavailable')
+})
+
+test('duplicate review and clean clicks cannot launch concurrent operations', async () => {
+  let resolveReview
+  let resolveClean
+  const hook = createHook((command) => {
+    if (command === 'system_cache_review') return new Promise((resolve) => { resolveReview = resolve })
+    if (command === 'system_cache_clean') return new Promise((resolve) => { resolveClean = resolve })
+    assert.fail(`Unexpected command: ${command}`)
+  })
+  const first = hook.render().review()
+  const second = hook.render().review()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(hook.calls.filter(({ command }) => command === 'system_cache_review').length, 1)
+  resolveReview(complete)
+  await Promise.all([first, second])
+  const cleanFirst = hook.render().clean()
+  const cleanSecond = hook.render().clean()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(hook.calls.filter(({ command }) => command === 'system_cache_clean').length, 1)
+  resolveClean(outcome)
+  await Promise.all([cleanFirst, cleanSecond])
+  assert.equal(hook.history.length, 1)
+})
+
+test('cancellation during the first listener registration releases it and never starts native review', async () => {
+  let finishListener
+  const hook = createHook(async (command) => {
+    assert.equal(command, 'mole_clean_preview_pty_cancel')
+  }, { listen: (_event, _callback, register) => new Promise((resolve) => { finishListener = () => resolve(register()) }) })
+  const review = hook.render().review()
+  await hook.render().cancel()
+  finishListener()
+  await review
+  assert.equal(hook.listeners.size, 0)
+  assert.equal(hook.stopped.length, 1)
+  assert.equal(hook.calls.filter(({ command }) => command === 'system_cache_review').length, 0)
+})
+
+test('unmount during the second listener registration immediately releases the late listener', async () => {
+  let finishListener
+  const hook = createHook(async (command) => {
+    assert.equal(command, 'mole_clean_preview_pty_cancel')
+  }, { listen: (event, _callback, register) => event === 'mole-clean-interaction-request'
+    ? new Promise((resolve) => { finishListener = () => resolve(register()) })
+    : register() })
+  const review = hook.render().review()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(hook.listeners.size, 1)
+  hook.unmount()
+  assert.equal(hook.listeners.size, 0)
+  finishListener()
+  await review
+  assert.equal(hook.listeners.size, 0)
+  assert.equal(hook.stopped.length, 2)
+  assert.equal(hook.calls.filter(({ command }) => command === 'system_cache_review').length, 0)
+})
+
+for (const exit of ['leave', 'unmount']) {
+  test(`${exit} while native cleanup runs cancels it and still records the returned execution outcome`, async () => {
+    let finishCleanup
+    const hook = createHook(async (command) => {
+      if (command === 'system_cache_review') return complete
+      if (command === 'system_cache_clean') return new Promise((resolve) => { finishCleanup = resolve })
+      assert.equal(command, 'mole_clean_preview_pty_cancel')
+    })
+    await hook.render().review()
+    const cleanup = hook.render().clean()
+    await new Promise((resolve) => setImmediate(resolve))
+    const currentRun = hook.calls.find(({ command }) => command === 'system_cache_clean').args.runId
+    hook.listeners.get('mole-clean-interaction-request')({ payload: { run_id: currentRun, prompt: 'Password:', kind: 'password' } })
+    hook.render().setInput('test-password')
+    if (exit === 'leave') hook.render(false)
+    else hook.unmount()
+    assert.equal(hook.listeners.size, 0)
+    assert.equal(hook.calls.filter(({ command }) => command === 'mole_clean_preview_pty_cancel').length, 1)
+    finishCleanup(outcome)
+    await cleanup
+    assert.equal(hook.history.length, 1)
+    assert.equal(hook.history[0][0], outcome)
+    assert.equal(hook.successes.length, 0)
+    assert.equal(hook.listeners.size, 0)
+    if (exit === 'leave') assert.equal(hook.render(false).input, '')
+  })
+}

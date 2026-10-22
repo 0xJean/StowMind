@@ -27,6 +27,7 @@ import { buildDiagnostics, findPrimaryDisk, sortProcesses } from './status/diagn
 import type { MoleDoctorCheck, MoleDoctorLevel, MoleDoctorResult } from './mole/doctorTypes'
 import { buildDoctorIssueUrl, buildDoctorReport } from './mole/doctorReport'
 import { collectRecentFailureSignals, summarizeDoctorSections, type DoctorSectionSummary } from './mole/doctorSections'
+import { SystemCachePanel } from './system-cache/SystemCachePanel'
 
 type Tone = 'green' | 'yellow' | 'red'
 
@@ -188,6 +189,8 @@ export function DoctorPage() {
           <p className="mt-2 break-words text-xs text-muted-foreground">{error}</p>
         </div>
       )}
+
+      <SystemCachePanel />
 
       <div className="iqon-card relative overflow-hidden p-6 md:p-8">
         <div className="pointer-events-none absolute inset-0 z-0">
