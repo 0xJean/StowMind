@@ -138,14 +138,111 @@ fn large_stdin_and_both_output_pipes_do_not_deadlock_each_other() {
         .unwrap();
     let payload = vec![b'x'; OUTPUT_LIMIT + 128 * 1024];
     let script = format!(
-        "(head -c {} /dev/zero; printf STDERR-END) >&2 & cat; wait; printf STDOUT-END",
+        "(head -c {} /dev/zero; printf STDERR-END) >&2 & tee \"$1\"; wait; count=$(wc -c < \"$1\"); printf 'STDIN-BYTES:%d\\nSTDOUT-END' \"$count\"",
         payload.len()
     );
-    let result = context.run(&mut shell(&script), Some(&payload)).unwrap();
+    let fixture = Fixture::new();
+    let result = context
+        .run(&mut fixture.command(&script), Some(&payload))
+        .unwrap();
     assert!(result.output.status.success());
     assert!(result.output_truncated);
     assert!(result.output.stdout.ends_with(b"STDOUT-END"));
     assert!(result.output.stderr.ends_with(b"STDERR-END"));
+    assert!(String::from_utf8_lossy(&result.output.stdout)
+        .contains(&format!("STDIN-BYTES:{}\n", payload.len())));
+}
+
+#[test]
+fn stdin_batches_make_progress_without_starving_other_streams_and_close_at_eof() {
+    use super::process::pump_input;
+    use std::io::{Result, Write};
+    use std::sync::{atomic::AtomicUsize, Arc};
+    struct Writer(Arc<AtomicUsize>);
+    impl Write for Writer {
+        fn write(&mut self, bytes: &[u8]) -> Result<usize> {
+            self.0.fetch_add(bytes.len(), Ordering::SeqCst);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+    let received = Arc::new(AtomicUsize::new(0));
+    let input = vec![0; OUTPUT_LIMIT];
+    let mut writer = Some(Writer(received.clone()));
+    let mut offset = 0;
+    pump_input(&mut writer, &input, &mut offset).unwrap();
+    assert!(
+        offset > 8192,
+        "ready stdin must not be limited to one write per polling interval"
+    );
+    assert!(
+        offset < input.len(),
+        "a batch must yield to output/cancellation before consuming all input"
+    );
+    while writer.is_some() {
+        pump_input(&mut writer, &input, &mut offset).unwrap();
+    }
+    assert_eq!(received.load(Ordering::SeqCst), input.len());
+    assert_eq!(offset, input.len());
+    let mut writer = Some(Writer(received));
+    let mut offset = 0;
+    pump_input(&mut writer, b"confirmation", &mut offset).unwrap();
+    assert!(
+        writer.is_none(),
+        "the final write must close stdin in the same batch"
+    );
+}
+
+#[test]
+fn stdin_backpressure_preserves_partial_writes_and_zero_progress_is_an_error() {
+    use super::process::pump_input;
+    use std::io::{ErrorKind, Result, Write};
+    struct Writer {
+        calls: usize,
+        zero: bool,
+    }
+    impl Write for Writer {
+        fn write(&mut self, bytes: &[u8]) -> Result<usize> {
+            self.calls += 1;
+            if self.zero {
+                return Ok(0);
+            }
+            match self.calls {
+                2 => Err(ErrorKind::WouldBlock.into()),
+                3 => Err(ErrorKind::Interrupted.into()),
+                _ => Ok(bytes.len().min(1024)),
+            }
+        }
+        fn flush(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+    let input = vec![0; 4096];
+    let mut writer = Some(Writer {
+        calls: 0,
+        zero: false,
+    });
+    let mut offset = 0;
+    pump_input(&mut writer, &input, &mut offset).unwrap();
+    assert_eq!(offset, 1024);
+    assert_eq!(
+        writer.as_ref().unwrap().calls,
+        2,
+        "WouldBlock must yield without spinning"
+    );
+    pump_input(&mut writer, &input, &mut offset).unwrap();
+    assert_eq!(offset, input.len());
+    assert!(writer.is_none());
+    let mut writer = Some(Writer {
+        calls: 0,
+        zero: true,
+    });
+    assert_eq!(
+        pump_input(&mut writer, b"x", &mut 0).unwrap_err().kind(),
+        ErrorKind::WriteZero
+    );
 }
 
 #[test]

@@ -95,6 +95,80 @@ impl<R: Read> Drain<R> {
     }
 }
 
+pub(super) fn pump_input<W: Write>(
+    pipe: &mut Option<W>,
+    input: &[u8],
+    offset: &mut usize,
+) -> std::io::Result<()> {
+    // Give ready input the same bounded work budget as each output stream.
+    // A full pipe yields immediately so stdout/stderr and cancellation run next.
+    for _ in 0..32 {
+        if *offset == input.len() {
+            *pipe = None;
+            return Ok(());
+        }
+        let Some(writer) = pipe.as_mut() else {
+            return Ok(());
+        };
+        match writer.write(&input[*offset..input.len().min(*offset + 8192)]) {
+            Ok(0) => return Err(std::io::ErrorKind::WriteZero.into()),
+            Ok(count) => *offset += count,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => {
+                *pipe = None;
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    if *offset == input.len() {
+        *pipe = None;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn wait_for_io(
+    stdout: Option<i32>,
+    stderr: Option<i32>,
+    stdin: Option<i32>,
+) -> std::io::Result<()> {
+    let mut pipes = [
+        libc::pollfd {
+            fd: stdout.unwrap_or(-1),
+            events: libc::POLLIN,
+            revents: 0,
+        },
+        libc::pollfd {
+            fd: stderr.unwrap_or(-1),
+            events: libc::POLLIN,
+            revents: 0,
+        },
+        libc::pollfd {
+            fd: stdin.unwrap_or(-1),
+            events: libc::POLLOUT,
+            revents: 0,
+        },
+    ];
+    // Wake immediately when the child can make progress; POLL remains the
+    // maximum idle wait so cancellation/deadline checks keep their latency.
+    let result = unsafe {
+        libc::poll(
+            pipes.as_mut_ptr(),
+            pipes.len() as libc::nfds_t,
+            POLL.as_millis() as i32,
+        )
+    };
+    if result < 0 {
+        let error = std::io::Error::last_os_error();
+        if error.kind() != std::io::ErrorKind::Interrupted {
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
 #[cfg(unix)]
 fn nonblocking(fd: &impl std::os::fd::AsRawFd) -> std::io::Result<()> {
     let descriptor = fd.as_raw_fd();
@@ -131,7 +205,7 @@ impl RunContext {
         command: &mut Command,
         input: Option<&[u8]>,
     ) -> Result<ProcessOutput, MaintenanceError> {
-        use std::os::unix::process::CommandExt;
+        use std::os::{fd::AsRawFd, unix::process::CommandExt};
         self.check()?;
         if input.is_some_and(|bytes| bytes.len() > INPUT_LIMIT) {
             return Err("Maintenance confirmation input is too large".into());
@@ -180,28 +254,15 @@ impl RunContext {
         let mut last_tree_check = Instant::now() - Duration::from_secs(1);
         let mut tree_alive = true;
         loop {
-            if let (Some(pipe), Some(bytes)) = (stdin.as_mut(), input) {
-                if input_offset == bytes.len() {
+            if let Some(bytes) = input {
+                if let Err(error) = pump_input(&mut stdin, bytes, &mut input_offset) {
+                    failure.get_or_insert_with(|| {
+                        MaintenanceError::new(
+                            "failed",
+                            format!("Cannot write maintenance input: {error}"),
+                        )
+                    });
                     stdin = None;
-                } else {
-                    match pipe.write(&bytes[input_offset..bytes.len().min(input_offset + 8192)]) {
-                        Ok(count) => input_offset += count,
-                        Err(error)
-                            if error.kind() == std::io::ErrorKind::WouldBlock
-                                || error.kind() == std::io::ErrorKind::Interrupted => {}
-                        Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => {
-                            stdin = None
-                        }
-                        Err(error) => {
-                            failure.get_or_insert_with(|| {
-                                MaintenanceError::new(
-                                    "failed",
-                                    format!("Cannot write maintenance input: {error}"),
-                                )
-                            });
-                            stdin = None;
-                        }
-                    }
                 }
             }
             if let Err(error) = out.pump().and_then(|_| err.pump()) {
@@ -280,7 +341,18 @@ impl RunContext {
                     return Err(error);
                 }
             }
-            std::thread::sleep(POLL);
+            if let Err(error) = wait_for_io(
+                (!out.eof).then(|| out.stream.as_raw_fd()),
+                (!err.eof).then(|| err.stream.as_raw_fd()),
+                stdin.as_ref().map(AsRawFd::as_raw_fd),
+            ) {
+                failure.get_or_insert_with(|| {
+                    MaintenanceError::new(
+                        "failed",
+                        format!("Cannot poll maintenance pipes: {error}"),
+                    )
+                });
+            }
         }
     }
 
