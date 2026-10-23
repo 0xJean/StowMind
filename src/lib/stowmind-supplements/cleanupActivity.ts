@@ -50,7 +50,7 @@ export function buildCleanupActivitySummary(
     totalFreed: Math.max(statFreed, historyFreed),
     executedCount: Math.max(statOperations, executed.length),
     previewCount: cleanup.filter((record) => record.cleanupSummary?.action === 'preview' || (!record.executed && !record.cleanupSummary?.outcome)).length,
-    optimizedCount: cleanup.filter((record) => record.type === 'optimize').length,
+    optimizedCount: executed.filter((record) => record.type === 'optimize').length,
     observedCacheReduction,
     latest: cleanup[0],
     latestExecuted,
@@ -67,6 +67,14 @@ export function cleanupFreedSize(record: HistoryRecord) {
   const size = record.cleanupSummary?.totalSize
   return record.executed && !record.undone && record.cleanupSummary?.sizeKind === 'reported_freed'
     && typeof size === 'number' && Number.isFinite(size) && size >= 0 ? size : 0
+}
+
+/** Tracked work is independent from physical disk space freed. */
+export function cleanupProcessedSize(record: HistoryRecord) {
+  if (!record.executed || record.undone) return 0
+  const summary = record.cleanupSummary
+  const value = summary?.processedSize ?? (summary?.sizeKind === 'processed' ? summary.totalSize : undefined)
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
 }
 
 export function cleanupItems(record: HistoryRecord) {

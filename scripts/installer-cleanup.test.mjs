@@ -34,20 +34,88 @@ for (const status of ['unknown', 'failed', 'partial']) {
     assert.equal(state.statistics.reportedFreedBytes, 20)
     assert.equal(state.statistics.cleanSizeFreed, 300)
     assert.equal(state.history[0].cleanupSummary.outcome, status)
-    assert.equal(state.history[0].cleanupSummary.sizeKind, 'unknown')
+    assert.equal(state.history[0].cleanupSummary.sizeKind, status === 'partial' ? 'processed' : 'unknown')
     assert.equal(state.history[0].cleanupSummary.totalSize, status === 'partial' ? 50 : undefined)
+    assert.equal(state.history[0].cleanupSummary.failedCount, 1)
+    assert.equal(state.history[0].cleanupSummary.skippedCount, undefined)
+    assert.equal(state.statistics.cleanItemsRemoved, status === 'partial' ? 8 : 7)
+    assert.equal(state.statistics.cleanOperationCount, status === 'partial' ? 3 : 2)
+    assert.equal(state.history[0].executed, status === 'partial')
+    if (status === 'partial') assert.equal(state.statistics.lastCleaned, state.history[0].timestamp)
+    else assert.equal(state.statistics.lastCleaned, undefined)
   })
 }
 
-test('confirmed zero stays zero while genuine Mole freed bytes update the latest statistics', () => {
+test('confirmed zero stays zero while successful deletion sizes remain processed bytes', () => {
   const { state, history } = historyFixture()
   history.recordInstallerOutcome({ status: 'success', item_count: 0, total_size: 0, failed_count: 0 }, 'Installers', 'Installers', '')
   assert.equal(state.history[0].cleanupSummary.itemCount, 0)
   assert.equal(state.history[0].cleanupSummary.totalSize, 0)
   assert.equal(state.statistics.reportedFreedBytes, 20)
+  assert.equal(state.statistics.cleanOperationCount, 2)
+  assert.equal(state.statistics.lastCleaned, undefined)
+  assert.equal(state.history[0].executed, false)
+  assert.equal(state.history[0].cleanupSummary.outcome, 'skipped')
   history.recordInstallerOutcome({ status: 'success', item_count: 2, total_size: 70, failed_count: 0 }, 'Installers', 'Installers', '')
-  assert.equal(state.statistics.reportedFreedBytes, 90)
+  assert.equal(state.statistics.reportedFreedBytes, 20)
+  assert.equal(state.statistics.cleanSizeFreed, 300)
   assert.equal(state.statistics.cleanItemsRemoved, 9)
+  assert.equal(state.statistics.cleanOperationCount, 3)
+  assert.equal(state.history[1].cleanupSummary.sizeKind, 'processed')
+  assert.equal(state.history[1].cleanupSummary.totalSize, 70)
+  assert.equal(state.statistics.lastCleaned, state.history[1].timestamp)
+})
+
+for (const status of ['success', 'partial']) {
+  test(`${status} confirmed deletion count is accumulated even when its size is unavailable`, () => {
+    const { state, history } = historyFixture()
+    history.recordInstallerOutcome({ status, item_count: 2, total_size: null, failed_count: status === 'partial' ? 1 : 0, raw_output: 'Confirmed deletion count only' }, 'Installers', 'Installers', 'Size unavailable')
+    assert.equal(state.statistics.cleanItemsRemoved, 9)
+    assert.equal(state.statistics.cleanOperationCount, 3)
+    assert.equal(state.statistics.reportedFreedBytes, 20)
+    assert.equal(state.statistics.cleanSizeFreed, 300)
+    assert.equal(state.history[0].executed, true)
+    assert.equal(state.history[0].cleanupSummary.itemCount, 2)
+    assert.equal(state.history[0].cleanupSummary.totalSize, undefined)
+    assert.equal(state.history[0].cleanupSummary.sizeKind, 'unknown')
+    assert.equal(state.history[0].cleanupSummary.outcome, status)
+  })
+}
+
+for (const itemCount of [null, NaN, Infinity, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+  test(`unconfirmed installer count ${itemCount} cannot increase cleanup statistics`, () => {
+    const { state, history } = historyFixture()
+    history.recordInstallerOutcome({ status: 'partial', item_count: itemCount, total_size: 50, failed_count: 1 }, 'Installers', 'Installers', 'Unknown count')
+    assert.equal(state.history[0].executed, false)
+    assert.equal(state.history[0].cleanupSummary.itemCount, undefined)
+    assert.equal(state.history[0].cleanupSummary.totalSize, undefined)
+    assert.equal(state.statistics.cleanItemsRemoved, 7)
+    assert.equal(state.statistics.cleanOperationCount, 2)
+    assert.equal(state.statistics.reportedFreedBytes, 20)
+    assert.equal(state.statistics.lastCleaned, undefined)
+  })
+}
+
+test('partial size corruption cannot erase its independently confirmed deletion count', () => {
+  const { state, history } = historyFixture()
+  history.recordInstallerOutcome({ status: 'partial', item_count: 1, total_size: Infinity, failed_count: NaN }, 'Installers', 'Installers', 'Incomplete report')
+  assert.equal(state.statistics.cleanItemsRemoved, 8)
+  assert.equal(state.statistics.cleanOperationCount, 3)
+  assert.equal(state.history[0].cleanupSummary.totalSize, undefined)
+  assert.equal(state.history[0].cleanupSummary.failedCount, undefined)
+  assert.equal(state.statistics.reportedFreedBytes, 20)
+})
+
+test('a failed native report with no deletions stays failed without counting a cleanup operation', () => {
+  const { state, history } = historyFixture()
+  history.recordInstallerOutcome({ status: 'failed', item_count: 0, total_size: 0, failed_count: 3 }, 'Installers', 'Installers', 'Three failures')
+  assert.equal(state.history[0].executed, false)
+  assert.equal(state.history[0].cleanupSummary.outcome, 'failed')
+  assert.equal(state.history[0].cleanupSummary.itemCount, 0)
+  assert.equal(state.history[0].cleanupSummary.failedCount, 3)
+  assert.equal(state.statistics.cleanItemsRemoved, 7)
+  assert.equal(state.statistics.cleanOperationCount, 2)
+  assert.equal(state.statistics.lastCleaned, undefined)
 })
 
 test('result component keeps partial and unknown states visible instead of reporting success', () => {

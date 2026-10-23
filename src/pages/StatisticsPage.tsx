@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useMemo } from 'react'
+import { addProcessedSize, processedSizeTotalLabel, type ProcessedSizeTotal } from './statistics/processedSize'
 
 type Tone = 'green' | 'cyan' | 'purple' | 'yellow' | 'red'
 
@@ -41,7 +42,7 @@ interface TypeStat {
   items: number
   skipped: number
   observed: number | null
-  processed?: number
+  processed?: ProcessedSizeTotal
   latest?: string
 }
 
@@ -86,7 +87,7 @@ export function StatisticsPage() {
       const current = map.get(type) ?? { count: 0, freed: 0, items: 0, skipped: 0, observed: null }
       current.count += 1
       current.freed += recordSize(record)
-      if (record.cleanupSummary?.sizeKind === 'processed') current.processed = (current.processed ?? 0) + (record.cleanupSummary.totalSize ?? 0)
+      current.processed = addProcessedSize(current.processed, record)
       current.items += recordItemCount(record)
       current.skipped += record.cleanupSummary?.skippedCount ?? 0
       const delta = record.cleanupSummary?.systemCache?.observedDeltaBytes
@@ -325,6 +326,7 @@ function TypeBreakdownTile({
   const tt = TONE[meta.tone]
   const Icon = meta.icon
   const empty = !stat || stat.count === 0
+  const processedLabel = processedSizeTotalLabel(stat?.processed, t)
   return (
     <div className={cn('iqon-row p-4', empty && 'opacity-60')}>
       <div className="mb-3 flex items-center gap-2">
@@ -344,7 +346,11 @@ function TypeBreakdownTile({
               {t('stats.typeFreed', { size: formatFileSize(stat.freed) })}
             </p>
           )}
-          {(stat.processed ?? 0) > 0 && <p className="mt-2 text-[10px] text-muted-foreground">{t('history.spaceProcessed', { size: formatFileSize(stat.processed!) })}</p>}
+          {processedLabel && (
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              {processedLabel}
+            </p>
+          )}
           {meta.type === 'system-cache' && (
             <p className="mt-2 text-[10px] text-muted-foreground">
               {stat.observed === null ? t('stats.cacheUnknown') : t('stats.cacheObserved', { size: formatFileSize(stat.observed) })}

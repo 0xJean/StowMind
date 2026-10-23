@@ -40,7 +40,7 @@ test('Trash processing and unknown uninstall totals never become reported freed 
   assert.equal(f.state.statistics.cleanItemsRemoved, 6)
 })
 
-test('explicit uninstall zero is preserved and only reported permanent deletion increments freed bytes', () => {
+test('explicit uninstall zero is preserved and permanent deletion sizes remain processed bytes', () => {
   const f = fixture()
   f.uninstall.recordUninstallExecution({ item_count: 0, total_size: 0, dry_run: false, permanent: true }, app, t)
   assert.equal(f.records[0].cleanupSummary.itemCount, 0)
@@ -49,7 +49,11 @@ test('explicit uninstall zero is preserved and only reported permanent deletion 
   assert.equal(f.records[0].executed, false)
   assert.equal(f.state.statistics.cleanOperationCount, 2)
   f.uninstall.recordUninstallExecution({ item_count: 1, total_size: 42, dry_run: false, permanent: true }, app, t)
-  assert.equal(f.state.statistics.reportedFreedBytes, 52)
+  assert.equal(f.state.statistics.reportedFreedBytes, 10)
+  assert.equal(f.records[1].cleanupSummary.sizeKind, 'processed')
+  assert.equal(f.records[1].cleanupSummary.totalSize, 42)
+  assert.equal(f.state.statistics.cleanItemsRemoved, 6)
+  assert.equal(f.state.statistics.cleanOperationCount, 3)
   f.uninstall.recordUninstallExecution({ item_count: 9, total_size: 1000, dry_run: true, permanent: true }, app, t)
   assert.equal(f.records.length, 2, 'Preview output cannot be recorded as execution')
 })

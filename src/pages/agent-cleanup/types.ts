@@ -50,6 +50,7 @@ export interface AgentCleanupExecuteRequest {
 export interface AgentCleanupExecuteResult {
   removed_count: number
   processed_bytes?: number | null
+  processed_size_status?: 'complete' | 'partial' | 'unavailable'
   freed_bytes: number | null
   skipped_count?: number
   errors?: string[]
@@ -60,6 +61,7 @@ export interface AgentCleanupExecuteResult {
 export interface AgentCleanupAction {
   path: string
   size_bytes: number | null
+  size_status?: 'complete' | 'partial' | 'unavailable'
   success: boolean
   message: string
 }

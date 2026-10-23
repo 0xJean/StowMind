@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { APP_STORE_VERSION, migrateCleanupMetrics } from './cleanupMetricsMigration'
 
 export interface AIProvider {
   type: 'ollama' | 'openai' | 'claude' | 'local_codex' | 'local_claude_code'
@@ -82,6 +83,13 @@ export interface SystemCacheHistoryDetails {
 
 export interface CleanupSummary {
   itemCount?: number
+  itemCountSource?: 'mole' | 'operation_log' | 'unknown'
+  operationCount?: number
+  operationLogStatus?: 'available' | 'unavailable' | 'ambiguous'
+  failedCount?: number
+  /** Mole's tracked processing amount; never physical disk space freed. */
+  processedSize?: number
+  processedSizeKind?: 'reported' | 'at_least' | 'partial' | 'unspecified' | 'unavailable'
   totalSize?: number
   /** Distinguish reports of freed bytes from estimates and processed file sizes. */
   sizeKind?: 'reported_freed' | 'estimated' | 'processed' | 'unknown'
@@ -122,6 +130,8 @@ export interface Statistics {
   cleanSizeFreed?: number
   /** Confirmed execution reports only; older counters may contain preview estimates. */
   reportedFreedBytes?: number
+  /** Pre-migration upper counter retained for diagnostics, never released-space totals. */
+  legacyUnverifiedFreedBytes?: number
   cleanOperationCount?: number
   lastCleaned?: string
   agentCleanupItemsRemoved?: number
@@ -390,6 +400,8 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'stowmind',
+      version: APP_STORE_VERSION,
+      migrate: (state, version) => migrateCleanupMetrics(state, version) as AppState,
     }
   )
 )

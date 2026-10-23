@@ -1,15 +1,20 @@
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card'
 import { useI18n } from '@/i18n'
 import { formatFileSize } from '@/lib/utils'
 import { AlertCircle, Ban, CheckCircle2, Clock, Database, Files, RefreshCw } from 'lucide-react'
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
-import { CleanScanStatusPanel, formatElapsed } from './CleanScanStatusPanel'
-import type { CleanCompletionStatus, MoleCleanPreview, MoleCleanSection } from './types'
+import { formatElapsed } from './CleanScanStatusPanel'
+import { CleanOperationLogPanel } from './CleanOperationLogPanel'
+import { CleanExecutionOutputPanel } from './CleanExecutionOutputPanel'
+import { parseCleanOperationLog, splitCleanOperationLog, summarizeCleanExecution } from './cleanExecutionResult'
+import type { CleanExecutionSummary } from './cleanExecutionResult'
+import type { CleanCompletionStatus, MoleCleanPreview } from './types'
 
 interface CleanCompletedPanelProps {
   preview: MoleCleanPreview
+  summary?: CleanExecutionSummary
   rawOutput: string
   outputLines: string[]
   completedAt: string
@@ -19,27 +24,37 @@ interface CleanCompletedPanelProps {
 }
 
 export function CleanCompletedPanel({
-  preview,
-  rawOutput,
-  outputLines,
-  completedAt,
-  elapsedMs,
-  status = 'completed',
-  onRescan,
+  summary, rawOutput, outputLines, completedAt, elapsedMs, status = 'completed', onRescan,
 }: CleanCompletedPanelProps) {
   const { t } = useI18n()
-  const sections = useMemo(() => sortSectionsBySize(preview.sections), [preview.sections])
+  const parts = useMemo(() => splitCleanOperationLog(rawOutput), [rawOutput])
+  const result = useMemo(() => summary ?? summarizeCleanExecution(outputLines, parts.rawOutput, parts.operationLog), [summary, outputLines, parts])
+  const records = useMemo(() => parseCleanOperationLog(parts.operationLog || rawOutput), [parts.operationLog, rawOutput])
   const cancelled = status === 'cancelled'
-  const sizeLabel = preview.potential_space === null ? t('clean.summary.unknown') : formatFileSize(preview.potential_space)
-  const countLabel = preview.item_count ?? t('clean.summary.unknown')
-  const metricsUnknown = preview.potential_space === null || preview.item_count === null
-  const unconfirmed = preview.potential_space === null && preview.item_count === null
-  const warning = cancelled || unconfirmed
-  const displayedOutput = useMemo(() => {
-    if (outputLines.length > 0) return outputLines
-    const rawLines = rawOutput.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-    return rawLines.length > 0 ? rawLines : [t('clean.cleanStreamNoOutput')]
-  }, [outputLines, rawOutput, t])
+  const failed = status === 'failed'
+  const partial = status === 'partial' || result.failedCount > 0
+  const unconfirmed = result.itemCount === null && result.totalSize === null && result.processedSize === null && result.operationCount === 0
+  const ambiguousLog = result.operationLogStatus === 'ambiguous'
+  const warning = cancelled || partial || failed || unconfirmed || ambiguousLog
+  const title = cancelled ? 'clean.cancelledTitle' : failed ? 'clean.result.failedTitle'
+    : partial ? 'clean.result.partialTitle' : unconfirmed || ambiguousLog ? 'history.statusUnknown' : 'clean.completedTitle'
+  const description = cancelled ? 'clean.cancelledScopeDesc' : failed ? 'clean.result.failedDesc'
+    : ambiguousLog ? 'clean.result.logAmbiguous' : result.failedCount > 0 ? 'clean.result.partialDesc'
+      : unconfirmed ? 'clean.summary.executionUnknown' : 'clean.completedSubtitle'
+  const processedValue = result.processedSize === null
+    ? t(result.processedSizeKind === 'partial' ? 'clean.result.processedPartial' : 'clean.result.notReported')
+    : result.processedSizeKind === 'at_least'
+      ? t('clean.result.processedAtLeast', { size: formatFileSize(result.processedSize) })
+      : formatFileSize(result.processedSize)
+  const processedHint = result.processedSizeKind === 'unspecified'
+    ? `${t('clean.result.processedReported')} ${t('clean.result.processedUnspecified')}`
+    : result.processedSizeKind === 'partial'
+      ? `${t('clean.result.processedReported')} ${t('clean.result.processedPartial')}`
+      : t('clean.result.processedReported')
+  const itemLabel = result.itemCountSource === 'mole' ? 'clean.result.moleItems'
+    : result.itemCountSource === 'operation_log' ? 'clean.result.operationItems' : 'clean.result.unknownItems'
+  // A completed result retains stdout separately from its operation ledger.
+  const stdout = parts.rawOutput.trim() || (rawOutput.trim() ? '' : outputLines.join('\n'))
 
   return (
     <div className="stow-page-wide">
@@ -47,166 +62,54 @@ export function CleanCompletedPanel({
         <div>
           <p className="iqon-eyebrow mb-1">{t('eyebrow.optimize')}</p>
           <h1 className="text-2xl font-bold tracking-tight">{t('clean.title')}</h1>
-          <p className="mt-1 text-xs text-muted-foreground">{t(cancelled ? 'clean.cancelledSubtitle' : unconfirmed ? 'clean.summary.executionUnknown' : 'clean.completedSubtitle')}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t(description, { count: result.failedCount })}</p>
         </div>
       </div>
 
       <Card className={`overflow-hidden ${warning ? 'border-iqon-yellow/30' : 'border-iqon-green/30'}`}>
-        <CardContent className="p-8">
+        <CardContent className="p-6 md:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-4">
               <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${warning ? 'bg-iqon-yellow/15 text-iqon-yellow' : 'bg-iqon-green/15 text-iqon-green'}`}>
-                {cancelled ? <Ban className="h-8 w-8" /> : unconfirmed ? <AlertCircle className="h-8 w-8" /> : <CheckCircle2 className="h-8 w-8" />}
+                {cancelled ? <Ban className="h-8 w-8" /> : warning ? <AlertCircle className="h-8 w-8" /> : <CheckCircle2 className="h-8 w-8" />}
               </div>
               <div>
-                <CardTitle className="text-3xl">{t(cancelled ? 'clean.cancelledTitle' : unconfirmed ? 'history.statusUnknown' : 'clean.completedTitle')}</CardTitle>
-                <CardDescription className="mt-2 max-w-xl">
-                  {metricsUnknown ? t('clean.summary.executionUnknown') : t(cancelled ? 'clean.cancelledDesc' : 'clean.completedDesc', {
-                    size: sizeLabel, count: countLabel,
-                  })}
-                </CardDescription>
+                <CardTitle className="text-3xl">{t(title)}</CardTitle>
+                <CardDescription className="mt-2 max-w-xl">{t(description, { count: result.failedCount })}</CardDescription>
               </div>
             </div>
             <Button type="button" variant="outline" onClick={onRescan}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              {t('clean.completedRescan')}
+              <RefreshCw className="mr-2 h-4 w-4" />{t('clean.completedRescan')}
             </Button>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-4">
-            <ResultStat
-              icon={<Database className="h-4 w-4" />}
-              label={t(cancelled ? 'clean.cancelledSizeLabel' : 'clean.completedSizeLabel')}
-              value={sizeLabel}
-            />
-            <ResultStat
-              icon={<Files className="h-4 w-4" />}
-              label={t(cancelled ? 'clean.cancelledItemsLabel' : 'clean.completedItemsLabel')}
-              value={String(countLabel)}
-            />
-            <ResultStat
-              icon={<Files className="h-4 w-4" />}
-              label={t('clean.completedCategoriesLabel')}
-              value={String(preview.category_count ?? t('clean.summary.unknown'))}
-            />
-            <ResultStat
-              icon={<Clock className="h-4 w-4" />}
-              label={t('clean.completedTimeLabel')}
-              value={formatElapsed(elapsedMs)}
-              hint={new Date(completedAt).toLocaleString()}
-            />
+          <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <ResultStat icon={<Database className="h-4 w-4" />} label={t('clean.result.processedSize')} value={processedValue} hint={processedHint} />
+            <ResultStat icon={<Database className="h-4 w-4" />} label={t('clean.result.freedSize')}
+              value={result.totalSize === null ? t('clean.result.notReported') : formatFileSize(result.totalSize)} />
+            <ResultStat icon={<Files className="h-4 w-4" />} label={t(itemLabel)} value={String(result.itemCount ?? t('clean.result.notReported'))} />
+            <ResultStat icon={<Files className="h-4 w-4" />} label={t('clean.result.logItems')}
+              value={result.operationLogStatus === 'available' ? String(result.operationCount) : t(ambiguousLog ? 'clean.result.ambiguous' : 'clean.result.notReported')}
+              hint={t('clean.result.logCountHint')} />
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />{t('clean.completedTimeLabel')}: {formatElapsed(elapsedMs)}</span>
+            <span>{new Date(completedAt).toLocaleString()}</span>
           </div>
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader className="border-b border-border/70">
-          <CardTitle>{t(cancelled ? 'clean.cancelledScopeTitle' : 'clean.completedScopeTitle')}</CardTitle>
-          <CardDescription>{t(cancelled ? 'clean.cancelledScopeDesc' : 'clean.completedScopeDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 p-6">
-          {sections.length > 0 ? (
-            sections.map((section, index) => (
-              <CleanedSectionRow key={`${section.title}-${index}`} section={section} index={index} />
-            ))
-          ) : (
-            <p className="rounded-2xl bg-surface-hover/80 p-4 text-sm text-muted-foreground">
-              {t('clean.completedScopeEmpty')}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="border-b border-border/70">
-          <CardTitle>{t('clean.completedOutputTitle')}</CardTitle>
-          <CardDescription>{t(cancelled ? 'clean.cancelledOutputDesc' : 'clean.completedOutputDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent className="p-6">
-          <CleanScanStatusPanel
-            loading={false}
-            activity="clean"
-            scanIdle={false}
-            scanError={null}
-            scanElapsedMs={elapsedMs}
-            scanOutput={displayedOutput}
-          />
-        </CardContent>
-      </Card>
+      <CleanOperationLogPanel records={records} status={result.operationLogStatus} />
+      <CleanExecutionOutputPanel output={stdout} />
     </div>
   )
 }
 
-function ResultStat({
-  icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: ReactNode
-  label: string
-  value: string
-  hint?: string
-}) {
+function ResultStat({ icon, label, value, hint }: { icon: ReactNode; label: string; value: string; hint?: string }) {
   return (
     <div className="iqon-row p-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        {icon}
-        <p className="iqon-eyebrow">{label}</p>
-      </div>
+      <div className="flex items-center gap-2 text-muted-foreground">{icon}<p className="iqon-eyebrow">{label}</p></div>
       <p className="mt-2 font-mono text-xl font-bold tabular-nums text-foreground">{value}</p>
-      {hint && <p className="mt-1 truncate text-[11px] text-muted-foreground">{hint}</p>}
+      {hint && <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{hint}</p>}
     </div>
   )
-}
-
-function CleanedSectionRow({ section, index }: { section: MoleCleanSection; index: number }) {
-  const { t } = useI18n()
-  const sectionSize = section.items.reduce((sum, item) => sum + itemSize(item), 0)
-  const sectionCount = section.items.reduce((sum, item) => sum + (item.count ?? 0), 0)
-
-  return (
-    <div className="iqon-row flex items-center gap-4 p-4">
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${cleanTone(index)}`}>
-        <CheckCircle2 className="h-5 w-5" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <h3 className="truncate text-sm font-bold">{section.title}</h3>
-        <p className="mt-1 truncate text-xs text-muted-foreground">
-          {section.items[0]?.label ?? t('clean.completedScopeEmpty')}
-        </p>
-      </div>
-      <div className="shrink-0 text-right">
-        <p className="font-mono text-sm font-bold tabular-nums text-foreground">
-          {sectionSize > 0 ? formatFileSize(sectionSize) : t('clean.cleanableNoSize')}
-        </p>
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          {t('clean.itemCountShort', { count: sectionCount || section.items.length })}
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function sortSectionsBySize(sections: MoleCleanSection[]) {
-  return [...sections].sort((a, b) => sectionSize(b) - sectionSize(a))
-}
-
-function sectionSize(section: MoleCleanSection) {
-  return section.items.reduce((sum, item) => sum + itemSize(item), 0)
-}
-
-function itemSize(item: { size?: number | null }) {
-  return typeof item.size === 'number' && item.size > 0 ? item.size : 0
-}
-
-function cleanTone(index: number) {
-  const tones = [
-    'bg-clean-green/10 text-clean-green',
-    'bg-primary/10 text-primary',
-    'bg-clean-cyan/10 text-clean-cyan',
-    'bg-clean-yellow/15 text-yellow-600 dark:text-clean-yellow',
-    'bg-clean-red/10 text-clean-red',
-  ]
-  return tones[index % tones.length]
 }
