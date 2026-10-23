@@ -4,21 +4,35 @@ use crate::stowmind_supplements::agent_cleanup::types::AgentCleanupPolicy;
 use std::{
     fs,
     io::Write,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
     thread::sleep,
     time::Duration,
-    time::{SystemTime, UNIX_EPOCH},
 };
 
+static NEXT_REPOSITORY: AtomicU64 = AtomicU64::new(0);
+
+fn reserve_temp_directory(parent: &Path, sequence: &AtomicU64) -> PathBuf {
+    for _ in 0..1024 {
+        let root = parent.join(format!(
+            "stowmind-agent-git-test-{}-{}",
+            std::process::id(),
+            sequence.fetch_add(1, Ordering::Relaxed)
+        ));
+        // A timestamp is not unique across parallel tests. Atomically claim
+        // the directory, including when a reused PID has left stale fixtures.
+        match fs::create_dir(&root) {
+            Ok(()) => return root,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => panic!("Cannot reserve test repository {}: {error}", root.display()),
+        }
+    }
+    panic!("Could not reserve an isolated test repository directory")
+}
+
 fn temp_repo() -> Repository {
-    let root = std::env::temp_dir().join(format!(
-        "stowmind-agent-git-test-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    fs::create_dir_all(&root).unwrap();
+    let root = reserve_temp_directory(&std::env::temp_dir(), &NEXT_REPOSITORY);
     for args in [
         &["init", "-q"][..],
         &["config", "user.email", "test@example.com"][..],
@@ -42,6 +56,50 @@ fn temp_repo() -> Repository {
     }
     let git_dir = fs::canonicalize(root.join(".git")).unwrap();
     Repository { root, git_dir }
+}
+
+#[test]
+fn repository_fixture_does_not_reuse_an_existing_directory() {
+    let parent = reserve_temp_directory(&std::env::temp_dir(), &NEXT_REPOSITORY);
+    let first = reserve_temp_directory(&parent, &AtomicU64::new(0));
+    let marker = first.join("owned-by-another-fixture");
+    fs::write(&marker, b"must remain untouched").unwrap();
+
+    // Repeat the same candidate deterministically, as after PID reuse. The
+    // second fixture must claim a different directory without touching first.
+    let second = reserve_temp_directory(&parent, &AtomicU64::new(0));
+    assert_ne!(first, second);
+    assert_eq!(fs::read(&marker).unwrap(), b"must remain untouched");
+    assert_eq!(fs::read_dir(&second).unwrap().count(), 0);
+    fs::remove_dir_all(parent).unwrap();
+}
+
+#[test]
+fn concurrent_repository_fixtures_have_independent_git_directories() {
+    const WORKERS: usize = 16;
+    let start = std::sync::Arc::new(std::sync::Barrier::new(WORKERS));
+    let workers = (0..WORKERS)
+        .map(|_| {
+            let start = start.clone();
+            std::thread::spawn(move || {
+                start.wait();
+                temp_repo()
+            })
+        })
+        .collect::<Vec<_>>();
+    let repositories = workers
+        .into_iter()
+        .map(|worker| worker.join().unwrap())
+        .collect::<Vec<_>>();
+    let unique = repositories
+        .iter()
+        .map(|repository| repository.git_dir.clone())
+        .collect::<std::collections::HashSet<_>>();
+    assert_eq!(unique.len(), WORKERS);
+    for repository in repositories {
+        assert!(ref_oid(&repository, "HEAD").is_some());
+        fs::remove_dir_all(repository.root).unwrap();
+    }
 }
 
 #[test]
