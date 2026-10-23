@@ -6,14 +6,16 @@ interface CleanupHistoryInput {
   type: CleanupHistoryType
   target: string
   label: string
-  itemCount: number
-  totalSize: number
+  itemCount: number | null | undefined
+  totalSize: number | null | undefined
+  sizeKind?: CleanupSummary['sizeKind']
   action: CleanupSummary['action']
   executed?: boolean
   errors?: string[]
   skippedCount?: number
   riskNotes?: string[]
   irreversible?: boolean
+  outcome?: CleanupSummary['outcome']
   categoryCounts?: Record<string, number>
   timestamp?: string
 }
@@ -31,18 +33,20 @@ export function createCleanupHistoryRecord(input: CleanupHistoryInput): HistoryR
     type: input.type,
     timestamp,
     directory: input.target,
-    totalFiles: input.itemCount,
-    categories: input.categoryCounts ?? { [input.label]: input.itemCount },
+    totalFiles: input.itemCount ?? 0,
+    categories: input.categoryCounts ?? (input.itemCount == null ? {} : { [input.label]: input.itemCount }),
     executed: input.executed ?? input.action !== 'preview',
     moves: [],
     cleanupSummary: {
-      itemCount: input.itemCount,
-      totalSize: input.totalSize,
+      itemCount: input.itemCount ?? undefined,
+      totalSize: input.totalSize ?? undefined,
+      sizeKind: input.sizeKind ?? (input.action === 'preview' ? 'estimated' : 'unknown'),
       action: input.action,
       errors: input.errors && input.errors.length > 0 ? input.errors : undefined,
       skippedCount: input.skippedCount,
       riskNotes: input.riskNotes && input.riskNotes.length > 0 ? input.riskNotes : undefined,
       irreversible: input.irreversible,
+      outcome: input.outcome,
     },
   }
 }

@@ -2,7 +2,8 @@ import { useI18n } from '@/i18n'
 import { cn, formatFileSize } from '@/lib/utils'
 import { Clock3, Eye, FileText, RotateCcw, ShieldCheck } from 'lucide-react'
 import type { PendingCleanScanSnapshot } from './cleanScanSnapshot'
-import type { MoleCleanItem, MoleCleanSection } from './types'
+import type { MoleCleanSection } from './types'
+import { cleanPreviewLabels, summarizeCleanSection } from './cleanPreviewSummary'
 
 type Tone = 'green' | 'cyan' | 'yellow' | 'red' | 'purple'
 
@@ -26,6 +27,7 @@ export function PendingCleanScanCard({ snapshot, onView, onRescan }: PendingClea
   const { locale, t } = useI18n()
   const scannedAt = formatScanTime(snapshot.createdAt, locale)
   const topSections = summarizeSections(snapshot.preview.sections)
+  const summary = cleanPreviewLabels(snapshot.preview, t)
 
   return (
     <div className="iqon-card relative w-full max-w-6xl overflow-hidden">
@@ -73,12 +75,13 @@ export function PendingCleanScanCard({ snapshot, onView, onRescan }: PendingClea
             <div className="relative z-10">
               <p className="iqon-eyebrow">{t('clean.potentialSpace')}</p>
               <p className="mt-2 text-5xl font-bold leading-none tabular-nums md:text-6xl">
-                {formatFileSize(snapshot.preview.potential_space)}
+                {summary.sizeLabel}
               </p>
               <div className="mt-5 grid grid-cols-2 gap-3">
-                <PendingStat label={t('clean.itemCount')} value={snapshot.preview.item_count} />
-                <PendingStat label={t('clean.categoryCount')} value={snapshot.preview.category_count} />
+                <PendingStat label={t('clean.itemCount')} value={summary.countLabel} />
+                <PendingStat label={t('clean.categoryCount')} value={summary.categoriesLabel} />
               </div>
+              {summary.needsRescan && <p className="mt-4 text-xs text-iqon-yellow">{t('clean.summary.rescanRequired')}</p>}
             </div>
 
             <div className="relative z-10 mt-6 flex flex-col gap-2 sm:flex-row">
@@ -141,14 +144,11 @@ function PendingSectionRow({ section, tone }: { section: SectionSummary; tone: T
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-foreground">{section.title}</p>
           <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-            {t('clean.cleanableSectionCount', {
-              selected: section.count || section.items,
-              total: section.count || section.items,
-            })}
+            {t('clean.summary.detailRows', { count: section.items })}
           </p>
         </div>
         <span className="shrink-0 text-sm font-bold tabular-nums text-foreground">
-          {section.size > 0 ? formatFileSize(section.size) : t('clean.cleanableNoSize')}
+          {section.size > 0 ? t('clean.summary.detailsSize', { size: formatFileSize(section.size) }) : t('clean.summary.unknown')}
         </span>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-iqon-border">
@@ -171,8 +171,9 @@ interface SectionSummary {
 
 function summarizeSections(sections: MoleCleanSection[]): SectionSummary[] {
   const rows = sections.map((section) => {
-    const size = section.items.reduce((sum, item) => sum + itemSize(item), 0)
-    const count = section.items.reduce((sum, item) => sum + (item.count ?? 0), 0)
+    const detail = summarizeCleanSection(section)
+    const size = detail.size ?? 0
+    const count = detail.count ?? 0
     return {
       title: section.title,
       size,
@@ -190,10 +191,6 @@ function summarizeSections(sections: MoleCleanSection[]): SectionSummary[] {
     ...row,
     percent: Math.max(8, Math.round(((row.size || row.count || row.items) / maxValue) * 100)),
   }))
-}
-
-function itemSize(item: MoleCleanItem) {
-  return typeof item.size === 'number' && item.size > 0 ? item.size : 0
 }
 
 function formatScanTime(value: string, locale: 'zh' | 'en') {

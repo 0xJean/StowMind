@@ -1,13 +1,20 @@
 use crate::app_icons::app_icon_data_url;
-use crate::mole_utils::{mole_command, unit_to_bytes};
+mod summary;
+use crate::maintenance_process::{
+    MaintenanceError, MaintenanceManager, RunContext, EXECUTE_TIMEOUT, LIST_TIMEOUT,
+    PREVIEW_TIMEOUT,
+};
+use crate::mole_utils::mole_command;
 use serde::{Deserialize, Serialize};
-use std::io::Write;
 use std::process::Output;
+use summary::{parse_size_to_bytes, parse_uninstall_operation_summary};
+use tauri::{State, Window};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct MoleUninstallList {
+    pub output_truncated: bool,
     pub items: Vec<MoleUninstallItem>,
-    pub total_size: u64,
+    pub total_size: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -18,15 +25,18 @@ pub struct MoleUninstallItem {
     pub uninstall_name: String,
     pub path: String,
     pub size: String,
-    pub size_bytes: u64,
+    pub size_bytes: Option<u64>,
     pub icon_data_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
 pub struct MoleUninstallOperationOutput {
-    pub item_count: u64,
-    pub total_size: u64,
+    pub output_truncated: bool,
+    pub item_count: Option<u64>,
+    pub total_size: Option<u64>,
     pub raw_output: String,
+    pub dry_run: bool,
+    pub permanent: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -40,72 +50,108 @@ struct RawMoleUninstallItem {
 }
 
 #[tauri::command]
-pub async fn mole_uninstall_list_json() -> Result<MoleUninstallList, String> {
-    load_uninstall_list(false).await
+pub async fn mole_uninstall_list_json(
+    window: Window,
+    state: State<'_, MaintenanceManager>,
+    run_id: String,
+) -> Result<MoleUninstallList, MaintenanceError> {
+    let run = state.begin(window.label(), &run_id, LIST_TIMEOUT)?;
+    tokio::task::spawn_blocking(move || load_uninstall_list(&run, false))
+        .await
+        .map_err(|error| {
+            MaintenanceError::new("failed", format!("Cannot join uninstall list: {error}"))
+        })?
 }
 
-async fn load_uninstall_list(include_icons: bool) -> Result<MoleUninstallList, String> {
-    let output = tokio::task::spawn_blocking(|| -> Result<std::process::Output, String> {
-        mole_command()?
-            .args(["uninstall", "--list"])
-            .output()
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| format!("Failed to join uninstall list task: {e}"))?
-    .map_err(|e| format!("Failed to run mo uninstall --list: {e}"))?;
-
+fn load_uninstall_list(
+    run: &RunContext,
+    include_icons: bool,
+) -> Result<MoleUninstallList, MaintenanceError> {
+    let mut command = mole_command()?;
+    let captured = run.run(command.args(["uninstall", "--list"]), None)?;
+    if captured.output_truncated {
+        return Err(
+            captured.failure("Uninstall inventory was truncated; scan again before proceeding")
+        );
+    }
+    let output = captured.output;
     if !output.status.success() {
         let detail = output_text(&output);
         return Err(if detail.trim().is_empty() {
             "mo uninstall --list failed".to_string()
         } else {
             detail
-        });
+        }
+        .into());
     }
 
-    parse_uninstall_list_output(&output, include_icons)
+    run.check()?;
+    parse_uninstall_list_output(&output, include_icons).map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn mole_uninstall_preview(
+    window: Window,
+    state: State<'_, MaintenanceManager>,
+    run_id: String,
     uninstall_name: String,
     path: String,
     permanent: Option<bool>,
-) -> Result<MoleUninstallOperationOutput, String> {
-    let item = validate_uninstall_target(uninstall_name, path).await?;
+) -> Result<MoleUninstallOperationOutput, MaintenanceError> {
+    let run = state.begin(window.label(), &run_id, PREVIEW_TIMEOUT)?;
     tokio::task::spawn_blocking(move || {
-        run_uninstall_command(&item, true, permanent.unwrap_or(false))
+        let item = validate_uninstall_target(&run, uninstall_name, path)?;
+        run_uninstall_command(&run, &item, true, permanent.unwrap_or(false))
     })
     .await
-    .map_err(|e| format!("Failed to join uninstall preview task: {e}"))?
+    .map_err(|error| {
+        MaintenanceError::new("failed", format!("Cannot join uninstall preview: {error}"))
+    })?
 }
 
 #[tauri::command]
 pub async fn mole_uninstall_execute(
+    window: Window,
+    state: State<'_, MaintenanceManager>,
+    run_id: String,
     uninstall_name: String,
     path: String,
     permanent: Option<bool>,
-) -> Result<MoleUninstallOperationOutput, String> {
-    let item = validate_uninstall_target(uninstall_name, path).await?;
+) -> Result<MoleUninstallOperationOutput, MaintenanceError> {
+    let run = state.begin(window.label(), &run_id, EXECUTE_TIMEOUT)?;
     tokio::task::spawn_blocking(move || {
-        run_uninstall_command(&item, false, permanent.unwrap_or(false))
+        let item = validate_uninstall_target(&run, uninstall_name, path)?;
+        let permanent = permanent.unwrap_or(false);
+        let preview = run_uninstall_command(&run, &item, true, permanent)?;
+        if preview.item_count != Some(1) {
+            return Err(MaintenanceError::new(
+                "failed",
+                "Mole uninstall preview did not confirm exactly one app; execution is blocked",
+            ));
+        }
+        run_uninstall_command(&run, &item, false, permanent)
     })
     .await
-    .map_err(|e| format!("Failed to join uninstall execute task: {e}"))?
+    .map_err(|error| {
+        MaintenanceError::new(
+            "failed",
+            format!("Cannot join uninstall execution: {error}"),
+        )
+    })?
 }
 
-async fn validate_uninstall_target(
+fn validate_uninstall_target(
+    run: &RunContext,
     uninstall_name: String,
     path: String,
-) -> Result<MoleUninstallItem, String> {
+) -> Result<MoleUninstallItem, MaintenanceError> {
     let requested_name = uninstall_name.trim().to_string();
     let requested_path = path.trim().to_string();
     if requested_name.is_empty() || requested_path.is_empty() {
-        return Err("Uninstall name and path are required".to_string());
+        return Err("Uninstall name and path are required".into());
     }
 
-    let list = load_uninstall_list(false).await?;
+    let list = load_uninstall_list(run, false)?;
     let same_name_count = list
         .items
         .iter()
@@ -114,7 +160,7 @@ async fn validate_uninstall_target(
     if same_name_count > 1 {
         return Err(format!(
             "Mole uninstall name '{requested_name}' matches {same_name_count} apps; GUI execution is blocked to avoid uninstalling the wrong app."
-        ));
+        ).into());
     }
 
     list.items
@@ -124,15 +170,19 @@ async fn validate_uninstall_target(
                 && normalize_path_key(&item.path) == normalize_path_key(&requested_path)
         })
         .ok_or_else(|| {
-            "Selected app is no longer present in Mole uninstall scan results".to_string()
+            MaintenanceError::new(
+                "failed",
+                "Selected app is no longer present in Mole uninstall scan results",
+            )
         })
 }
 
 fn run_uninstall_command(
+    run: &RunContext,
     item: &MoleUninstallItem,
     dry_run: bool,
     permanent: bool,
-) -> Result<MoleUninstallOperationOutput, String> {
+) -> Result<MoleUninstallOperationOutput, MaintenanceError> {
     let mut command = mole_command()?;
     command.arg("uninstall");
     if dry_run {
@@ -143,42 +193,63 @@ fn run_uninstall_command(
     }
     command.arg(&item.uninstall_name);
     command.env("MO_NO_OPLOG", "1");
-    command.stdin(std::process::Stdio::piped());
-    command.stdout(std::process::Stdio::piped());
-    command.stderr(std::process::Stdio::piped());
-
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("Failed to run mo uninstall: {e}"))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        // First confirmation is direct-app match confirmation. Second one is Mole's
-        // batch-removal confirmation. The destructive work still stays inside Mole.
-        stdin
-            .write_all(b"y\n\n")
-            .map_err(|e| format!("Failed to confirm Mole uninstall: {e}"))?;
+    // Fixed, bounded confirmations preserve Mole's existing direct-app flow;
+    // no interactive input can keep the worker waiting indefinitely.
+    let captured = match run.run(&mut command, Some(b"y\n\n")) {
+        Ok(output) => output,
+        Err(error) => {
+            return Err(if dry_run {
+                error
+            } else {
+                attach_uninstall_partial(error, permanent)
+            })
+        }
+    };
+    if dry_run && captured.output_truncated {
+        return Err(captured.failure("Uninstall preview was truncated; execution is blocked"));
     }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("Failed to wait for mo uninstall: {e}"))?;
-    let raw_output = strip_ansi(&output_text(&output));
-
-    if !output.status.success() {
-        return Err(if raw_output.trim().is_empty() {
-            "mo uninstall failed".to_string()
+    let raw_output = strip_ansi(&captured.text());
+    if !captured.output.status.success() {
+        let error = captured.failure("mo uninstall failed");
+        return Err(if dry_run {
+            error
         } else {
-            raw_output
+            attach_uninstall_partial(error, permanent)
         });
     }
+    Ok(uninstall_outcome(
+        raw_output,
+        dry_run,
+        permanent,
+        captured.output_truncated,
+    ))
+}
 
-    let (item_count, total_size) =
-        parse_uninstall_operation_summary(&raw_output).unwrap_or((1, item.size_bytes));
-    Ok(MoleUninstallOperationOutput {
+fn uninstall_outcome(
+    raw_output: String,
+    dry_run: bool,
+    permanent: bool,
+    output_truncated: bool,
+) -> MoleUninstallOperationOutput {
+    let (item_count, total_size) = parse_uninstall_operation_summary(&raw_output, dry_run);
+    MoleUninstallOperationOutput {
         item_count,
         total_size,
         raw_output,
-    })
+        dry_run,
+        permanent,
+        output_truncated,
+    }
+}
+
+fn attach_uninstall_partial(error: MaintenanceError, permanent: bool) -> MaintenanceError {
+    let partial = uninstall_outcome(
+        strip_ansi(&error.raw_output),
+        false,
+        permanent,
+        error.output_truncated,
+    );
+    error.partial(&partial)
 }
 
 fn parse_uninstall_list_output(
@@ -214,56 +285,16 @@ fn parse_uninstall_list_output(
             }
         })
         .collect();
-    let total_size = items.iter().map(|item| item.size_bytes).sum();
+    let total_size = items
+        .iter()
+        .map(|item| item.size_bytes)
+        .try_fold(0_u64, |sum, size| sum.checked_add(size?));
 
-    Ok(MoleUninstallList { items, total_size })
-}
-
-fn parse_size_to_bytes(size: &str) -> u64 {
-    let trimmed = size.trim();
-    if trimmed.is_empty() {
-        return 0;
-    }
-
-    let re = match regex::Regex::new(r"(?i)^\s*([0-9]+(?:\.[0-9]+)?)\s*([KMGT]?B)\s*$") {
-        Ok(re) => re,
-        Err(_) => return 0,
-    };
-    let Some(caps) = re.captures(trimmed) else {
-        return 0;
-    };
-
-    let amount = caps
-        .get(1)
-        .and_then(|m| m.as_str().parse::<f64>().ok())
-        .unwrap_or(0.0);
-    let unit = caps
-        .get(2)
-        .map(|m| m.as_str().to_ascii_uppercase())
-        .unwrap_or_else(|| "B".to_string());
-
-    unit_to_bytes(amount, &unit)
-}
-
-fn parse_uninstall_operation_summary(raw: &str) -> Option<(u64, u64)> {
-    let re = regex::Regex::new(
-        r"(?i)(?:Would remove|Removed)\s+(\d+)\s+apps?(?:,\s+(?:would free|freed)\s+([0-9]+(?:\.[0-9]+)?)\s*([KMGT]?B))?",
-    )
-    .ok()?;
-    let caps = re.captures(raw)?;
-    let count = caps.get(1)?.as_str().parse::<u64>().ok()?;
-    let total_size = caps
-        .get(2)
-        .and_then(|amount| {
-            let unit = caps.get(3).map(|m| m.as_str()).unwrap_or("B");
-            amount
-                .as_str()
-                .parse::<f64>()
-                .ok()
-                .map(|amount| unit_to_bytes(amount, unit))
-        })
-        .unwrap_or(0);
-    Some((count, total_size))
+    Ok(MoleUninstallList {
+        items,
+        total_size,
+        output_truncated: false,
+    })
 }
 
 fn output_text(output: &Output) -> String {
@@ -297,10 +328,32 @@ fn normalize_path_key(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        extract_json_array, parse_size_to_bytes, parse_uninstall_operation_summary,
-        RawMoleUninstallItem,
-    };
+    use super::{extract_json_array, RawMoleUninstallItem};
+    #[test]
+    fn interrupted_uninstall_never_uses_the_preflight_as_removal_evidence() {
+        use super::{attach_uninstall_partial, MaintenanceError};
+        let mut error = MaintenanceError::new("timeout", "timeout");
+        error.raw_output = "Removed 1 app, freed 4KB\n".to_string();
+        assert!(attach_uninstall_partial(error.clone(), false)
+            .partial_result
+            .is_none());
+        error.process_started = true;
+        let partial = attach_uninstall_partial(error, true)
+            .partial_result
+            .unwrap();
+        assert_eq!(partial["item_count"], 1);
+        assert_eq!(partial["total_size"], 4096);
+        assert_eq!(partial["dry_run"], false);
+        assert_eq!(partial["permanent"], true);
+        let mut unknown = MaintenanceError::new("cancelled", "cancelled");
+        unknown.process_started = true;
+        unknown.raw_output = "Would remove 1 app, would free 9GB\n".to_string();
+        let partial = attach_uninstall_partial(unknown, false)
+            .partial_result
+            .unwrap();
+        assert!(partial["item_count"].is_null());
+        assert!(partial["total_size"].is_null());
+    }
 
     #[test]
     fn parses_uninstall_item_json() {
@@ -322,29 +375,10 @@ mod tests {
     }
 
     #[test]
-    fn parses_size_strings() {
-        assert_eq!(parse_size_to_bytes("4KB"), 4096);
-        assert_eq!(parse_size_to_bytes("1.5MB"), 1_572_864);
-        assert!(parse_size_to_bytes("2.10GB") > 2_250_000_000);
-    }
-
-    #[test]
     fn extracts_json_array_from_noisy_output() {
         let raw = "Scanning...\n[\n  {\"name\":\"A\"}\n]\nlog tail";
         let json = extract_json_array(raw).unwrap();
         assert!(json.starts_with('['));
         assert!(json.ends_with(']'));
-    }
-
-    #[test]
-    fn parses_uninstall_operation_summary() {
-        let dry = "Uninstall dry run complete\nWould remove 1 app, would free 4KB: App\n";
-        let executed = "Uninstall complete\nRemoved 2 apps, freed 1.5MB: A, B\n";
-
-        assert_eq!(parse_uninstall_operation_summary(dry), Some((1, 4096)));
-        assert_eq!(
-            parse_uninstall_operation_summary(executed),
-            Some((2, 1_572_864))
-        );
     }
 }

@@ -1,34 +1,34 @@
-import { findLatestProgress } from './cleanProgress'
-import type { MoleCleanItem, MoleCleanPreview, MoleCleanSection } from './types'
+import type { MoleCleanItem, MoleCleanPreview } from './types'
 
 export interface CleanExecutionSummary {
-  itemCount: number
-  totalSize: number
+  itemCount: number | null
+  totalSize: number | null
 }
 
 export function buildExecutedCleanPreview(
   preview: MoleCleanPreview,
   summary: CleanExecutionSummary,
   rawOutput: string,
-  options: { confirmedOnly?: boolean; confirmedSectionTitle?: string } = {},
+  options: { confirmedSectionTitle?: string } = {},
 ): MoleCleanPreview {
-  const sections = buildExecutedSections(preview.sections, summary.itemCount, rawOutput, options)
+  const sections = buildExecutedSections(summary.itemCount, rawOutput, options.confirmedSectionTitle)
   return {
     ...preview,
     potential_space: summary.totalSize,
     item_count: summary.itemCount,
-    category_count: countExecutedCategories(sections, summary.itemCount),
+    // Operation logs confirm individual paths, not Mole's category totals.
+    category_count: summary.itemCount === 0 ? 0 : null,
+    summary_status: summary.totalSize === null ? 'unavailable' : 'exact',
+    scan_status: 'complete',
     sections,
     raw_output: rawOutput,
   }
 }
 
 export function summarizeCleanExecution(
-  preview: MoleCleanPreview,
   lines: string[],
   rawOutput: string,
   operationLog: string,
-  fallbackToPreview: boolean,
 ): CleanExecutionSummary {
   const allLines = collectLines(lines, rawOutput, operationLog)
 
@@ -36,22 +36,11 @@ export function summarizeCleanExecution(
   if (explicit) return explicit
 
   const operationLogSummary = summarizeOperationLog(allLines)
-  if (operationLogSummary.itemCount > 0 || operationLogSummary.totalSize > 0) {
+  if ((operationLogSummary.itemCount ?? 0) > 0) {
     return operationLogSummary
   }
-
-  const progress = findLatestProgress(allLines)
-  if (progress?.phase === 'execution' && progress.total !== null && progress.total > 0) {
-    const ratio = Math.min(1, Math.max(0, progress.current / progress.total))
-    return {
-      itemCount: progress.current,
-      totalSize: Math.round(preview.potential_space * ratio),
-    }
-  }
-
-  return fallbackToPreview
-    ? { itemCount: preview.item_count, totalSize: preview.potential_space }
-    : { itemCount: 0, totalSize: 0 }
+  // Scan estimates and progress ratios are not evidence of bytes actually freed.
+  return { itemCount: null, totalSize: null }
 }
 
 export function buildCleanExecutionOutputLines(
@@ -102,49 +91,43 @@ function splitLines(value: string) {
 }
 
 function parseExplicitSummary(lines: string[]): CleanExecutionSummary | null {
+  let reportedCount: number | null = null
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const line = lines[index]
 
-    const session = line.match(/clean session ended .*?,\s*(\d+)\s+items?,\s*([0-9]+(?:\.[0-9]+)?)\s*([KMGT]?B)\b/i)
+    const session = line.match(/^#\s*=+\s*clean(?: run=[a-z0-9-]+)? session ended at .*?,\s*(\d+)\s+items?,\s*[0-9]+(?:\.[0-9]+)?\s*[KMGT]?B\s*=+$/i)
     if (session) {
-      return {
-        itemCount: Number(session[1]),
-        totalSize: unitToBytes(Number(session[2]), session[3]),
-      }
+      reportedCount ??= Number(session[1])
+      continue
     }
 
-    const freed = line.match(/Space freed:\s*([0-9]+(?:\.[0-9]+)?)\s*([KMGT]?B)\b(?:\s*\|\s*Items cleaned:\s*(\d+))?/i)
+    const tracked = line.match(/^Tracked cleanup:.*\|\s*Items cleaned:\s*(\d+)\s*$/i)
+    if (tracked) reportedCount ??= Number(tracked[1])
+    // Anchoring excludes estimates and filenames containing "Space freed:".
+    const freed = line.match(/^Space freed:\s*([0-9]+(?:\.[0-9]+)?)\s*([KMGT]?B)\b(?:\s*\|\s*Items cleaned:\s*(\d+))?/i)
     if (freed) {
       return {
-        itemCount: freed[3] ? Number(freed[3]) : 0,
+        itemCount: freed[3] ? Number(freed[3]) : reportedCount,
         totalSize: unitToBytes(Number(freed[1]), freed[2]),
       }
     }
   }
 
-  return null
+  return reportedCount === null ? null : { itemCount: reportedCount, totalSize: null }
 }
 
 function summarizeOperationLog(lines: string[]): CleanExecutionSummary {
   let itemCount = 0
-  let totalSize = 0
+  const seen = new Set<string>()
 
   for (const line of lines) {
-    if (!/\[clean\]\s+(REMOVED|TRASHED)\s+/i.test(line)) continue
+    if (!confirmedOperation(line)) continue
+    if (seen.has(line)) continue
+    seen.add(line)
     itemCount += 1
-    totalSize += parseLineSize(line)
   }
 
-  return { itemCount, totalSize }
-}
-
-function parseLineSize(line: string) {
-  let size = 0
-  const matches = line.matchAll(/([0-9]+(?:\.[0-9]+)?)\s*([KMGT]?B)\b/gi)
-  for (const match of matches) {
-    size = Math.max(size, unitToBytes(Number(match[1]), match[2]))
-  }
-  return size
+  return { itemCount: itemCount || null, totalSize: null }
 }
 
 function unitToBytes(amount: number, unit: string) {
@@ -162,21 +145,16 @@ function unitToBytes(amount: number, unit: string) {
 }
 
 function buildExecutedSections(
-  sections: MoleCleanSection[],
-  itemCount: number,
+  itemCount: number | null,
   rawOutput: string,
-  options: { confirmedOnly?: boolean; confirmedSectionTitle?: string },
+  confirmedSectionTitle?: string,
 ) {
-  if (itemCount <= 0) return []
+  if (itemCount === null || itemCount <= 0) return []
 
-  if (options.confirmedOnly) {
-    const items = parseOperationLogItems(collectLines([], rawOutput, ''))
-    return items.length > 0
-      ? [{ title: options.confirmedSectionTitle ?? 'Confirmed cleaned items', items }]
-      : []
-  }
-
-  return sections.filter((section) => section.items.length > 0)
+  const items = parseOperationLogItems(collectLines([], rawOutput, ''))
+  return items.length > 0
+    ? [{ title: confirmedSectionTitle ?? 'Confirmed cleaned items', items }]
+    : []
 }
 
 function parseOperationLogItems(lines: string[]): MoleCleanItem[] {
@@ -184,18 +162,16 @@ function parseOperationLogItems(lines: string[]): MoleCleanItem[] {
   const seen = new Set<string>()
 
   for (const line of lines) {
-    const match = line.match(/\[clean\]\s+(REMOVED|TRASHED)\s+(.+)$/i)
-    if (!match) continue
-
-    const label = match[2].trim()
-    const key = label.toLowerCase()
+    const label = confirmedOperation(line)
+    if (!label) continue
+    const key = label
     if (!label || seen.has(key)) continue
     seen.add(key)
 
-    const size = parseLineSize(line)
     items.push({
       label,
-      size: size > 0 ? size : null,
+      // A filename may contain a size-looking string; log paths are not byte reports.
+      size: null,
       count: 1,
       status: 'ok',
     })
@@ -204,7 +180,6 @@ function parseOperationLogItems(lines: string[]): MoleCleanItem[] {
   return items
 }
 
-function countExecutedCategories(sections: MoleCleanSection[], itemCount: number) {
-  if (itemCount <= 0) return 0
-  return sections.filter((section) => section.items.length > 0).length
+function confirmedOperation(line: string) {
+  return line.match(/^(?:\[[^\]\r\n]+\]\s+)?\[clean(?: run=[a-z0-9-]+)?\]\s+(?:REMOVED|TRASHED)\s+(.+)$/i)?.[1].trim() ?? null
 }

@@ -1,84 +1,133 @@
+use crate::maintenance_process::{MaintenanceError, MaintenanceManager, EXECUTE_TIMEOUT};
 use crate::mole_utils::{mole_command, strip_ansi};
 use serde::Serialize;
-use std::process::Output;
+use tauri::{State, Window};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct MoleOptimizeExecuteOutcome {
-    pub applied_count: u64,
+    pub output_truncated: bool,
+    pub applied_count: Option<u64>,
+    pub summary_status: String,
     pub raw_output: String,
 }
 
 #[tauri::command]
-pub async fn mole_optimize_execute() -> Result<MoleOptimizeExecuteOutcome, String> {
-    let output = tokio::task::spawn_blocking(|| -> Result<std::process::Output, String> {
-        mole_command()?
-            .arg("optimize")
-            .output()
-            .map_err(|e| e.to_string())
+pub async fn mole_optimize_execute(
+    window: Window,
+    state: State<'_, MaintenanceManager>,
+    run_id: String,
+) -> Result<MoleOptimizeExecuteOutcome, MaintenanceError> {
+    let run = state.begin(window.label(), &run_id, EXECUTE_TIMEOUT)?;
+    tokio::task::spawn_blocking(move || {
+        let preview = crate::mole_optimize::run_optimize_preview(&run)?;
+        if preview.preview_status != "complete" || preview.planned_count.is_none() {
+            return Err(MaintenanceError::new(
+                "failed",
+                "Mole optimize preview is incomplete; execution is blocked",
+            ));
+        }
+        let mut command = mole_command()?;
+        let captured = match run.run(command.arg("optimize"), None) {
+            Ok(output) => output,
+            Err(error) => return Err(attach_optimize_partial(error)),
+        };
+        if !captured.output.status.success() {
+            return Err(attach_optimize_partial(
+                captured.failure("mo optimize failed"),
+            ));
+        }
+        Ok(optimize_outcome(
+            &captured.text(),
+            captured.output_truncated,
+        ))
     })
     .await
-    .map_err(|e| format!("Failed to join Mole optimize task: {e}"))?
-    .map_err(|e| format!("Failed to run mo optimize: {e}"))?;
+    .map_err(|error| {
+        MaintenanceError::new("failed", format!("Cannot join optimize execution: {error}"))
+    })?
+}
 
-    let raw_output = output_text(&output);
-    if !output.status.success() {
-        return Err(if raw_output.trim().is_empty() {
-            "mo optimize failed".to_string()
-        } else {
-            raw_output
-        });
-    }
-
-    let clean = strip_ansi(&raw_output);
-    Ok(MoleOptimizeExecuteOutcome {
+fn optimize_outcome(raw_output: &str, output_truncated: bool) -> MoleOptimizeExecuteOutcome {
+    let clean = strip_ansi(raw_output);
+    MoleOptimizeExecuteOutcome {
         applied_count: parse_applied_count(&clean),
+        summary_status: execution_summary_status(&clean).to_string(),
         raw_output: clean,
-    })
+        output_truncated,
+    }
 }
 
-fn output_text(output: &Output) -> String {
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if stderr.trim().is_empty() {
-        stdout
-    } else if stdout.trim().is_empty() {
-        stderr
+fn attach_optimize_partial(error: MaintenanceError) -> MaintenanceError {
+    let mut partial = optimize_outcome(&error.raw_output, error.output_truncated);
+    // A report observed before interruption is evidence of partial work, never
+    // evidence that every requested optimization completed.
+    if partial.applied_count.is_some() {
+        partial.summary_status = "partial".to_string();
+    }
+    error.partial(&partial)
+}
+
+fn parse_applied_count(raw: &str) -> Option<u64> {
+    let re = regex::Regex::new(r"(?im)^\s*(?:Applied\s+(\d+)\s+optimizations?\b|(\d+)\s+optimizations?\s+(?:applied|completed|complete)\b)").expect("static optimize outcome");
+    re.captures_iter(raw)
+        .last()
+        .and_then(|caps| caps.get(1).or_else(|| caps.get(2)))
+        .and_then(|value| value.as_str().parse().ok())
+}
+
+fn execution_summary_status(raw: &str) -> &'static str {
+    if parse_applied_count(raw).is_none() {
+        return "unavailable";
+    }
+    let warnings = regex::Regex::new(r"(?im)\b([1-9][0-9]*)\s+(?:failed|need attention)\b")
+        .expect("static optimize warnings");
+    if warnings.is_match(raw) {
+        "partial"
     } else {
-        format!("{stdout}\n{stderr}")
+        "complete"
     }
-}
-
-fn parse_applied_count(raw: &str) -> u64 {
-    let patterns = [
-        r"(?i)\bApplied\s+(\d+)\s+optimizations?\b",
-        r"(?i)\b(\d+)\s+optimizations?\s+(?:applied|completed|complete)\b",
-        r"(?i)\bWould\s+apply\s+(\d+)\s+optimizations?\b",
-    ];
-
-    for pattern in patterns {
-        let Ok(re) = regex::Regex::new(pattern) else {
-            continue;
-        };
-        if let Some(count) = re
-            .captures(raw)
-            .and_then(|caps| caps.get(1))
-            .and_then(|value| value.as_str().parse::<u64>().ok())
-        {
-            return count;
-        }
-    }
-
-    0
 }
 
 #[cfg(test)]
 mod tests {
-    use super::parse_applied_count;
-
+    use super::*;
     #[test]
-    fn parses_applied_summary() {
-        assert_eq!(parse_applied_count("Applied 23 optimizations"), 23);
-        assert_eq!(parse_applied_count("23 optimizations completed"), 23);
-        assert_eq!(parse_applied_count("Would apply 7 optimizations"), 7);
+    fn interrupted_execution_reports_actual_partial_work_only_after_spawn() {
+        let mut error = MaintenanceError::new("cancelled", "cancelled");
+        error.raw_output = "Applied 2 optimizations\n".to_string();
+        assert!(attach_optimize_partial(error.clone())
+            .partial_result
+            .is_none());
+        error.process_started = true;
+        error.output_truncated = true;
+        let partial = attach_optimize_partial(error).partial_result.unwrap();
+        assert_eq!(partial["applied_count"], 2);
+        assert_eq!(partial["summary_status"], "partial");
+        assert_eq!(partial["output_truncated"], true);
+        let mut unknown = MaintenanceError::new("timeout", "timeout");
+        unknown.process_started = true;
+        unknown.raw_output = "Would apply 7 optimizations\n".to_string();
+        let partial = attach_optimize_partial(unknown).partial_result.unwrap();
+        assert!(partial["applied_count"].is_null());
+        assert_eq!(partial["summary_status"], "unavailable");
+    }
+    #[test]
+    fn only_actual_reported_counts_authorize_success() {
+        assert_eq!(parse_applied_count("Applied 0 optimizations"), Some(0));
+        assert_eq!(parse_applied_count("23 optimizations completed"), Some(23));
+        assert_eq!(parse_applied_count("Would apply 7 optimizations"), None);
+        assert_eq!(parse_applied_count("Optimization Complete"), None);
+        assert_eq!(
+            execution_summary_status("Applied 3 optimizations\n1 failed | 2 need attention"),
+            "partial"
+        );
+        assert_eq!(
+            execution_summary_status("Would apply 3 optimizations"),
+            "unavailable"
+        );
+        assert_eq!(
+            parse_applied_count("Applied 8 optimizations\nApplied 0 optimizations"),
+            Some(0)
+        );
     }
 }

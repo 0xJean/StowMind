@@ -85,7 +85,7 @@ export function ApplicationList({ rows, selectedPath, onSelect, onReveal, onUpda
               </div>
               <StatusBadge status={row.update?.updateStatus} />
               <span className="hidden truncate text-xs font-semibold text-muted-foreground lg:block">{item.source || 'unknown'}</span>
-              <span className="hidden text-right font-mono text-xs font-semibold text-muted-foreground lg:block">{formatFileSize(item.size_bytes)}</span>
+              <span className="hidden text-right font-mono text-xs font-semibold text-muted-foreground lg:block">{item.size_bytes === null ? t('clean.summary.unknown') : formatFileSize(item.size_bytes)}</span>
               <div className="flex items-center justify-end gap-2">
                 {row.update?.updateStatus === 'available' && row.update.actionKind && row.update.actionTarget && (
                   <button

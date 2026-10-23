@@ -71,7 +71,7 @@ export function ApplicationDetails({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Fact label={t('apps.detail.size')} value={formatFileSize(item.size_bytes)} />
+            <Fact label={t('apps.detail.size')} value={item.size_bytes === null ? t('clean.summary.unknown') : formatFileSize(item.size_bytes)} />
             <Fact label={t('apps.detail.source')} value={item.source} />
             <Fact label={t('apps.detail.uninstallName')} value={item.uninstall_name} />
             <Fact label={t('apps.detail.bundle')} value={item.bundle_id || 'unknown'} />

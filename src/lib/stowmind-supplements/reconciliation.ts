@@ -19,19 +19,21 @@ interface StoredSupplementSnapshot<T> {
 }
 
 export interface CleanSupplementSnapshot {
-  potential_space: number
-  item_count: number
+  potential_space: number | null
+  item_count: number | null
+  summary_status?: 'exact' | 'at_least' | 'unavailable'
+  scan_status?: 'complete' | 'incomplete' | 'unknown'
 }
 
 export interface CleanSupplementReconciliation {
   source: typeof STOWMIND_SUPPLEMENT_SOURCE
   confidence: SupplementConfidence
-  beforePotentialBytes: number
-  afterPotentialBytes: number
-  estimatedFreedBytes: number
-  beforeItemCount: number
-  afterItemCount: number
-  resolvedItemCount: number
+  beforePotentialBytes: number | null
+  afterPotentialBytes: number | null
+  estimatedFreedBytes: number | null
+  beforeItemCount: number | null
+  afterItemCount: number | null
+  resolvedItemCount: number | null
 }
 
 export interface UninstallSupplementItemSnapshot {
@@ -106,18 +108,32 @@ export function reconcileCleanExecution(
 ): CleanSupplementReconciliation | null {
   if (!before || !after) return null
 
-  const estimatedFreedBytes = Math.max(0, before.potential_space - after.potential_space)
-  const resolvedItemCount = Math.max(0, before.item_count - after.item_count)
+  const beforePotentialBytes = cleanObservation(before.potential_space)
+  const afterPotentialBytes = cleanObservation(after.potential_space)
+  const beforeItemCount = cleanObservation(before.item_count)
+  const afterItemCount = cleanObservation(after.item_count)
+  // A difference between two lower bounds has no meaningful bound itself.
+  // Legacy snapshots also lack evidence that either scan completed.
+  const comparable = [before, after].every((snapshot) =>
+    snapshot.scan_status === 'complete' && snapshot.summary_status === 'exact')
+  const estimatedFreedBytes = comparable && beforePotentialBytes !== null && afterPotentialBytes !== null
+    ? Math.max(0, beforePotentialBytes - afterPotentialBytes) : null
+  const resolvedItemCount = comparable && beforeItemCount !== null && afterItemCount !== null
+    ? Math.max(0, beforeItemCount - afterItemCount) : null
   return {
     source: STOWMIND_SUPPLEMENT_SOURCE,
-    confidence: 'estimated',
-    beforePotentialBytes: before.potential_space,
-    afterPotentialBytes: after.potential_space,
+    confidence: estimatedFreedBytes !== null ? 'estimated' : 'unknown',
+    beforePotentialBytes,
+    afterPotentialBytes,
     estimatedFreedBytes,
-    beforeItemCount: before.item_count,
-    afterItemCount: after.item_count,
+    beforeItemCount,
+    afterItemCount,
     resolvedItemCount,
   }
+}
+
+function cleanObservation(value: number | null): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
 }
 
 export function reconcileUninstallExecution(

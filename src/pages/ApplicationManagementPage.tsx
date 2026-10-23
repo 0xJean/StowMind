@@ -1,7 +1,8 @@
 import { Button } from '@/components/ui/button'
+import { MaintenanceRunStatus } from '@/components/MaintenanceRunStatus'
+import { useMaintenanceRun } from '@/hooks/useMaintenanceRun'
 import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
-import { createCleanupHistoryRecord } from '@/lib/historyRecords'
 import { loadResultSnapshot, resultCacheKeys, saveResultSnapshot } from '@/lib/resultCache'
 import {
   runStowmindSupplementAppUpdateAction,
@@ -9,12 +10,13 @@ import {
   type StowmindSupplementAppUpdateScan,
 } from '@/lib/stowmind-supplements/appUpdates'
 import { cn, formatFileSize } from '@/lib/utils'
-import { useAppStore } from '@/stores/app'
 import { open as openPath } from '@tauri-apps/api/shell'
 import { invoke } from '@tauri-apps/api/tauri'
 import { Activity, AppWindow, Download, HardDrive, Loader2, Search, Settings2, Sparkles, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'react-toastify'
+import { canExecuteUninstall, recordUninstallExecution, uninstallTargetKey } from './application-management/uninstallOutcome'
+import { MetricCard, ModeButton, SortButton } from './application-management/ApplicationControls'
 import { ApplicationList } from './application-management/ApplicationList'
 import { buildManagedRows, filterManagedRows } from './application-management/appMatching'
 import type { MoleAppUpdateCapability } from './application-management/updateTypes'
@@ -50,42 +52,31 @@ export function ApplicationManagementPage() {
   const [preview, setPreview] = useState<MoleUninstallOperationOutput | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [permanentUninstall, setPermanentUninstall] = useState(false)
-  const [loading, setLoading] = useState(false)
   const [updateLoading, setUpdateLoading] = useState(false)
-  const [previewing, setPreviewing] = useState(false)
-  const [executing, setExecuting] = useState(false)
+  const maintenance = useMaintenanceRun('/apps')
+  const loading = maintenance.run?.phase === 'scan'
+  const previewing = maintenance.run?.phase === 'preview'
+  const executing = maintenance.run?.phase === 'execute'
   const [updatingPath, setUpdatingPath] = useState<string | null>(null)
   const [bulkUpdating, setBulkUpdating] = useState(false)
   const [query, setQuery] = useState('')
   const [source, setSource] = useState('all')
   const [tab, setTab] = useState<AppManagementTab>('all')
   const [sortMode, setSortMode] = useState<SortMode>('size_desc')
-  const addHistory = useAppStore((s) => s.addHistory)
-  const statistics = useAppStore((s) => s.statistics)
-  const updateStatistics = useAppStore((s) => s.updateStatistics)
+  const targetRef = useRef<string | null>(null)
+  const previewTargetRef = useRef<string | null>(null)
+  const previewReady = Boolean(selected && canExecuteUninstall(preview, permanentUninstall) && previewTargetRef.current === uninstallTargetKey(selected.uninstall, permanentUninstall))
 
   const refresh = async () => {
-    setLoading(true)
-    try {
-      const [listResult, capabilityResult] = await Promise.allSettled([
-        invoke<MoleUninstallList>('mole_uninstall_list_json'),
-        invoke<MoleAppUpdateCapability>('mole_app_update_capability_json'),
-      ])
-      if (capabilityResult.status === 'fulfilled') setAppCapability(capabilityResult.value)
-      if (listResult.status === 'rejected') throw listResult.reason
-      const list = stripIconPayloads(listResult.value)
-      setData(list)
-      await saveAppManagementSnapshotPatch({
-        data: list,
-        appCapability: capabilityResult.status === 'fulfilled' ? capabilityResult.value : appCapability,
-      })
-      return list
-    } catch (err) {
-      toast.error(t('apps.fail', { error: String(err) }))
-      return null
-    } finally {
-      setLoading(false)
-    }
+    if (maintenance.isBusy() || !maintenance.isVisible()) return null
+    previewTargetRef.current = null
+    setPreview(null)
+    const result = await maintenance.runTask<MoleUninstallList>('scan', 'mole_uninstall_list_json')
+    if (!result?.ok || result.interrupted || !maintenance.isVisible()) return null
+    const list = stripIconPayloads(result.value)
+    setData(list)
+    await saveAppManagementSnapshotPatch({ data: list })
+    return list
   }
 
   const scanUpdates = async () => {
@@ -106,12 +97,15 @@ export function ApplicationManagementPage() {
     let cancelled = false
     void (async () => {
       const snapshot = await loadResultSnapshot<ApplicationManagementSnapshot>(resultCacheKeys.appManagement)
-      if (cancelled) return
+      if (cancelled || !maintenance.isVisible() || maintenance.isBusy()) return
       if (snapshot) {
         setData(stripIconPayloads(snapshot.payload.data))
         setAppCapability(snapshot.payload.appCapability)
         setUpdateScan(snapshot.payload.updateScan)
       }
+      void invoke<MoleAppUpdateCapability>('mole_app_update_capability_json').then((value) => {
+        if (!cancelled && maintenance.isVisible()) setAppCapability(value)
+      }).catch(() => {})
       await refresh()
     })()
     return () => {
@@ -119,6 +113,14 @@ export function ApplicationManagementPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!maintenance.active) {
+      previewTargetRef.current = null
+      setPreview(null)
+      setConfirming(false)
+    }
+  }, [maintenance.active])
 
   const saveAppManagementSnapshotPatch = async (patch: Partial<ApplicationManagementSnapshot>) => {
     const current = await loadResultSnapshot<ApplicationManagementSnapshot>(resultCacheKeys.appManagement)
@@ -156,6 +158,12 @@ export function ApplicationManagementPage() {
   const homebrewCount = rows.filter((row) => row.uninstall.source.toLowerCase().includes('homebrew')).length
 
   const selectRow = (row: ManagedAppRow) => {
+    if (maintenance.isBusy()) {
+      if (!previewing) return
+      void maintenance.cancel()
+    }
+    targetRef.current = uninstallTargetKey(row.uninstall, false)
+    previewTargetRef.current = null
     setSelected(row)
     setPreview(null)
     setConfirming(false)
@@ -167,43 +175,44 @@ export function ApplicationManagementPage() {
   }
 
   const previewUninstall = async () => {
-    if (!selected) return
-    setPreviewing(true)
-    try {
-      const result = await invoke<MoleUninstallOperationOutput>('mole_uninstall_preview', {
-        uninstallName: selected.uninstall.uninstall_name,
-        path: selected.uninstall.path,
-        permanent: permanentUninstall,
-      })
-      setPreview(result)
-      toast.success(t('apps.previewDone', { count: String(result.item_count || 1) }))
-    } catch (err) {
-      toast.error(t('apps.previewFail', { error: String(err) }))
-    } finally {
-      setPreviewing(false)
-    }
+    if (!selected || maintenance.isBusy() || !maintenance.isVisible()) return
+    const key = uninstallTargetKey(selected.uninstall, permanentUninstall)
+    previewTargetRef.current = null
+    setPreview(null)
+    const result = await maintenance.runTask<MoleUninstallOperationOutput>('preview', 'mole_uninstall_preview', {
+      uninstallName: selected.uninstall.uninstall_name,
+      path: selected.uninstall.path,
+      permanent: permanentUninstall,
+    })
+    if (!result?.ok || result.interrupted || !maintenance.isVisible() || targetRef.current !== key) return
+    previewTargetRef.current = key
+    setPreview(result.value)
+    if (result.value.item_count === null) toast.warning(t('apps.summaryUnknown'))
+    else toast.success(t('apps.previewDone', { count: String(result.value.item_count) }))
   }
 
   const executeUninstall = async () => {
-    if (!selected) return
-    setExecuting(true)
-    try {
-      const result = await invoke<MoleUninstallOperationOutput>('mole_uninstall_execute', {
-        uninstallName: selected.uninstall.uninstall_name,
-        path: selected.uninstall.path,
-        permanent: permanentUninstall,
-      })
-      recordExecution(result)
-      toast.success(t('apps.uninstallSuccess', { name: selected.uninstall.name }))
-      setPreview(null)
-      setSelected(null)
-      setConfirming(false)
-      await refresh()
-    } catch (err) {
-      toast.error(t('apps.uninstallFail', { error: String(err) }))
-    } finally {
-      setExecuting(false)
+    if (!selected || maintenance.isBusy() || !maintenance.isVisible() || !confirming) return
+    const key = uninstallTargetKey(selected.uninstall, permanentUninstall)
+    if (!previewReady || targetRef.current !== key) { toast.warning(t('apps.summaryUnknown')); return }
+    const item = selected.uninstall
+    previewTargetRef.current = null
+    setPreview(null)
+    const result = await maintenance.runTask<MoleUninstallOperationOutput>('execute', 'mole_uninstall_execute', {
+      uninstallName: item.uninstall_name, path: item.path, permanent: permanentUninstall,
+    })
+    if (!result) return
+    if (!result.ok) {
+      if (result.error.partial_result) recordUninstallExecution(result.error.partial_result as MoleUninstallOperationOutput, item, t, result.error.code)
+      return
     }
+    recordUninstallExecution(result.value, item, t, result.interrupted ? 'cancelled' : undefined)
+    if (!maintenance.isVisible() || result.interrupted) return
+    if (!result.value.dry_run && (result.value.item_count ?? 0) > 0 && typeof result.value.total_size === 'number' && Number.isFinite(result.value.total_size)) toast.success(t('apps.uninstallSuccess', { name: item.name }))
+    else toast.warning(t('apps.summaryUnknown'))
+    setSelected(null)
+    setConfirming(false)
+    await refresh()
   }
 
   const runUpdateAction = async (row: ManagedAppRow) => {
@@ -241,29 +250,6 @@ export function ApplicationManagementPage() {
     }
   }
 
-  const recordExecution = (result: MoleUninstallOperationOutput) => {
-    if (!selected) return
-    const itemCount = result.item_count || 1
-    const totalSize = result.total_size || selected.uninstall.size_bytes
-    const timestamp = new Date().toISOString()
-    addHistory(createCleanupHistoryRecord({
-      type: 'uninstall',
-      target: selected.uninstall.name,
-      label: t('history.type.uninstall'),
-      itemCount,
-      totalSize,
-      action: 'execute',
-      executed: true,
-      timestamp,
-    }))
-    updateStatistics({
-      cleanItemsRemoved: (statistics.cleanItemsRemoved ?? 0) + itemCount,
-      cleanSizeFreed: (statistics.cleanSizeFreed ?? 0) + totalSize,
-      cleanOperationCount: (statistics.cleanOperationCount ?? 0) + 1,
-      lastCleaned: timestamp,
-    })
-  }
-
   return (
     <div className="stow-page-wide">
       <div className="stow-page-header">
@@ -277,7 +263,7 @@ export function ApplicationManagementPage() {
             <span className="iqon-dot iqon-dot-green" />
             {appCapability?.cliExposed ? t('apps.updateNative') : t('apps.badge.moleGui')}
           </span>
-          <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={maintenance.busy}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Settings2 className="mr-2 h-4 w-4" />}
             {t('apps.refresh')}
           </Button>
@@ -294,9 +280,11 @@ export function ApplicationManagementPage() {
         </div>
       </div>
 
+      <MaintenanceRunStatus state={maintenance} onCancel={() => void maintenance.cancel()} />
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard icon={AppWindow} label={t('apps.metric.totalApps')} value={String(data?.items.length ?? 0)} />
-        <MetricCard icon={HardDrive} label={t('apps.metric.totalSize')} value={formatFileSize(data?.total_size ?? 0)} />
+        <MetricCard icon={HardDrive} label={t('apps.metric.totalSize')} value={data?.total_size == null ? t('clean.summary.unknown') : formatFileSize(data.total_size)} />
         <MetricCard icon={Download} label={t('apps.metric.updates')} value={String(allUpdateCandidates)} tone={allUpdateCandidates > 0 ? 'warning' : 'default'} />
         <MetricCard icon={Sparkles} label={t('apps.metric.homebrew')} value={String(homebrewCount)} />
       </div>
@@ -365,11 +353,11 @@ export function ApplicationManagementPage() {
                 <Button variant="outline" size="sm" onClick={() => reveal(selected.uninstall.path)}>
                   {t('apps.openPath')}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => void previewUninstall()} disabled={previewing || executing}>
+                <Button variant="outline" size="sm" onClick={() => void previewUninstall()} disabled={maintenance.busy}>
                   {previewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4" />}
                   {t('apps.previewUninstall')}
                 </Button>
-                <Button variant={confirming ? 'secondary' : 'destructive'} size="sm" onClick={() => setConfirming(true)} disabled={previewing || executing}>
+                <Button variant={confirming ? 'secondary' : 'destructive'} size="sm" onClick={() => setConfirming(true)} disabled={maintenance.busy || !previewReady}>
                   {executing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                   {t('apps.uninstallWithMole')}
                 </Button>
@@ -386,8 +374,8 @@ export function ApplicationManagementPage() {
               <input
                 type="checkbox"
                 checked={permanentUninstall}
-                onChange={(event) => setPermanentUninstall(event.target.checked)}
-                disabled={executing}
+                onChange={(event) => { if (maintenance.isBusy()) return; setPermanentUninstall(event.target.checked); setPreview(null); previewTargetRef.current = null; targetRef.current = uninstallTargetKey(selected.uninstall, event.target.checked) }}
+                disabled={maintenance.busy}
                 className="mt-0.5 h-4 w-4 accent-destructive"
               />
               <span>
@@ -396,11 +384,11 @@ export function ApplicationManagementPage() {
               </span>
             </label>
             <div className="mt-3 flex gap-2">
-              <Button variant="destructive" size="sm" onClick={() => void executeUninstall()} disabled={executing}>
+              <Button variant="destructive" size="sm" onClick={() => void executeUninstall()} disabled={maintenance.busy || !previewReady}>
                 {executing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {t('apps.confirmRun')}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setConfirming(false)} disabled={executing}>
+              <Button variant="outline" size="sm" onClick={() => setConfirming(false)} disabled={maintenance.busy}>
                 {t('apps.confirmCancel')}
               </Button>
             </div>
@@ -412,8 +400,8 @@ export function ApplicationManagementPage() {
             <p className="font-bold text-primary">{t('apps.previewReadyTitle')}</p>
             <p className="mt-1 text-muted-foreground">
               {t('apps.previewReadyDesc', {
-                count: String(preview.item_count || 1),
-                size: formatFileSize(preview.total_size || selected?.uninstall.size_bytes || 0),
+                count: String(preview.item_count ?? t('clean.summary.unknown')),
+                size: preview.total_size === null ? t('clean.summary.unknown') : formatFileSize(preview.total_size),
               })}
             </p>
           </div>
@@ -431,65 +419,5 @@ export function ApplicationManagementPage() {
         />
       </div>
     </div>
-  )
-}
-
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  tone = 'default',
-}: {
-  icon: typeof AppWindow
-  label: string
-  value: string
-  tone?: 'default' | 'warning'
-}) {
-  return (
-    <div
-      className={cn(
-        'stow-panel flex items-center justify-between gap-4 p-5',
-        tone === 'warning' && 'border-yellow-400/25 bg-yellow-500/10'
-      )}
-    >
-      <div>
-        <p className="text-xs font-bold uppercase tracking-normal text-muted-foreground">{label}</p>
-        <p className="mt-2 text-2xl font-bold tracking-normal">{value}</p>
-      </div>
-      <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary', tone === 'warning' && 'bg-yellow-500/15 text-yellow-600')}>
-        <Icon className="h-5 w-5" />
-      </div>
-    </div>
-  )
-}
-
-function ModeButton({ active, label, count, onClick }: { active: boolean; label: string; count: number; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'rounded-xl px-4 py-2 text-sm font-bold transition-colors',
-        active ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground hover:bg-card/70 hover:text-foreground'
-      )}
-    >
-      {label}
-      <span className="ml-2 font-mono text-xs text-muted-foreground">{count}</span>
-    </button>
-  )
-}
-
-function SortButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors',
-        active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground'
-      )}
-    >
-      {label}
-    </button>
   )
 }

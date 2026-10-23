@@ -15,7 +15,7 @@ pub fn execute_item(
     home: &Path,
     policy: &AgentCleanupPolicy,
     now: i64,
-) -> Result<(String, u64, String), String> {
+) -> Result<(String, Option<u64>, String), String> {
     if id.starts_with(REF_ITEM_PREFIX) {
         execute_ref(id, home, policy, now)
     } else if id.starts_with(PRUNE_ITEM_PREFIX) {
@@ -30,7 +30,7 @@ fn execute_ref(
     home: &Path,
     policy: &AgentCleanupPolicy,
     now: i64,
-) -> Result<(String, u64, String), String> {
+) -> Result<(String, Option<u64>, String), String> {
     let payload = parse_ref_item_id(id)?;
     let repository = validate_repository(home, Path::new(&payload.git_dir))?;
     let Some(item) = inspect_ref(
@@ -67,7 +67,7 @@ fn execute_ref(
     }
     Ok((
         item.path,
-        item.size,
+        Some(item.size),
         "Removed Codex internal Git ref".to_string(),
     ))
 }
@@ -77,7 +77,7 @@ fn execute_prune(
     home: &Path,
     policy: &AgentCleanupPolicy,
     now: i64,
-) -> Result<(String, u64, String), String> {
+) -> Result<(String, Option<u64>, String), String> {
     let payload = parse_prune_item_id(id)?;
     let repository = validate_repository(home, Path::new(&payload.git_dir))?;
     let Some(item) = scan_unreachable_objects(
@@ -91,7 +91,7 @@ fn execute_prune(
     if !item.eligible {
         return Err(item.reason);
     }
-    let before = objects::directory_size(&repository.git_dir.join("objects"));
+    let before = objects::directory_size(&repository.git_dir.join("objects"))?;
     let expiration = safety::git_expiration_arg(policy, now);
     let expiration_unreachable = expiration.clone();
     run_git(
@@ -108,10 +108,11 @@ fn execute_prune(
         &repository.git_dir,
         &["gc", &format!("--prune={expiration}"), "--quiet"],
     )?;
-    let after = objects::directory_size(&repository.git_dir.join("objects"));
-    Ok((
-        item.path,
-        before.saturating_sub(after),
-        "Expired reflogs and pruned unreachable Git objects".to_string(),
-    ))
+    // Cleanup has already completed. Preserve that fact if the later size
+    // measurement fails, rather than inviting a retry of the destructive step.
+    let (size, message) = match objects::directory_size(&repository.git_dir.join("objects")) {
+        Ok(after) => (Some(before.saturating_sub(after)), "Expired reflogs and pruned unreachable Git objects".to_string()),
+        Err(error) => (None, format!("Expired reflogs and pruned unreachable Git objects; processed size is unknown: {error}")),
+    };
+    Ok((item.path, size, message))
 }

@@ -55,7 +55,7 @@ export function filterManagedRows(
 }
 
 function compareRows(a: ManagedAppRow, b: ManagedAppRow, sortMode: SortMode) {
-  if (sortMode === 'size_asc') return a.uninstall.size_bytes - b.uninstall.size_bytes
+  if (sortMode === 'size_asc') return (a.uninstall.size_bytes ?? Number.POSITIVE_INFINITY) - (b.uninstall.size_bytes ?? Number.POSITIVE_INFINITY)
   if (sortMode === 'name') return a.uninstall.name.localeCompare(b.uninstall.name)
   if (sortMode === 'source') {
     return a.uninstall.source.localeCompare(b.uninstall.source) || a.uninstall.name.localeCompare(b.uninstall.name)
@@ -63,7 +63,7 @@ function compareRows(a: ManagedAppRow, b: ManagedAppRow, sortMode: SortMode) {
   if (sortMode === 'update') {
     return updateRank(a.update?.updateStatus) - updateRank(b.update?.updateStatus) || a.uninstall.name.localeCompare(b.uninstall.name)
   }
-  return b.uninstall.size_bytes - a.uninstall.size_bytes
+  return (b.uninstall.size_bytes ?? -1) - (a.uninstall.size_bytes ?? -1)
 }
 
 function updateRank(status?: string) {

@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useI18n } from '@/i18n'
 import { formatFileSize } from '@/lib/utils'
-import { Ban, CheckCircle2, Clock, Database, Files, RefreshCw } from 'lucide-react'
+import { AlertCircle, Ban, CheckCircle2, Clock, Database, Files, RefreshCw } from 'lucide-react'
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { CleanScanStatusPanel, formatElapsed } from './CleanScanStatusPanel'
@@ -30,6 +30,11 @@ export function CleanCompletedPanel({
   const { t } = useI18n()
   const sections = useMemo(() => sortSectionsBySize(preview.sections), [preview.sections])
   const cancelled = status === 'cancelled'
+  const sizeLabel = preview.potential_space === null ? t('clean.summary.unknown') : formatFileSize(preview.potential_space)
+  const countLabel = preview.item_count ?? t('clean.summary.unknown')
+  const metricsUnknown = preview.potential_space === null || preview.item_count === null
+  const unconfirmed = preview.potential_space === null && preview.item_count === null
+  const warning = cancelled || unconfirmed
   const displayedOutput = useMemo(() => {
     if (outputLines.length > 0) return outputLines
     const rawLines = rawOutput.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
@@ -42,23 +47,22 @@ export function CleanCompletedPanel({
         <div>
           <p className="iqon-eyebrow mb-1">{t('eyebrow.optimize')}</p>
           <h1 className="text-2xl font-bold tracking-tight">{t('clean.title')}</h1>
-          <p className="mt-1 text-xs text-muted-foreground">{t(cancelled ? 'clean.cancelledSubtitle' : 'clean.completedSubtitle')}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t(cancelled ? 'clean.cancelledSubtitle' : unconfirmed ? 'clean.summary.executionUnknown' : 'clean.completedSubtitle')}</p>
         </div>
       </div>
 
-      <Card className={`overflow-hidden ${cancelled ? 'border-iqon-yellow/30' : 'border-iqon-green/30'}`}>
+      <Card className={`overflow-hidden ${warning ? 'border-iqon-yellow/30' : 'border-iqon-green/30'}`}>
         <CardContent className="p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-4">
-              <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${cancelled ? 'bg-iqon-yellow/15 text-iqon-yellow' : 'bg-iqon-green/15 text-iqon-green'}`}>
-                {cancelled ? <Ban className="h-8 w-8" /> : <CheckCircle2 className="h-8 w-8" />}
+              <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${warning ? 'bg-iqon-yellow/15 text-iqon-yellow' : 'bg-iqon-green/15 text-iqon-green'}`}>
+                {cancelled ? <Ban className="h-8 w-8" /> : unconfirmed ? <AlertCircle className="h-8 w-8" /> : <CheckCircle2 className="h-8 w-8" />}
               </div>
               <div>
-                <CardTitle className="text-3xl">{t(cancelled ? 'clean.cancelledTitle' : 'clean.completedTitle')}</CardTitle>
+                <CardTitle className="text-3xl">{t(cancelled ? 'clean.cancelledTitle' : unconfirmed ? 'history.statusUnknown' : 'clean.completedTitle')}</CardTitle>
                 <CardDescription className="mt-2 max-w-xl">
-                  {t(cancelled ? 'clean.cancelledDesc' : 'clean.completedDesc', {
-                    size: formatFileSize(preview.potential_space),
-                    count: preview.item_count,
+                  {metricsUnknown ? t('clean.summary.executionUnknown') : t(cancelled ? 'clean.cancelledDesc' : 'clean.completedDesc', {
+                    size: sizeLabel, count: countLabel,
                   })}
                 </CardDescription>
               </div>
@@ -73,17 +77,17 @@ export function CleanCompletedPanel({
             <ResultStat
               icon={<Database className="h-4 w-4" />}
               label={t(cancelled ? 'clean.cancelledSizeLabel' : 'clean.completedSizeLabel')}
-              value={formatFileSize(preview.potential_space)}
+              value={sizeLabel}
             />
             <ResultStat
               icon={<Files className="h-4 w-4" />}
               label={t(cancelled ? 'clean.cancelledItemsLabel' : 'clean.completedItemsLabel')}
-              value={String(preview.item_count)}
+              value={String(countLabel)}
             />
             <ResultStat
               icon={<Files className="h-4 w-4" />}
               label={t('clean.completedCategoriesLabel')}
-              value={String(preview.category_count)}
+              value={String(preview.category_count ?? t('clean.summary.unknown'))}
             />
             <ResultStat
               icon={<Clock className="h-4 w-4" />}

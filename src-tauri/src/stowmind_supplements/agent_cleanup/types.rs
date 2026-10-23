@@ -58,7 +58,7 @@ pub struct AgentCleanupAgent {
     pub detected: bool,
     pub roots: Vec<String>,
     pub item_count: u64,
-    pub total_size: u64,
+    pub total_size: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -68,6 +68,7 @@ pub struct AgentCleanupItem {
     pub category: String,
     pub path: String,
     pub size: u64,
+    pub size_status: String,
     pub entry_count: u64,
     pub modified_at: i64,
     pub eligible: bool,
@@ -88,7 +89,7 @@ pub struct AgentCleanupSummary {
     pub candidate_count: u64,
     pub eligible_count: u64,
     pub protected_count: u64,
-    pub total_size_bytes: u64,
+    pub total_size_bytes: Option<u64>,
     pub reclaimable_size_bytes: u64,
 }
 
@@ -116,7 +117,7 @@ pub struct AgentCleanupExecuteRequest {
 #[derive(Clone, Debug, Serialize)]
 pub struct AgentCleanupAction {
     pub path: String,
-    pub size_bytes: u64,
+    pub size_bytes: Option<u64>,
     pub success: bool,
     pub message: String,
 }
@@ -125,7 +126,10 @@ pub struct AgentCleanupAction {
 pub struct AgentCleanupResult {
     pub source: String,
     pub removed_count: u64,
-    pub freed_bytes: u64,
+    /// Logical bytes processed, including recoverable moves to Trash. This is
+    /// not a measurement of physical disk space released.
+    pub processed_bytes: Option<u64>,
+    pub freed_bytes: Option<u64>,
     pub skipped_count: u64,
     pub errors: Vec<String>,
     pub completed_at: Option<String>,

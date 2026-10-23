@@ -5,6 +5,7 @@ import { loadTypeScript } from './ios-organizer-test-harness.mjs'
 const baseline = {
   totalFilesOrganized: 0, totalSizeOrganized: 0, categoryCounts: {},
   cleanSizeFreed: 80, cleanOperationCount: 2,
+  reportedFreedBytes: 80,
   systemCacheCleanupCount: 0, systemCacheObservedBytes: 0,
 }
 let state

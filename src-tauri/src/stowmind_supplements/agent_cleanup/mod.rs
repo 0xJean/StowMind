@@ -4,6 +4,7 @@
 mod adapter_roots;
 mod adapters;
 mod git;
+mod measurement;
 mod scanner;
 mod types;
 mod worktree;
@@ -78,13 +79,11 @@ fn execute(request: AgentCleanupExecuteRequest) -> Result<AgentCleanupResult, St
         }
     });
     let mut actions = Vec::with_capacity(item_ids.len());
-    let mut freed_bytes: u64 = 0;
 
     for item_id in item_ids {
         if git::is_git_item_id(&item_id) {
             match git::execute_item(&item_id, &home, &policy, now) {
                 Ok((path, size_bytes, message)) => {
-                    freed_bytes = freed_bytes.saturating_add(size_bytes);
                     actions.push(AgentCleanupAction {
                         path,
                         size_bytes,
@@ -121,10 +120,9 @@ fn execute(request: AgentCleanupExecuteRequest) -> Result<AgentCleanupResult, St
         }
         match safe_trash::move_path_to_trash(&path) {
             Ok(_) => {
-                freed_bytes = freed_bytes.saturating_add(item.size);
                 actions.push(AgentCleanupAction {
                     path: item.path,
-                    size_bytes: item.size,
+                    size_bytes: Some(item.size),
                     success: true,
                     message: "Moved to system trash".to_string(),
                 });
@@ -133,6 +131,12 @@ fn execute(request: AgentCleanupExecuteRequest) -> Result<AgentCleanupResult, St
         }
     }
     let removed_count = actions.iter().filter(|action| action.success).count() as u64;
+    let processed_bytes = actions
+        .iter()
+        .filter(|action| action.success)
+        .try_fold(0_u64, |sum, action| {
+            action.size_bytes.map(|size| sum.saturating_add(size))
+        });
     let skipped_count = actions.len() as u64 - removed_count;
     let errors = actions
         .iter()
@@ -142,7 +146,8 @@ fn execute(request: AgentCleanupExecuteRequest) -> Result<AgentCleanupResult, St
     Ok(AgentCleanupResult {
         source: "stowmind_supplement".to_string(),
         removed_count,
-        freed_bytes,
+        processed_bytes,
+        freed_bytes: None,
         skipped_count,
         errors,
         completed_at: Some(epoch_now().to_string()),
@@ -157,7 +162,7 @@ fn skipped(path: String, message: &str) -> AgentCleanupAction {
 fn skipped_with_size(path: String, size_bytes: u64, message: String) -> AgentCleanupAction {
     AgentCleanupAction {
         path,
-        size_bytes,
+        size_bytes: Some(size_bytes),
         success: false,
         message,
     }

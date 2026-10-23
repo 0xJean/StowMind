@@ -27,7 +27,7 @@ mod safety;
 mod tests;
 
 pub(super) use execution::{execute_item, is_git_item_id};
-use objects::{object_stats, unreachable_object_ids};
+use objects::{git_scan_error, object_stats, unreachable_object_ids};
 use safety::{git_process_running, has_git_lock, modified_at, old_enough};
 
 const INTERNAL_REF_PREFIX: &str = "refs/codex/turn-diffs/";
@@ -102,8 +102,16 @@ fn scan_codex_refs(
         &repository.git_dir,
         &["for-each-ref", "--format=%(refname)", INTERNAL_REF_PREFIX],
     );
-    let Ok(output) = output else {
-        return Vec::new();
+    let output = match output {
+        Ok(output) => output,
+        Err(reason) => {
+            return vec![git_scan_error(
+                repository,
+                CleanupCategory::CodexRefs,
+                now,
+                reason,
+            )]
+        }
     };
     output
         .lines()
@@ -167,6 +175,7 @@ fn inspect_ref(
         category: CleanupCategory::CodexRefs.as_str().to_string(),
         path: display,
         size,
+        size_status: "complete".to_string(),
         entry_count: 1,
         modified_at,
         eligible,
@@ -182,18 +191,35 @@ fn scan_unreachable_objects(
     now: i64,
     git_process_active: bool,
 ) -> Option<AgentCleanupItem> {
-    let object_ids = unreachable_object_ids(&repository.git_dir);
+    let object_ids = match unreachable_object_ids(&repository.git_dir) {
+        Ok(ids) => ids,
+        Err(reason) => {
+            return Some(git_scan_error(
+                repository,
+                CleanupCategory::GitUnreachable,
+                now,
+                reason,
+            ))
+        }
+    };
     if object_ids.is_empty() {
         return None;
     }
     let truncated = object_ids.len() > MAX_GIT_ITEMS;
-    let (object_count, object_bytes) = object_stats(
+    let (object_count, object_bytes) = match object_stats(
         &repository.git_dir,
         &object_ids[..object_ids.len().min(MAX_GIT_ITEMS)],
-    );
-    if object_count == 0 {
-        return None;
-    }
+    ) {
+        Ok(stats) => stats,
+        Err(reason) => {
+            return Some(git_scan_error(
+                repository,
+                CleanupCategory::GitUnreachable,
+                now,
+                reason,
+            ))
+        }
+    };
     let modified_at = object_store_modified_at(&repository.git_dir).unwrap_or(now);
     let age_ok = old_enough(modified_at, policy, now);
     let clean = repository_is_clean(repository);
@@ -260,6 +286,7 @@ fn scan_unreachable_objects(
             repository.git_dir.display()
         ),
         size: object_bytes,
+        size_status: if truncated { "partial" } else { "complete" }.to_string(),
         entry_count: object_count,
         modified_at,
         eligible,

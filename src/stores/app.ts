@@ -83,13 +83,15 @@ export interface SystemCacheHistoryDetails {
 export interface CleanupSummary {
   itemCount?: number
   totalSize?: number
+  /** Distinguish reports of freed bytes from estimates and processed file sizes. */
+  sizeKind?: 'reported_freed' | 'estimated' | 'processed' | 'unknown'
   action?: 'execute' | 'preview'
   errors?: string[]
   skippedCount?: number
   /** Explicit safety warnings preserved in history for irreversible actions. */
   riskNotes?: string[]
   irreversible?: boolean
-  outcome?: 'success' | 'failed' | 'skipped'
+  outcome?: 'success' | 'partial' | 'failed' | 'skipped' | 'unknown'
   systemCache?: SystemCacheHistoryDetails
 }
 
@@ -118,10 +120,13 @@ export interface Statistics {
   lastOrganized?: string
   cleanItemsRemoved?: number
   cleanSizeFreed?: number
+  /** Confirmed execution reports only; older counters may contain preview estimates. */
+  reportedFreedBytes?: number
   cleanOperationCount?: number
   lastCleaned?: string
   agentCleanupItemsRemoved?: number
   agentCleanupSizeFreed?: number
+  agentCleanupProcessedBytes?: number
   agentCleanupOperationCount?: number
   agentCleanupSkipped?: number
   agentCleanupErrors?: number
@@ -348,9 +353,11 @@ export const useAppStore = create<AppState>()(
         categoryCounts: {},
         cleanItemsRemoved: 0,
         cleanSizeFreed: 0,
+        reportedFreedBytes: 0,
         cleanOperationCount: 0,
         agentCleanupItemsRemoved: 0,
         agentCleanupSizeFreed: 0,
+        agentCleanupProcessedBytes: 0,
         agentCleanupOperationCount: 0,
         agentCleanupSkipped: 0,
         agentCleanupErrors: 0,

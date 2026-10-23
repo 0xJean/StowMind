@@ -11,9 +11,11 @@ export interface MoleCleanSection {
 }
 
 export interface MoleCleanPreview {
-  potential_space: number
-  item_count: number
-  category_count: number
+  potential_space: number | null
+  item_count: number | null
+  category_count: number | null
+  summary_status?: 'exact' | 'at_least' | 'unavailable'
+  scan_status?: 'complete' | 'incomplete' | 'unknown'
   sections: MoleCleanSection[]
   raw_output: string
 }

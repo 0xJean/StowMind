@@ -6,6 +6,9 @@ import { createCleanupHistoryRecord } from '@/lib/historyRecords'
 import { deleteResultSnapshot, loadResultSnapshot, resultCacheKeys, saveResultSnapshot } from '@/lib/resultCache'
 import { formatFileSize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
+import { cachedInstallerPreview, canExecuteInstallerPreview, type MoleInstallerExecuteOutcome, type MoleInstallerPreview } from './installer/types'
+import { recordInstallerOutcome } from './installer/installerHistory'
+import { InstallerExecutionResult, installerResultMessage } from './installer/InstallerExecutionResult'
 import { open as openPath } from '@tauri-apps/api/shell'
 import { invoke } from '@tauri-apps/api/tauri'
 import { Archive, CheckCircle2, Database, ExternalLink, FolderDown, Loader2, Package, ShieldCheck, Trash2 } from 'lucide-react'
@@ -14,34 +17,15 @@ import { toast } from 'react-toastify'
 import { MaintenanceScanCard, formatMaintenanceElapsed } from './maintenance/MaintenanceScanCard'
 import { useMaintenanceScanProgress } from './maintenance/useMaintenanceScanProgress'
 
-interface MoleInstallerItem {
-  path: string
-  name: string
-  size: number
-  source: string
-}
-
-interface MoleInstallerPreview {
-  items: MoleInstallerItem[]
-  total_size: number
-}
-
-interface MoleInstallerExecuteOutcome {
-  item_count: number
-  total_size: number
-  raw_output: string
-}
-
 export function InstallerPage() {
   const { t } = useI18n()
   const [preview, setPreview] = useState<MoleInstallerPreview | null>(null)
   const [loading, setLoading] = useState(false)
   const [executing, setExecuting] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
+  const [lastOutcome, setLastOutcome] = useState<MoleInstallerExecuteOutcome | null>(null)
   const scanElapsedMs = useMaintenanceScanProgress(loading)
   const addHistory = useAppStore((s) => s.addHistory)
-  const statistics = useAppStore((s) => s.statistics)
-  const updateStatistics = useAppStore((s) => s.updateStatistics)
 
   const items = useMemo(
     () => [...(preview?.items ?? [])].sort((a, b) => b.size - a.size),
@@ -49,22 +33,26 @@ export function InstallerPage() {
   )
 
   const runPreview = async () => {
+    if (loading || executing) return
+    setPreview(null)
+    setLastOutcome(null)
     setLoading(true)
     setScanError(null)
     try {
       const next = await invoke<MoleInstallerPreview>('mole_installer_preview')
       setPreview(next)
-      await saveResultSnapshot(resultCacheKeys.installerPreview, next)
+      await saveResultSnapshot(resultCacheKeys.installerPreview, cachedInstallerPreview(next))
       addHistory(createCleanupHistoryRecord({
         type: 'installer',
         target: t('installer.title'),
         label: t('history.type.installer'),
         itemCount: next.items.length,
         totalSize: next.total_size,
+        sizeKind: 'estimated',
         action: 'preview',
         executed: false,
       }))
-      if (next.items.length === 0) {
+      if (next.scan_status === 'complete' && next.items.length === 0) {
         toast.success(t('installer.noneFound'))
       }
     } catch (err) {
@@ -81,7 +69,7 @@ export function InstallerPage() {
   }
 
   const executeWithMole = async () => {
-    if (!preview || preview.items.length === 0) return
+    if (!preview || loading || executing || !canExecuteInstallerPreview(preview)) return
 
     const confirmed = window.confirm(
       t('installer.executeConfirm', {
@@ -92,36 +80,19 @@ export function InstallerPage() {
     if (!confirmed) return
 
     setExecuting(true)
+    setPreview(cachedInstallerPreview(preview))
     try {
       const outcome = await invoke<MoleInstallerExecuteOutcome>('mole_installer_execute', {
         paths: preview.items.map((item) => item.path),
+        reviewToken: preview.review_token,
       })
-      const itemCount = outcome.item_count || preview.items.length
-      const totalSize = outcome.total_size || preview.total_size
-      const timestamp = new Date().toISOString()
-
-      if (itemCount > 0) {
-        addHistory(createCleanupHistoryRecord({
-          type: 'installer',
-          target: t('installer.title'),
-          label: t('history.type.installer'),
-          itemCount,
-          totalSize,
-          action: 'execute',
-          executed: true,
-          timestamp,
-        }))
-        updateStatistics({
-          cleanItemsRemoved: (statistics.cleanItemsRemoved ?? 0) + itemCount,
-          cleanSizeFreed: (statistics.cleanSizeFreed ?? 0) + totalSize,
-          cleanOperationCount: (statistics.cleanOperationCount ?? 0) + 1,
-          lastCleaned: timestamp,
-        })
-      }
-
+      const message = installerResultMessage(outcome, t)
+      recordInstallerOutcome(outcome, t('installer.title'), t('history.type.installer'), message)
+      setLastOutcome(outcome)
       setPreview(null)
       await deleteResultSnapshot(resultCacheKeys.installerPreview)
-      toast.success(t('installer.executeSuccess', { count: itemCount }))
+      if (outcome.status === 'success') toast.success(message)
+      else toast.warning(message)
     } catch (err) {
       toast.error(t('installer.executeFail', { error: String(err) }))
     } finally {
@@ -133,7 +104,7 @@ export function InstallerPage() {
     void (async () => {
       const snapshot = await loadResultSnapshot<MoleInstallerPreview>(resultCacheKeys.installerPreview)
       if (snapshot) {
-        setPreview(snapshot.payload)
+        setPreview(cachedInstallerPreview(snapshot.payload))
         setScanError(null)
       }
     })()
@@ -158,7 +129,11 @@ export function InstallerPage() {
     </div>
   )
 
-  const emptyPreview = Boolean(preview && items.length === 0)
+  const emptyPreview = Boolean(preview && preview.scan_status === 'complete' && items.length === 0)
+  const canClean = canExecuteInstallerPreview(preview)
+  const sizeLabel = preview?.scan_status === 'complete' && Number.isFinite(preview.total_size)
+    ? formatFileSize(preview.total_size) : t('clean.summary.unknown')
+  const countLabel = preview?.scan_status === 'complete' || items.length > 0 ? items.length : t('clean.summary.unknown')
   // Keep the scan state visible after a failed refresh, even when an older
   // preview is still on screen. Otherwise the results view hides the error
   // and leaves the user without an obvious way to retry.
@@ -185,6 +160,7 @@ export function InstallerPage() {
           title={scanError ? t('installer.scanFailedTitle') : emptyPreview ? t('installer.noneFound') : t('installer.scanIdleTitle')}
         >
           {installerScanScope}
+          {lastOutcome && <InstallerExecutionResult result={lastOutcome} />}
         </MaintenanceScanCard>
       </div>
     )
@@ -199,7 +175,7 @@ export function InstallerPage() {
           <p className="mt-1 text-xs text-muted-foreground">{t('installer.subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => void runPreview()}>
+          <Button onClick={() => void runPreview()} disabled={executing || loading}>
             <Archive className="w-4 h-4 mr-2" />
             {t('installer.preview')}
           </Button>
@@ -214,13 +190,13 @@ export function InstallerPage() {
         </div>
         <div className="stow-metric-card">
           <p className="text-sm text-muted-foreground">{t('clean.itemCount')}</p>
-          <p className="mt-2 text-2xl font-bold">{items.length}</p>
+          <p className="mt-2 text-2xl font-bold">{countLabel}</p>
           <p className="mt-1 text-xs text-muted-foreground">{t('installer.resultsTitle')}</p>
         </div>
         <div className="stow-metric-card">
           <p className="text-sm text-muted-foreground">{t('clean.potentialSpace')}</p>
-          <p className="mt-2 text-2xl font-bold">{formatFileSize(preview?.total_size ?? 0)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{t('installer.emptyDesc')}</p>
+          <p className="mt-2 text-2xl font-bold">{sizeLabel}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t('installer.scanPreviewOnly')}</p>
         </div>
       </div>
 
@@ -232,14 +208,15 @@ export function InstallerPage() {
               {items.length > 0
                 ? t('installer.resultsDesc', {
                     count: items.length,
-                    size: formatFileSize(preview.total_size),
+                    size: sizeLabel,
                   })
-                : t('installer.emptyDesc')}
+                : t('installer.reviewRequired')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {!canClean && <p role="status" className="text-sm text-iqon-yellow">{t("installer.reviewRequired")}</p>}
             {items.length > 0 && (
-              <Button type="button" variant="destructive" onClick={() => void executeWithMole()} disabled={executing}>
+              <Button type="button" variant="destructive" onClick={() => void executeWithMole()} disabled={executing || loading || !canClean}>
                 {executing ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (

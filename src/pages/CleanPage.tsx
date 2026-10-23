@@ -1,19 +1,13 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { useI18n } from '@/i18n'
-import { createCleanupHistoryRecord } from '@/lib/historyRecords'
-import { useAppStore } from '@/stores/app'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/tauri'
 import { ChevronDown, ChevronRight, FileText } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'react-toastify'
-import {
-  buildCleanExecutionOutputLines,
-  buildExecutedCleanPreview,
-  combineCleanRawOutput,
-  splitCleanOperationLog,
-  summarizeCleanExecution,
-} from './clean/cleanExecutionResult'
+import { splitCleanOperationLog } from './clean/cleanExecutionResult'
+import { recordCleanCompletion, type CleanCompletionInput } from './clean/cleanCompletion'
+import { getCleanPreviewSummary } from './clean/cleanPreviewSummary'
 import { CleanCompletedPanel } from './clean/CleanCompletedPanel'
 import { CleanInteractionPrompt } from './clean/CleanInteractionPrompt'
 import { PendingCleanScanCard } from './clean/PendingCleanScanCard'
@@ -31,7 +25,6 @@ import { hasDiskAccessFailure } from './clean/cleanFailureHints'
 import {
   sortCleanSectionsBySize,
   type CleanCompletionResult,
-  type CleanCompletionStatus,
   type MoleCleanExecutionResult,
   type MoleCleanPreview,
   type MoleCleanPreviewOutput,
@@ -57,69 +50,28 @@ export function CleanPage() {
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
   const [externalPath, setExternalPath] = useState('')
+  const previewScopeRef = useRef<string | null>(null)
   const cancellingRef = useRef(false)
   const cleanInteraction = useCleanPtyInteraction()
   const sections = useMemo(() => sortCleanSectionsBySize(preview?.sections ?? []), [preview])
 
-  const archiveCleanedPreview = (cleanedPreview: MoleCleanPreview, errors?: string[]) => {
-    const timestamp = new Date().toISOString()
-    const state = useAppStore.getState()
-    const statistics = state.statistics
-    state.addHistory(createCleanupHistoryRecord({
-      type: 'clean',
-      target: t('clean.title'),
-      label: t('history.type.clean'),
-      itemCount: cleanedPreview.item_count,
-      totalSize: cleanedPreview.potential_space,
-      action: 'execute',
-      executed: true,
-      timestamp,
-      errors,
-    }))
-    state.updateStatistics({
-      cleanItemsRemoved: (statistics.cleanItemsRemoved ?? 0) + cleanedPreview.item_count,
-      cleanSizeFreed: (statistics.cleanSizeFreed ?? 0) + cleanedPreview.potential_space,
-      cleanOperationCount: (statistics.cleanOperationCount ?? 0) + 1,
-      lastCleaned: timestamp,
-    })
+  const changeExternalPath = (value: string) => {
+    setExternalPath(value)
+    if (value.trim() === previewScopeRef.current) return
+    previewScopeRef.current = null
+    setPreview(null)
+    setCompletedClean(null)
+    setScanError(null)
+    setScanOutput([])
+    setShowPendingChoice(false)
   }
-  const finishCleanRun = ({
-    status,
-    previewToArchive,
-    rawOutput,
-    operationLog,
-    outputLines,
-    startedAt,
-  }: {
-    status: CleanCompletionStatus
-    previewToArchive: MoleCleanPreview
-    rawOutput: string
-    operationLog: string
-    outputLines: string[]
-    startedAt: number
-  }) => {
-    const fallbackToPreview = status === 'completed'
-    const combinedRawOutput = combineCleanRawOutput(rawOutput, operationLog)
-    const displayedOutput = buildCleanExecutionOutputLines(outputLines, rawOutput, operationLog)
-    const summary = summarizeCleanExecution(previewToArchive, outputLines, rawOutput, operationLog, fallbackToPreview)
-    const executedPreview = buildExecutedCleanPreview(previewToArchive, summary, combinedRawOutput, {
-      confirmedOnly: status === 'cancelled',
-      confirmedSectionTitle: t('clean.cancelledScopeTitle'),
-    })
-    const errors = status === 'cancelled' ? [t('clean.cancelledHistoryNote')] : undefined
 
-    archiveCleanedPreview(executedPreview, errors)
+  const finishCleanRun = (input: CleanCompletionInput) => {
+    const completion = recordCleanCompletion(input, t)
     setPendingScan(null)
     setShowPendingChoice(false)
     setPreview(null)
-    setCompletedClean({
-      preview: executedPreview,
-      rawOutput: combinedRawOutput,
-      outputLines: displayedOutput,
-      completedAt: new Date().toISOString(),
-      elapsedMs: Date.now() - startedAt,
-      status,
-    })
+    setCompletedClean(completion)
   }
 
   const cancelActiveRun = async () => {
@@ -171,6 +123,7 @@ export function CleanPage() {
         cleanInteraction.open(event.payload)
       })
       const next = await invoke<MoleCleanPreview>('mole_clean_preview_pty', { runId, externalPath: selectedExternalPath.trim() || null })
+      previewScopeRef.current = selectedExternalPath.trim()
       setPreview(next)
       setRawOpen(false)
       setScanOutput((current) => (
@@ -180,7 +133,7 @@ export function CleanPage() {
       setPendingScan(hasCleanPreviewContent(next) ? savedSnapshot : null)
       setShowPendingChoice(false)
 
-      if (next.potential_space === 0 && next.sections.length === 0) {
+      if (getCleanPreviewSummary(next).empty) {
         toast.success(t('clean.noneFound'))
       }
       return next
@@ -209,7 +162,11 @@ export function CleanPage() {
   }
 
   const runClean = async () => {
-    if (!preview) return
+    if (!preview || loading) return
+    if (!getCleanPreviewSummary(preview).canClean || previewScopeRef.current !== externalPath.trim()) {
+      toast.warning(t('clean.summary.rescanRequired'))
+      return
+    }
 
     const previewToArchive = preview
     const startedAt = Date.now()
@@ -308,6 +265,7 @@ export function CleanPage() {
   const viewPendingScan = () => {
     if (!pendingScan) return
     setExternalPath(pendingScan.externalPath ?? '')
+    previewScopeRef.current = pendingScan.externalPath?.trim() ?? ''
     setCompletedClean(null)
     setPreview(pendingScan.preview)
     setRawOpen(false)
@@ -343,6 +301,8 @@ export function CleanPage() {
           setShowPendingChoice(true)
           return
         }
+        setExternalPath(snapshot.externalPath ?? '')
+        previewScopeRef.current = snapshot.externalPath?.trim() ?? ''
         setPreview(snapshot.preview)
         setScanOutput([t('clean.pendingLoadedOutput')])
         return
@@ -416,7 +376,7 @@ export function CleanPage() {
   if (fullscreenScan) {
     return (
       <div className="stow-clean-fullscreen">
-        <CleanScopeControls externalPath={externalPath} onExternalPathChange={setExternalPath} disabled={loading} />
+        <CleanScopeControls externalPath={externalPath} onExternalPathChange={changeExternalPath} disabled={loading} />
         <CleanScanCard
           fullScreen
           preview={preview}
@@ -448,7 +408,7 @@ export function CleanPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-8">
-        <CleanScopeControls externalPath={externalPath} onExternalPathChange={setExternalPath} disabled={loading} />
+        <CleanScopeControls externalPath={externalPath} onExternalPathChange={changeExternalPath} disabled={loading} />
         <CleanScanCard
           preview={preview}
           loading={loading}

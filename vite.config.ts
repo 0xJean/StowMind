@@ -22,6 +22,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (/\/src\/i18n\/(en|zh)\.ts$/.test(id)) return 'locales'
           if (!id.includes('node_modules')) return undefined
           if (id.includes('/xterm/') || id.includes('/@xterm/')) return 'xterm'
           if (id.includes('/lucide-react/')) return 'icons'

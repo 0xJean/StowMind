@@ -1,5 +1,5 @@
 import { useI18n } from '@/i18n'
-import { cn, formatFileSize } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { type HistoryRecord, type HistoryRecordType, useAppStore } from '@/stores/app'
 import { invoke } from '@tauri-apps/api/tauri'
 import {
@@ -24,6 +24,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { MoleHistoryPanel } from './history/MoleHistoryPanel'
 import { SystemCacheHistoryDetail } from './history/SystemCacheHistoryDetail'
+import { cleanupHistorySizeLabel } from './history/cleanupLabels'
 
 type StatusFilter = 'all' | 'executed' | 'undone'
 type TypeFilter = 'all' | HistoryRecordType
@@ -369,10 +370,9 @@ function TimelineItem({
     type === 'organize' && record.executed && !record.undone && (record.moves?.length ?? 0) > 0
   const cleanupErrors = record.cleanupSummary?.errors ?? []
   const outcome = record.cleanupSummary?.outcome
-  const isPreview = record.cleanupSummary?.action === 'preview' || (!record.executed && !outcome)
   const tone = recordTone(record)
-  const totalSize = record.cleanupSummary?.totalSize
-  const itemCount = type === 'organize' ? record.totalFiles : record.cleanupSummary?.itemCount ?? record.totalFiles
+  const sizeLabel = cleanupHistorySizeLabel(record, t)
+  const itemCount = type === 'organize' ? record.totalFiles : record.cleanupSummary?.itemCount ?? t('clean.summary.unknown')
   const timeStr = new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
   return (
@@ -404,7 +404,7 @@ function TimelineItem({
                 'rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider',
                 record.undone
                   ? 'bg-iqon-row text-muted-foreground'
-                  : record.executed
+                  : record.executed && outcome !== 'partial' && outcome !== 'unknown'
                     ? 'bg-iqon-green/10 text-iqon-green'
                     : 'bg-iqon-yellow/10 text-iqon-yellow'
               )}
@@ -413,6 +413,8 @@ function TimelineItem({
                 ? t('history.statusUndone')
                 : outcome === 'failed' ? t('history.statusFailed')
                 : outcome === 'skipped' ? t('history.statusSkipped')
+                : outcome === 'partial' ? t('history.statusPartial')
+                : outcome === 'unknown' ? t('history.statusUnknown')
                 : record.executed
                   ? t('history.statusExecuted')
                   : t('history.statusPreview')}
@@ -423,13 +425,11 @@ function TimelineItem({
           {type === 'organize'
             ? t('history.nFiles', { n: itemCount })
             : t('history.nItems', { n: itemCount })}
-          {type !== 'organize' && typeof totalSize === 'number' && (
+          {type !== 'organize' && sizeLabel && (
             <>
               {' · '}
               <span className="font-bold text-foreground">
-                {t(isPreview ? 'history.spacePotential' : 'history.spaceFreed', {
-                  size: formatFileSize(totalSize),
-                })}
+                {sizeLabel}
               </span>
             </>
           )}
