@@ -398,9 +398,9 @@ export function CleanPage() {
   if (fullscreenScan) {
     return (
       <div className="stow-clean-fullscreen">
-        <CleanScopeControls externalPath={externalPath} onExternalPathChange={changeExternalPath} disabled={loading} />
         <CleanScanCard
           fullScreen
+          scopeControls={<CleanScopeControls externalPath={externalPath} onExternalPathChange={changeExternalPath} disabled={loading} />}
           preview={preview}
           loading={loading}
           scanIdle={scanIdle}
@@ -430,8 +430,8 @@ export function CleanPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-8">
-        <CleanScopeControls externalPath={externalPath} onExternalPathChange={changeExternalPath} disabled={loading} />
         <CleanScanCard
+          scopeControls={<CleanScopeControls externalPath={externalPath} onExternalPathChange={changeExternalPath} disabled={loading} />}
           preview={preview}
           loading={loading}
           scanIdle={scanIdle}

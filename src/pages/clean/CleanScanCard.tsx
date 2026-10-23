@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/c
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { AlertCircle, Ban, RefreshCw, Trash2 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import {
   getCleanFailureDetails,
   getCleanFailureKind,
@@ -24,6 +25,7 @@ interface CleanScanCardProps {
   scanOutput: string[]
   activity?: 'scan' | 'clean'
   fullScreen?: boolean
+  scopeControls?: ReactNode
   onScan: () => void
   onClean: () => void
   onCancel?: () => void
@@ -40,6 +42,7 @@ export function CleanScanCard({
   scanOutput,
   activity = 'scan',
   fullScreen = false,
+  scopeControls,
   onScan,
   onClean,
   onCancel,
@@ -140,6 +143,8 @@ export function CleanScanCard({
             t={t}
           />
         )}
+
+        {scopeControls}
 
         {!loading && !preview && !scanError && (
           <Button type="button" className="mt-1 w-full max-w-xs" onClick={onScan}>
