@@ -35,10 +35,10 @@ export function buildCleanupActivitySummary(
   statistics: Statistics
 ): CleanupActivitySummary {
   const cleanup = history.filter((record) => isCleanupType(record.type ?? 'organize'))
-  const executed = cleanup.filter((record) => record.executed)
+  const executed = cleanup.filter((record) => record.executed && !record.undone)
   const latestExecuted = executed[0]
-  const statFreed = (statistics.cleanSizeFreed ?? 0) + (statistics.agentCleanupSizeFreed ?? 0)
-  const historyFreed = executed.reduce((sum, record) => sum + cleanupSize(record), 0)
+  const statFreed = statistics.reportedFreedBytes ?? 0
+  const historyFreed = executed.reduce((sum, record) => sum + cleanupFreedSize(record), 0)
   const statOperations = (statistics.cleanOperationCount ?? 0) + (statistics.agentCleanupOperationCount ?? 0) + (statistics.systemCacheCleanupCount ?? 0)
   const observedCacheReduction = Math.max(
     statistics.systemCacheObservedBytes ?? 0,
@@ -60,6 +60,13 @@ export function buildCleanupActivitySummary(
 
 export function cleanupSize(record: HistoryRecord) {
   return record.cleanupSummary?.totalSize ?? 0
+}
+
+/** Legacy records lack proof that their size came from an execution report. */
+export function cleanupFreedSize(record: HistoryRecord) {
+  const size = record.cleanupSummary?.totalSize
+  return record.executed && !record.undone && record.cleanupSummary?.sizeKind === 'reported_freed'
+    && typeof size === 'number' && Number.isFinite(size) && size >= 0 ? size : 0
 }
 
 export function cleanupItems(record: HistoryRecord) {

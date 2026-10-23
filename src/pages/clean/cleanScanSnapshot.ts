@@ -16,7 +16,7 @@ export interface PendingCleanScanSnapshot {
 }
 
 export function hasCleanPreviewContent(preview: MoleCleanPreview) {
-  return preview.item_count > 0 || preview.potential_space > 0 || preview.sections.some((section) => section.items.length > 0)
+  return (preview.item_count ?? 0) > 0 || (preview.potential_space ?? 0) > 0 || preview.sections.some((section) => section.items.length > 0)
 }
 
 export async function loadPendingCleanScan() {
@@ -63,9 +63,9 @@ function isPendingCleanScanSnapshot(value: unknown): value is PendingCleanScanSn
 function isMoleCleanPreview(value: unknown): value is MoleCleanPreview {
   if (!isRecord(value)) return false
   return (
-    typeof value.potential_space === 'number' &&
-    typeof value.item_count === 'number' &&
-    typeof value.category_count === 'number' &&
+    (value.potential_space === null || typeof value.potential_space === 'number') &&
+    (value.item_count === null || typeof value.item_count === 'number') &&
+    (value.category_count === null || typeof value.category_count === 'number') &&
     Array.isArray(value.sections) &&
     typeof value.raw_output === 'string'
   )

@@ -3757,6 +3757,7 @@ dependencies = [
  "base64 0.22.1",
  "futures-util",
  "hex",
+ "libc",
  "mime_guess",
  "notify",
  "objc",

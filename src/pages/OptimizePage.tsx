@@ -1,14 +1,13 @@
+import { MaintenanceRunStatus } from '@/components/MaintenanceRunStatus'
+import { useMaintenanceRun } from '@/hooks/useMaintenanceRun'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/i18n'
-import { createCleanupHistoryRecord } from '@/lib/historyRecords'
 import { loadResultSnapshot, resultCacheKeys, saveResultSnapshot } from '@/lib/resultCache'
 import { cn, formatDecimal } from '@/lib/utils'
-import { useAppStore } from '@/stores/app'
-import { invoke } from '@tauri-apps/api/tauri'
 import {
   Activity,
   AlertTriangle,
@@ -28,33 +27,8 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'react-toastify'
 
-interface MoleOptimizationItem {
-  category: string
-  name: string
-  description: string
-  action: string
-  safe: boolean
-}
-
-interface MoleOptimizeHealth {
-  health_score: number
-  health_score_msg: string
-  memory_used_gb: number
-  memory_total_gb: number
-  disk_used_gb: number
-  disk_total_gb: number
-  disk_used_percent: number
-  uptime_days: number
-  active_whitelist: string[]
-  optimizations: MoleOptimizationItem[]
-  raw_output: string
-  platform: string
-}
-
-interface MoleOptimizeExecuteOutcome {
-  applied_count: number
-  raw_output: string
-}
+import type { MoleOptimizationItem, MoleOptimizeHealth, MoleOptimizeExecuteOutcome } from './optimize/types'
+import { canExecuteOptimize, recordOptimizeExecution } from './optimize/outcome'
 
 type SortMode = 'category' | 'name' | 'action'
 
@@ -70,74 +44,48 @@ const TONE: Record<Tone, { text: string; glow: string; mesh: string; dot: string
 export function OptimizePage() {
   const { t } = useI18n()
   const [data, setData] = useState<MoleOptimizeHealth | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [executing, setExecuting] = useState(false)
+  const maintenance = useMaintenanceRun('/optimize')
+  const loading = maintenance.run?.phase === 'scan'
+  const executing = maintenance.run?.phase === 'execute'
   const [query, setQuery] = useState('')
   const [safeOnly, setSafeOnly] = useState(false)
   const [sortMode, setSortMode] = useState<SortMode>('category')
   const [rawOpen, setRawOpen] = useState(false)
   const [lastRunOutput, setLastRunOutput] = useState<string | null>(null)
-  const addHistory = useAppStore((s) => s.addHistory)
-  const statistics = useAppStore((s) => s.statistics)
-  const updateStatistics = useAppStore((s) => s.updateStatistics)
+  const [freshPreview, setFreshPreview] = useState(false)
 
   const refresh = async () => {
-    setLoading(true)
-    try {
-      const next = await invoke<MoleOptimizeHealth>('mole_optimize_health_json')
-      setData(next)
-      await saveResultSnapshot(resultCacheKeys.optimizeHealth, next)
-      return next
-    } catch (err) {
-      toast.error(t('optimize.fail', { error: String(err) }))
-      return null
-    } finally {
-      setLoading(false)
-    }
+    if (maintenance.isBusy() || !maintenance.isVisible()) return null
+    setFreshPreview(false)
+    const result = await maintenance.runTask<MoleOptimizeHealth>('scan', 'mole_optimize_health_json')
+    if (!result?.ok || result.interrupted || !maintenance.isVisible()) return null
+    setData(result.value)
+    setFreshPreview(result.value.preview_status === 'complete')
+    await saveResultSnapshot(resultCacheKeys.optimizeHealth, result.value)
+    return result.value
   }
 
   const runOptimize = async () => {
-    if (!data) {
+    if (!data || !freshPreview || maintenance.isBusy() || !maintenance.isVisible() || !canExecuteOptimize(data)) {
       toast.info(t('optimize.recordNeedRefresh'))
       return
     }
-
-    const confirmed = window.confirm(
-      t('optimize.executeConfirm', {
-        count: data.optimizations.length,
-        safe: safeCount,
-      })
-    )
-    if (!confirmed) return
-
-    setExecuting(true)
-    try {
-      const outcome = await invoke<MoleOptimizeExecuteOutcome>('mole_optimize_execute')
-      const timestamp = new Date().toISOString()
-      const itemCount = outcome.applied_count || data.optimizations.length
-
-      setLastRunOutput(outcome.raw_output)
-      addHistory(createCleanupHistoryRecord({
-        type: 'optimize',
-        target: t('optimize.title'),
-        label: t('history.type.optimize'),
-        itemCount,
-        totalSize: 0,
-        action: 'execute',
-        executed: true,
-        timestamp,
-      }))
-      updateStatistics({
-        cleanOperationCount: (statistics.cleanOperationCount ?? 0) + 1,
-        lastCleaned: timestamp,
-      })
-      toast.success(t('optimize.executeSuccess', { count: itemCount }))
-      await refresh()
-    } catch (err) {
-      toast.error(t('optimize.executeFail', { error: String(err) }))
-    } finally {
-      setExecuting(false)
+    if (!window.confirm(t('optimize.executeConfirm', { count: data.planned_count ?? 0 }))) return
+    setFreshPreview(false)
+    const result = await maintenance.runTask<MoleOptimizeExecuteOutcome>('execute', 'mole_optimize_execute')
+    if (!result) return
+    if (!result.ok) {
+      if (result.error.partial_result) recordOptimizeExecution(result.error.partial_result as MoleOptimizeExecuteOutcome, t, result.error.code)
+      if (maintenance.isVisible()) setLastRunOutput(result.error.raw_output)
+      return
     }
+    recordOptimizeExecution(result.value, t, result.interrupted ? 'cancelled' : undefined)
+    if (!maintenance.isVisible()) return
+    setLastRunOutput(result.value.raw_output)
+    if (result.interrupted) return
+    if (result.value.summary_status !== 'complete' || result.value.applied_count === null) toast.warning(t('optimize.executeUnknown'))
+    else toast.success(t('optimize.executeSuccess', { count: result.value.applied_count }))
+    await refresh()
   }
 
   const filteredItems = useMemo(() => {
@@ -162,23 +110,30 @@ export function OptimizePage() {
 
   const safeCount = data?.optimizations.filter((item) => item.safe).length ?? 0
   const reviewCount = Math.max((data?.optimizations.length ?? 0) - safeCount, 0)
-  const healthScore = Math.max(0, Math.min(100, data?.health_score ?? 0))
+  const healthScore = data?.health_score == null ? null : Math.max(0, Math.min(100, data.health_score))
+  const numberLabel = (value: number | null | undefined, digits = 1) => value == null ? t('clean.summary.unknown') : formatDecimal(value, digits)
   const actionCount = data?.optimizations.length ?? 0
-  const canExecute = Boolean(data && actionCount > 0 && !loading && !executing)
-  const heroTone: Tone = healthScore >= 80 ? 'green' : healthScore >= 60 ? 'cyan' : healthScore >= 40 ? 'yellow' : 'red'
+  const canExecute = Boolean(data && freshPreview && canExecuteOptimize(data) && !loading && !executing)
+  const heroTone: Tone = healthScore === null ? 'yellow' : healthScore >= 80 ? 'green' : healthScore >= 60 ? 'cyan' : healthScore >= 40 ? 'yellow' : 'red'
   const heroT = TONE[heroTone]
 
   useEffect(() => {
+    let cancelled = false
     void (async () => {
       const snapshot = await loadResultSnapshot<MoleOptimizeHealth>(resultCacheKeys.optimizeHealth)
+      if (cancelled || !maintenance.isVisible() || maintenance.isBusy()) return
       if (snapshot) setData(snapshot.payload)
       await refresh()
     })()
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => { if (!maintenance.active) setFreshPreview(false) }, [maintenance.active])
+
   return (
     <div className="stow-page-wide">
+      <MaintenanceRunStatus state={maintenance} onCancel={() => void maintenance.cancel()} />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.55fr)]">
         <section className="iqon-card relative overflow-hidden">
           <div className="pointer-events-none absolute inset-0 z-0">
@@ -194,7 +149,9 @@ export function OptimizePage() {
                 </span>
                 <span className={cn('iqon-pill', reviewCount > 0 ? 'border-iqon-yellow/40 text-iqon-yellow' : 'border-iqon-green/40 text-iqon-green')}>
                   <span className={cn('iqon-dot', reviewCount > 0 ? 'iqon-dot-yellow' : 'iqon-dot-green')} />
-                  {reviewCount > 0
+                  {!freshPreview
+                    ? t('optimize.recordNeedRefresh')
+                    : reviewCount > 0
                     ? t('optimize.heroReview', { count: reviewCount })
                     : t('optimize.heroReady')}
                 </span>
@@ -231,14 +188,14 @@ export function OptimizePage() {
                   <div className="flex items-end justify-between gap-4">
                     <div>
                       <p className="iqon-eyebrow">{t('optimize.healthLabel')}</p>
-                      <p className="mt-1 text-4xl font-bold tabular-nums">{healthScore}</p>
+                      <p className="mt-1 text-4xl font-bold tabular-nums">{healthScore ?? t('clean.summary.unknown')}</p>
                     </div>
                     <div className="relative h-12 w-12">
                       <div className={cn('absolute inset-0 rounded-full opacity-20 blur-md', heroT.glow)} />
                       <Gauge className={cn('relative h-12 w-12', heroT.text)} />
                     </div>
                   </div>
-                  <Progress value={healthScore} className="mt-4 h-3" />
+                  <Progress value={healthScore ?? undefined} className="mt-4 h-3" />
                   <p className="mt-3 min-h-10 text-xs leading-5 text-muted-foreground">{data?.health_score_msg ?? t('optimize.loading')}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -259,17 +216,18 @@ export function OptimizePage() {
             <p className="mt-1 text-xs text-muted-foreground">{t('optimize.nextDesc')}</p>
           </div>
           <div className="space-y-2">
-            <StepRow active={!data || loading} done={Boolean(data)} label={t('optimize.step.scan')} detail={t('optimize.step.scanDesc')} />
+            <StepRow active={!data || loading} done={freshPreview} label={t('optimize.step.scan')} detail={t('optimize.step.scanDesc')} />
             <StepRow active={Boolean(data && !executing)} done={Boolean(data && actionCount > 0)} label={t('optimize.step.review')} detail={t('optimize.step.reviewDesc', { count: actionCount })} />
-            <StepRow active={executing} done={Boolean(lastRunOutput)} label={t('optimize.step.execute')} detail={lastRunOutput ? t('optimize.step.done') : t('optimize.step.executeDesc')} />
+            <StepRow active={executing} done={Boolean(lastRunOutput) && !maintenance.failure} label={t('optimize.step.execute')} detail={lastRunOutput && !maintenance.failure ? t('optimize.step.done') : t('optimize.step.executeDesc')} />
           </div>
         </div>
       </div>
 
+      <p role="status" className="text-xs text-muted-foreground">{t(freshPreview ? 'optimize.fullScope' : 'optimize.previewIncomplete')}</p>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <MetricCard tone="cyan" icon={Activity} title={t('optimize.metric.memory')} value={`${formatDecimal(data?.memory_used_gb ?? 0)} / ${formatDecimal(data?.memory_total_gb ?? 0)} GB`} detail={t('optimize.metric.memoryValue', { used: formatDecimal(data?.memory_used_gb ?? 0), total: formatDecimal(data?.memory_total_gb ?? 0) })} />
-        <MetricCard tone="yellow" icon={Gauge} title={t('optimize.metric.disk')} value={`${formatDecimal(data?.disk_used_percent ?? 0)}%`} detail={t('optimize.metric.diskValue', { used: formatDecimal(data?.disk_used_gb ?? 0), total: formatDecimal(data?.disk_total_gb ?? 0), percent: formatDecimal(data?.disk_used_percent ?? 0) })} />
-        <MetricCard tone="green" icon={ShieldCheck} title={t('optimize.metric.uptime')} value={t('optimize.metric.uptimeValue', { days: formatDecimal(data?.uptime_days ?? 0, 0) })} detail={data?.platform ?? '—'} />
+        <MetricCard tone="cyan" icon={Activity} title={t('optimize.metric.memory')} value={`${numberLabel(data?.memory_used_gb)} / ${numberLabel(data?.memory_total_gb)} GB`} detail={t('optimize.metric.memoryValue', { used: numberLabel(data?.memory_used_gb), total: numberLabel(data?.memory_total_gb) })} />
+        <MetricCard tone="yellow" icon={Gauge} title={t('optimize.metric.disk')} value={`${numberLabel(data?.disk_used_percent)}%`} detail={t('optimize.metric.diskValue', { used: numberLabel(data?.disk_used_gb), total: numberLabel(data?.disk_total_gb), percent: numberLabel(data?.disk_used_percent) })} />
+        <MetricCard tone="green" icon={ShieldCheck} title={t('optimize.metric.uptime')} value={t('optimize.metric.uptimeValue', { days: numberLabel(data?.uptime_days, 0) })} detail={data?.platform ?? '—'} />
         <MetricCard tone={reviewCount > 0 ? 'red' : 'green'} icon={AlertTriangle} title={t('optimize.metric.reviewRequired')} value={String(reviewCount)} detail={t('optimize.metric.optimizationValue', { safe: safeCount, total: actionCount })} />
       </div>
 

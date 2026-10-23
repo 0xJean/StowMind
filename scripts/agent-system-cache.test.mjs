@@ -100,7 +100,7 @@ function createPage(invokeOverride) {
       if (command === 'system_cache_clean') return cacheOutcome
       if (command === 'mole_clean_preview_pty_cancel') return null
       if (command === 'agent_cleanup_execute') return {
-        removed_count: args.request.itemIds.length, freed_bytes: 384, skipped_count: 0, errors: [],
+        removed_count: args.request.itemIds.length, processed_bytes: 384, freed_bytes: null, skipped_count: 0, errors: [],
         completed_at: '1700000010',
         actions: agentPreview.items.filter((item) => args.request.itemIds.includes(item.id)).map((item) => ({ path: item.path, success: true })),
       }
@@ -300,7 +300,9 @@ test('bulk Agent selection, bytes, execution and history exclude the shared icon
   assert.equal(page.history.length, 1)
   assert.equal(page.history[0].type, 'agent-cleanup')
   assert.equal(page.history[0].cleanupSummary.totalSize, 384)
-  assert.equal(page.store.statistics.agentCleanupSizeFreed, 384)
+  assert.equal(page.history[0].cleanupSummary.sizeKind, 'processed')
+  assert.equal(page.store.statistics.agentCleanupProcessedBytes, 384)
+  assert.equal(page.store.statistics.agentCleanupSizeFreed, undefined)
   assert.equal(page.store.statistics.systemCacheCleanupCount, undefined)
 })
 

@@ -7,19 +7,22 @@ export interface MoleUninstallItem {
   uninstall_name: string
   path: string
   size: string
-  size_bytes: number
+  size_bytes: number | null
   icon_data_url?: string | null
 }
 
 export interface MoleUninstallList {
   items: MoleUninstallItem[]
-  total_size: number
+  total_size: number | null
 }
 
 export interface MoleUninstallOperationOutput {
-  item_count: number
-  total_size: number
+  output_truncated?: boolean
+  item_count: number | null
+  total_size: number | null
   raw_output: string
+  dry_run: boolean
+  permanent: boolean
 }
 
 export type SortMode = 'size_desc' | 'size_asc' | 'name' | 'source' | 'update'

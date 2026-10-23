@@ -1,6 +1,7 @@
 use super::{
     adapters::{adapter_specs, agent_summaries, category_enabled, root_path},
     git,
+    measurement::{measure_item, MAX_ITEM_ENTRIES},
     types::{
         AgentCleanupItem, AgentCleanupPolicy, AgentCleanupPreview, AgentCleanupProtected,
         AgentCleanupSummary, CleanupCategory,
@@ -17,7 +18,6 @@ use std::{
 };
 use walkdir::WalkDir;
 
-const MAX_ITEM_ENTRIES: usize = 100_000;
 const PROCESS_CACHE_TTL_SECS: u64 = 2;
 static PROCESS_CACHE: OnceLock<Mutex<HashMap<String, (std::time::Instant, bool)>>> =
     OnceLock::new();
@@ -27,29 +27,43 @@ pub(super) fn scan(home: &Path, policy: AgentCleanupPolicy, now: i64) -> AgentCl
     let mut items = Vec::new();
     for spec in specs {
         let root = root_path(home, spec);
-        if fs::symlink_metadata(&root)
-            .map(|metadata| metadata.file_type().is_symlink())
-            .unwrap_or(false)
-        {
+        let metadata = match fs::symlink_metadata(&root) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                items.push(scan_error_marker(&root, spec, &error.to_string()));
+                continue;
+            }
+        };
+        if metadata.file_type().is_symlink() {
             continue;
         }
         if spec.scan_self {
-            if root.exists() {
-                if let Some(item) = inspect_item(&root, spec, &policy, now) {
-                    items.push(item);
-                }
+            if let Some(item) = inspect_item(&root, spec, &policy, now) {
+                items.push(item);
+            } else {
+                items.push(scan_error_marker(
+                    &root,
+                    spec,
+                    "Metadata could not be inspected",
+                ));
             }
             continue;
         }
-        if !root.is_dir() {
+        if !metadata.is_dir() {
             continue;
         }
-        let Ok(entries) = fs::read_dir(&root) else {
-            continue;
+        let entries = match fs::read_dir(&root) {
+            Ok(entries) => entries,
+            Err(error) => {
+                items.push(scan_error_marker(&root, spec, &error.to_string()));
+                continue;
+            }
         };
         let mut root_items = Vec::new();
         let mut scanned_entries = 0usize;
         let mut truncated = false;
+        let mut scan_error = None;
         for entry in entries {
             if scanned_entries >= MAX_ITEM_ENTRIES {
                 // A large Crashpad directory can contain millions of dumps.
@@ -59,22 +73,34 @@ pub(super) fn scan(home: &Path, policy: AgentCleanupPolicy, now: i64) -> AgentCl
                 break;
             }
             scanned_entries += 1;
-            let Ok(entry) = entry else {
-                continue;
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error) => {
+                    scan_error = Some(error.to_string());
+                    break;
+                }
             };
             let path = entry.path();
-            if entry
-                .file_type()
-                .map(|kind| kind.is_symlink())
-                .unwrap_or(true)
-            {
+            let kind = match entry.file_type() {
+                Ok(kind) => kind,
+                Err(error) => {
+                    scan_error = Some(error.to_string());
+                    break;
+                }
+            };
+            if kind.is_symlink() {
                 continue;
             }
             if let Some(item) = inspect_item(&path, spec, &policy, now) {
                 root_items.push(item);
+            } else {
+                scan_error = Some("An entry changed or could not be inspected".to_string());
+                break;
             }
         }
-        if truncated {
+        if let Some(error) = scan_error {
+            items.push(scan_error_marker(&root, spec, &error));
+        } else if truncated {
             // Do not mix a partial list of executable entries with the
             // protected marker. A user must receive a complete preview before
             // any item from this root can be selected for cleanup.
@@ -87,6 +113,17 @@ pub(super) fn scan(home: &Path, policy: AgentCleanupPolicy, now: i64) -> AgentCl
     let mut agents = agent_summaries(specs, home);
     git::augment_agent_summaries(&mut agents, home);
     build_preview(policy, agents, items, now)
+}
+
+fn scan_error_marker(
+    root: &Path,
+    spec: &super::types::AgentRootSpec,
+    error: &str,
+) -> AgentCleanupItem {
+    let mut item = scan_limit_marker(root, spec, 0);
+    item.id = format!("scan-error:{}", root.display());
+    item.reason = format!("Scan incomplete; files remain protected: {error}");
+    item
 }
 
 /// Build a non-selectable marker when an allow-listed directory exceeds the
@@ -110,6 +147,7 @@ fn scan_limit_marker(
         category: spec.category.as_str().to_string(),
         path,
         size: 0,
+        size_status: "unavailable".to_string(),
         entry_count: scanned_entries,
         modified_at,
         eligible: false,
@@ -137,12 +175,17 @@ pub(super) fn inspect_item(
         .duration_since(UNIX_EPOCH)
         .ok()?
         .as_secs() as i64;
-    let (size, entry_count) = item_size(path);
+    let measurement = measure_item(path);
+    let size = measurement.bytes;
+    let entry_count = measurement.entries;
     let mut protected = false;
     let mut reason = String::new();
     let age_ok =
         now.saturating_sub(modified_at) >= policy.min_age_days.saturating_mul(86_400) as i64;
-    if protected_artifact_name(path) || contains_protected_descendant(path) {
+    if !measurement.complete {
+        protected = true;
+        reason = "Size measurement is incomplete; scan limits or unreadable entries require manual inspection".to_string();
+    } else if protected_artifact_name(path) || contains_protected_descendant(path) {
         protected = true;
         reason = "Protected application state or credentials".to_string();
     } else if !age_ok {
@@ -180,6 +223,12 @@ pub(super) fn inspect_item(
         category: spec.category.as_str().to_string(),
         path: path_text,
         size,
+        size_status: if measurement.complete {
+            "complete"
+        } else {
+            "partial"
+        }
+        .to_string(),
         entry_count,
         modified_at,
         eligible: !protected,
@@ -201,7 +250,11 @@ pub(super) fn build_preview(
             (count + 1, size.saturating_add(item.size))
         });
         agent.item_count = count;
-        agent.total_size = size;
+        agent.total_size = items
+            .iter()
+            .filter(|item| item.agent == agent.id)
+            .all(|item| item.size_status == "complete")
+            .then_some(size);
     }
     let protected = items
         .iter()
@@ -216,7 +269,10 @@ pub(super) fn build_preview(
         candidate_count: items.len() as u64,
         eligible_count: items.iter().filter(|item| item.eligible).count() as u64,
         protected_count: protected.len() as u64,
-        total_size_bytes: items.iter().map(|item| item.size).sum(),
+        total_size_bytes: items
+            .iter()
+            .all(|item| item.size_status == "complete")
+            .then(|| items.iter().map(|item| item.size).sum()),
         reclaimable_size_bytes: items
             .iter()
             .filter(|item| item.eligible)
@@ -377,27 +433,6 @@ pub(super) fn refresh_process_cache() {
             entries.clear();
         }
     }
-}
-
-fn item_size(path: &Path) -> (u64, u64) {
-    let mut size: u64 = 0;
-    let mut count: u64 = 0;
-    for entry in WalkDir::new(path)
-        .follow_links(false)
-        .max_depth(8)
-        .into_iter()
-        .flatten()
-        .take(MAX_ITEM_ENTRIES)
-    {
-        if entry.file_type().is_symlink() {
-            continue;
-        }
-        count += 1;
-        if let Ok(metadata) = entry.metadata() {
-            size = size.saturating_add(metadata.len());
-        }
-    }
-    (size, count)
 }
 
 pub(super) fn epoch_now() -> i64 {

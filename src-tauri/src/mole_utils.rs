@@ -72,26 +72,6 @@ pub fn runtime_path() -> OsString {
     std::env::join_paths(entries).unwrap_or_else(|_| OsString::from(default_runtime_path()))
 }
 
-pub fn locate_mole_script(script_name: &str) -> Result<PathBuf, String> {
-    let mut roots = Vec::new();
-
-    if let Ok(exe_path) = locate_mole_executable() {
-        roots.extend(mole_script_roots_from_executable(&exe_path));
-    }
-
-    roots.extend(mole_config_roots());
-    roots.push(PathBuf::from("/opt/homebrew/opt/mole/libexec"));
-    roots.push(PathBuf::from("/usr/local/opt/mole/libexec"));
-
-    if let Some(script) = find_mole_script_in_roots(script_name, roots) {
-        return Ok(script);
-    }
-
-    Err(format!(
-        "Could not locate Mole {script_name}. StowMind checked Mole executable roots, ~/.config/mole, and Homebrew libexec paths."
-    ))
-}
-
 /// Resolve a script only from the runtime selected by StowMind. A scoped,
 /// privileged operation must not silently borrow libraries from another Mole
 /// installation when a configured executable is incomplete or incompatible.
@@ -304,24 +284,6 @@ fn expand_user_config_path(value: &str) -> Option<PathBuf> {
     }
 
     Some(PathBuf::from(value))
-}
-
-fn mole_config_roots() -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-
-    if let Some(config_dir) = std::env::var_os("MOLE_CONFIG_DIR") {
-        roots.push(PathBuf::from(config_dir));
-    }
-
-    if let Some(xdg_config_home) = std::env::var_os("XDG_CONFIG_HOME") {
-        roots.push(PathBuf::from(xdg_config_home).join("mole"));
-    }
-
-    if let Some(home) = std::env::var_os("HOME") {
-        roots.push(PathBuf::from(home).join(".config/mole"));
-    }
-
-    roots
 }
 
 fn mole_executable_candidates() -> Vec<PathBuf> {

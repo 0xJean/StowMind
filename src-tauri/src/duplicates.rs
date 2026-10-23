@@ -87,7 +87,12 @@ pub fn find_duplicates(
         0,
         0,
     ));
-    for entry in walker.into_iter().filter_map(|e| e.ok()) {
+    for entry in walker
+        .into_iter()
+        .filter_entry(|entry| !path_matches_exclude(entry.path(), exclude_patterns))
+    {
+        // An unreadable subtree is an incomplete scan, not an empty result.
+        let entry = entry.map_err(io::Error::other)?;
         visited += 1;
         if visited == 1 || last_collect_emit.elapsed() >= Duration::from_millis(120) {
             on_progress(DuplicateScanProgress::new(
@@ -148,12 +153,8 @@ pub fn find_duplicates(
                 ));
                 last_hash_emit = Instant::now();
             }
-            match hash_file(&path) {
-                Ok(h) => {
-                    by_hash.entry(h).or_default().push(path);
-                }
-                Err(_) => {}
-            }
+            let hash = hash_file(&path)?;
+            by_hash.entry(hash).or_default().push(path);
         }
         for (hash, paths) in by_hash {
             if paths.len() < 2 {
@@ -164,9 +165,7 @@ pub fn find_duplicates(
                 .map(|p| p.to_string_lossy().to_string())
                 .collect();
             ps.sort();
-            let size = std::fs::metadata(Path::new(&ps[0]))
-                .map(|m| m.len())
-                .unwrap_or(0);
+            let size = std::fs::metadata(Path::new(&ps[0]))?.len();
             out.push(DuplicateGroup {
                 size,
                 hash,
@@ -183,3 +182,7 @@ pub fn find_duplicates(
     out.sort_by(|a, b| b.paths.len().cmp(&a.paths.len()));
     Ok(out)
 }
+
+#[cfg(test)]
+#[path = "duplicates_tests.rs"]
+mod tests;

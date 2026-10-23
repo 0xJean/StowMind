@@ -2,7 +2,7 @@ import { ScanAtlasVisual, type ScanAtlasVisualState } from '@/components/ScanAtl
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card'
 import { useI18n } from '@/i18n'
-import { cn, formatFileSize } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { AlertCircle, Ban, RefreshCw, Trash2 } from 'lucide-react'
 import {
   getCleanFailureDetails,
@@ -11,12 +11,11 @@ import {
 } from './cleanFailureHints'
 import { findLatestProgress, findLatestStep, parseCleanProgress } from './cleanProgress'
 import { CleanScanStatusPanel, formatElapsed } from './CleanScanStatusPanel'
+import { cleanPreviewLabels } from './cleanPreviewSummary'
+import type { MoleCleanPreview } from './types'
 
 interface CleanScanCardProps {
-  preview: {
-    potential_space: number
-    item_count: number
-  } | null
+  preview: MoleCleanPreview | null
   loading: boolean
   scanIdle: boolean
   scanError: string | null
@@ -54,17 +53,7 @@ export function CleanScanCard({
   const warming = loading && !hasRealProgress
   const showIdle = scanIdle && !warming
   const immersive = loading || (!preview && !scanError)
-
-  // When cleaning with a known preview, estimate freed/remaining size by item ratio.
-  const ratioKnown = Boolean(progress && progress.total !== null && progress.total > 0)
-  const estimatedFreed =
-    cleaning && preview && progress && ratioKnown && progress.phase === 'execution'
-      ? Math.round((progress.current / (progress.total as number)) * preview.potential_space)
-      : null
-  const estimatedRemaining =
-    cleaning && preview && estimatedFreed !== null
-      ? Math.max(0, preview.potential_space - estimatedFreed)
-      : null
+  const summary = preview ? cleanPreviewLabels(preview, t) : null
   const failureKind = scanError ? getCleanFailureKind(scanError) : null
   const failureSummary = scanError
     ? failureKind?.kind === 'runtime_limit'
@@ -94,7 +83,7 @@ export function CleanScanCard({
               ? cleaning
                 ? warming ? t('clean.cleanWarmingTitle') : showIdle ? t('clean.cleanIdleTitle') : t('clean.cleanRunningTitle')
                 : warming ? t('clean.scanWarmingTitle') : showIdle ? t('clean.scanIdleTitle') : t('clean.scanRunningTitle')
-              : scanError ? cleaning ? t('clean.cleanStatus.failed') : t('clean.scanFailedTitle') : preview ? formatFileSize(preview.potential_space) : t('clean.placeholderTitle')}
+              : scanError ? cleaning ? t('clean.cleanStatus.failed') : t('clean.scanFailedTitle') : summary ? summary.sizeLabel : t('clean.placeholderTitle')}
           </CardTitle>
           <CardDescription className="mx-auto max-w-xl">
             {loading
@@ -108,10 +97,11 @@ export function CleanScanCard({
                       idle: formatElapsed(scanIdleMs),
                     })
                   : t(cleaning ? 'clean.cleanRunningDesc' : 'clean.scanRunningDesc', { time: formatElapsed(scanElapsedMs) })
-              : scanError ? cleaning ? t('clean.cleanFailedDesc') : t('clean.scanFailedDesc') : preview
-                ? t('clean.executionLatest', {
-                    count: preview.item_count,
-                    size: formatFileSize(preview.potential_space),
+              : scanError ? cleaning ? t('clean.cleanFailedDesc') : t('clean.scanFailedDesc') : summary
+                ? t('clean.cleanableSummary', {
+                    count: summary.countLabel,
+                    size: summary.sizeLabel,
+                    categories: summary.categoriesLabel,
                   })
                 : t('clean.placeholderDesc')}
           </CardDescription>
@@ -147,8 +137,6 @@ export function CleanScanCard({
             warming={warming}
             cleaning={cleaning}
             scanIdle={showIdle}
-            estimatedFreed={estimatedFreed}
-            estimatedRemaining={estimatedRemaining}
             t={t}
           />
         )}
@@ -177,11 +165,17 @@ export function CleanScanCard({
             {cancelling ? t('clean.cancelling') : t(cleaning ? 'clean.cancelClean' : 'clean.cancelScan')}
           </Button>
         )}
-        {!loading && preview && (
-          <Button type="button" className="mt-1 w-full max-w-xs" onClick={onClean}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            {t('clean.cleanableAction', { size: formatFileSize(preview.potential_space) })}
-          </Button>
+        {!loading && summary && (
+          <div className="flex w-full max-w-xl flex-col items-center gap-3">
+            {summary.needsRescan && <p role="status" className="text-sm text-iqon-yellow">{t('clean.summary.rescanRequired')}</p>}
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button type="button" onClick={onClean} disabled={!summary.canClean || Boolean(scanError)}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t('clean.cleanableAction', { size: summary.sizeLabel })}
+              </Button>
+              {!scanError && <Button type="button" variant="outline" onClick={onScan}><RefreshCw className="mr-2 h-4 w-4" />{t('clean.scanRetry')}</Button>}
+            </div>
+          </div>
         )}
 
         {(loading || scanOutput.length > 0 || scanError) && (
@@ -206,8 +200,6 @@ function ProgressTracker({
   warming,
   cleaning,
   scanIdle,
-  estimatedFreed,
-  estimatedRemaining,
   t,
 }: {
   tone: 'green' | 'yellow'
@@ -216,8 +208,6 @@ function ProgressTracker({
   warming: boolean
   cleaning: boolean
   scanIdle: boolean
-  estimatedFreed: number | null
-  estimatedRemaining: number | null
   t: ReturnType<typeof useI18n>['t']
 }) {
   const barColor = tone === 'yellow' ? 'bg-iqon-yellow' : 'bg-iqon-green'
@@ -295,22 +285,6 @@ function ProgressTracker({
           <p className="mt-2 text-[11px] text-muted-foreground">
             {isDiscovery ? t('clean.progress.discoveryHint') : t('clean.progress.itemsCount', { n: progress.current })}
           </p>
-        )}
-        {hasRatio && cleaning && estimatedFreed !== null && estimatedRemaining !== null && (
-          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-iqon-border pt-2 text-[10px]">
-            <div>
-              <p className="iqon-eyebrow">{t('clean.progress.estFreedLabel')}</p>
-              <p className="mt-0.5 font-mono text-xs font-bold tabular-nums text-iqon-green">
-                {formatFileSize(estimatedFreed)}
-              </p>
-            </div>
-            <div>
-              <p className="iqon-eyebrow">{t('clean.progress.estRemainingLabel')}</p>
-              <p className="mt-0.5 font-mono text-xs font-bold tabular-nums text-muted-foreground">
-                {formatFileSize(estimatedRemaining)}
-              </p>
-            </div>
-          </div>
         )}
       </div>
     </div>

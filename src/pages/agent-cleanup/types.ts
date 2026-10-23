@@ -11,7 +11,7 @@ export interface AgentCleanupAgent {
   name: string
   available?: boolean
   item_count?: number
-  total_size?: number
+  total_size?: number | null
 }
 
 export interface AgentCleanupItem {
@@ -20,6 +20,7 @@ export interface AgentCleanupItem {
   category: AgentCleanupCategory
   path: string
   size: number
+  size_status?: 'complete' | 'partial' | 'unavailable'
   modified_at?: string | number | null
   reason?: string | null
   default_selected: boolean
@@ -48,7 +49,8 @@ export interface AgentCleanupExecuteRequest {
 
 export interface AgentCleanupExecuteResult {
   removed_count: number
-  freed_bytes: number
+  processed_bytes?: number | null
+  freed_bytes: number | null
   skipped_count?: number
   errors?: string[]
   completed_at?: string
@@ -57,7 +59,7 @@ export interface AgentCleanupExecuteResult {
 
 export interface AgentCleanupAction {
   path: string
-  size_bytes: number
+  size_bytes: number | null
   success: boolean
   message: string
 }

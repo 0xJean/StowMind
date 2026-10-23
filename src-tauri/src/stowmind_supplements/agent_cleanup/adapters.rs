@@ -49,7 +49,7 @@ pub(super) fn agent_summaries(specs: &[AgentRootSpec], home: &Path) -> Vec<Agent
             detected: !roots.is_empty(),
             roots,
             item_count: 0,
-            total_size: 0,
+            total_size: Some(0),
         }
     })
     .collect()

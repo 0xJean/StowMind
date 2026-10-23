@@ -1,0 +1,18 @@
+Clean Your Mac
+
+Dry Run Mode, Preview only, no deletions
+
+➤ User essentials
+  → User app cache 187 items, 8.85GB dry
+  → User app logs 23 items, 1.4MB dry
+  → Trash · would empty, 1 items
+
+➤ Developer tools
+  → npm cache · would clean
+  → npm cache directory 3 items, 2.87GB dry
+  ✓ Rust toolchains: 5 found · rustup toolchain list
+
+======================================================================
+Dry run complete - no changes made
+Potential space: 19.57GB | Items: 1050 | Categories: 50
+======================================================================

@@ -1,269 +1,177 @@
-use crate::mole_utils::{locate_mole_script, shell_quote, strip_ansi, unit_to_bytes};
-use serde::Serialize;
-use std::path::Path;
-use std::process::{Command, Output};
+mod parser;
+mod review;
+mod scripts;
+#[cfg(test)]
+mod tests;
+mod types;
 
-const FIELD_SEP: char = '\x1f';
-const RECORD_SEP: char = '\x1e';
+use crate::mole_utils::locate_selected_mole_script;
+use parser::{parse_outcome, parse_records, preview_size};
+use std::{
+    path::Path,
+    process::{Command, Output, Stdio},
+    sync::{Mutex, OnceLock},
+};
+use tauri::Window;
+use types::{MoleExecuteOutcome, MolePurgeItem, MolePurgePreview};
 
-#[derive(Clone, Debug, Serialize)]
-pub struct MolePurgePreview {
-    pub root: String,
-    pub items: Vec<MolePurgeItem>,
-    pub total_size: u64,
-    pub raw_output: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MolePurgeItem {
-    pub path: String,
-    pub size: u64,
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct MoleExecuteOutcome {
-    pub item_count: u64,
-    pub total_size: u64,
-    pub raw_output: String,
-}
+// Mole's helper scripts maintain process-local preview/operation files. Avoid
+// overlapping invocations and bind destructive runs to a fresh native preview.
+static OPERATION: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[tauri::command]
 pub async fn mole_purge_preview(
+    window: Window,
     path: String,
     include_empty: Option<bool>,
 ) -> Result<MolePurgePreview, String> {
-    let root = path.trim().to_string();
-    if root.is_empty() {
-        return Err("Purge path is required".to_string());
-    }
-    if !Path::new(&root).is_dir() {
-        return Err(format!("Purge path is not a directory: {root}"));
-    }
-
+    let requested_root = path.trim().to_string();
+    let root = normalize_root(&requested_root)?;
     let include_empty = include_empty.unwrap_or(false);
-    let root_for_task = root.clone();
-    let items =
-        tokio::task::spawn_blocking(move || collect_purge_items(&root_for_task, include_empty))
-            .await
-            .map_err(|e| format!("Failed to join purge preview task: {e}"))??;
-
-    let total_size = items.iter().map(|item| item.size).sum();
-    Ok(MolePurgePreview {
-        root,
-        raw_output: format!("Collected {} Mole purge artifact(s)", items.len()),
-        items,
-        total_size,
+    let window_label = window.label().to_string();
+    review::invalidate(&window_label)?;
+    tokio::task::spawn_blocking(move || {
+        let _operation = OPERATION
+            .get_or_init(Default::default)
+            .try_lock()
+            .map_err(|_| "A purge operation is already running")?;
+        let script = std::fs::canonicalize(locate_selected_mole_script("purge.sh")?)
+            .map_err(|error| format!("Mole purge script is unavailable: {error}"))?;
+        let items = collect_purge_items(&script, &root, include_empty)?;
+        let (total_size, size_kind) = preview_size(&items);
+        let review_token = if items.is_empty() {
+            None
+        } else {
+            Some(review::issue(
+                &root,
+                &items,
+                &script,
+                include_empty,
+                &window_label,
+            )?)
+        };
+        Ok(MolePurgePreview {
+            root,
+            requested_root,
+            include_empty,
+            total_size,
+            size_kind,
+            scan_status: "complete".to_string(),
+            review_token,
+            raw_output: format!("Collected {} Mole purge artifact(s)", items.len()),
+            items,
+        })
     })
+    .await
+    .map_err(|error| format!("Failed to join purge preview: {error}"))?
 }
 
-fn collect_purge_items(root: &str, include_empty: bool) -> Result<Vec<MolePurgeItem>, String> {
-    let purge_script = locate_mole_script("purge.sh")?;
-    let mut command = Command::new("/bin/bash");
-    command
+fn collect_purge_items(
+    purge_script: &Path,
+    root: &str,
+    include_empty: bool,
+) -> Result<Vec<MolePurgeItem>, String> {
+    let output = Command::new("/bin/bash")
         .arg("-c")
-        .arg(build_purge_collect_script(
+        .arg(scripts::collect(
             &purge_script.to_string_lossy(),
             root,
+            include_empty,
         ))
-        .env("MOLE_SKIP_MAIN", "1")
-        .env("MOLE_TEST_MODE", "1")
-        .env("MO_NO_OPLOG", "1")
-        .env(
-            "XDG_CACHE_HOME",
-            std::env::temp_dir().join("stowmind-mole-cache"),
-        );
-    if include_empty {
-        command.env("MOLE_PURGE_INCLUDE_EMPTY", "1");
-    }
-    let output = command
+        .stdin(Stdio::null())
         .output()
-        .map_err(|e| format!("Failed to run Mole purge preview: {e}"))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-
+        .map_err(|error| format!("Failed to run Mole purge preview: {error}"))?;
     if !output.status.success() {
-        return Err(if stderr.is_empty() {
-            "Mole purge preview failed".to_string()
-        } else {
-            stderr
-        });
+        return Err(format!(
+            "Mole purge scan did not complete (exit {:?}): {}",
+            output.status.code(),
+            output_text(&output)
+        ));
     }
-
-    Ok(parse_purge_collect_records(&stdout, include_empty))
-}
-
-fn build_purge_collect_script(purge_script: &str, root: &str) -> String {
-    format!(
-        "export MOLE_SKIP_MAIN=1; \
-         export MOLE_TEST_MODE=1; \
-         export MO_NO_OPLOG=1; \
-         source {}; \
-         scan_output=$(mktemp); \
-         stats_dir=\"${{XDG_CACHE_HOME:-$HOME/.cache}}/mole\"; \
-         mkdir -p \"$stats_dir\" >/dev/null 2>&1 || true; \
-         : > \"$stats_dir/purge_scanning\" 2>/dev/null || true; \
-         scan_purge_targets {} \"$scan_output\"; \
-         while IFS= read -r item_path; do \
-           [[ -n \"$item_path\" && -d \"$item_path\" ]] || continue; \
-           size_kb=$(du -sk \"$item_path\" 2>/dev/null | awk '{{print $1}}'); \
-           [[ \"$size_kb\" =~ ^[0-9]+$ ]] || size_kb=0; \
-           printf '%s\\x1f%s\\x1e' \"$item_path\" \"$((size_kb * 1024))\"; \
-         done < \"$scan_output\"; \
-         rm -f \"$scan_output\" \"$stats_dir/purge_scanning\" 2>/dev/null || true",
-        shell_quote(purge_script),
-        shell_quote(root)
-    )
-}
-
-fn parse_purge_collect_records(raw: &str, include_empty: bool) -> Vec<MolePurgeItem> {
-    raw.split(RECORD_SEP)
-        .filter_map(|record| {
-            let record = record.trim_end_matches('\n');
-            if record.is_empty() {
-                return None;
-            }
-
-            let mut parts = record.split(FIELD_SEP);
-            let path = parts.next()?.trim().to_string();
-            let size = parts.next()?.trim().parse::<u64>().ok()?;
-            if path.is_empty() || (!include_empty && size == 0) {
-                return None;
-            }
-
-            Some(MolePurgeItem { path, size })
-        })
-        .collect()
+    let items = parse_records(&String::from_utf8_lossy(&output.stdout), include_empty)?;
+    for item in &items {
+        let path = std::fs::canonicalize(&item.path)
+            .map_err(|error| format!("Purge candidate became unavailable: {error}"))?;
+        if path == Path::new(root) || !path.starts_with(root) {
+            return Err("Mole purge candidate is outside the scanned root".to_string());
+        }
+    }
+    Ok(items)
 }
 
 #[tauri::command]
 pub async fn mole_purge_execute(
+    window: Window,
     path: String,
     include_empty: Option<bool>,
+    review_token: String,
+    confirmed: bool,
 ) -> Result<MoleExecuteOutcome, String> {
-    let root = path.trim().to_string();
-    if root.is_empty() {
-        return Err("Purge path is required".to_string());
+    if !confirmed {
+        return Err("Purge requires explicit confirmation".to_string());
     }
-    if !Path::new(&root).is_dir() {
-        return Err(format!("Purge path is not a directory: {root}"));
-    }
-
+    let root = normalize_root(&path)?;
     let include_empty = include_empty.unwrap_or(false);
-    let root_for_task = root.clone();
-    let output = tokio::task::spawn_blocking(move || -> Result<Output, String> {
-        let purge_script = locate_mole_script("purge.sh")?;
-        let script = format!(
-            "export MOLE_SKIP_MAIN=1; \
-             source {}; \
-             PURGE_SEARCH_PATHS=({}); \
-             export MOLE_PURGE_INCLUDE_EMPTY={}; \
-             unset MOLE_DRY_RUN; \
-             start_purge; \
-             perform_purge",
-            shell_quote(&purge_script.to_string_lossy()),
-            shell_quote(&root_for_task),
-            if include_empty { "1" } else { "0" }
-        );
-        Command::new("/bin/bash")
+    let reviewed = review::consume(&review_token, &root, include_empty, window.label())?;
+    tokio::task::spawn_blocking(move || {
+        let _operation = OPERATION
+            .get_or_init(Default::default)
+            .try_lock()
+            .map_err(|_| "A purge operation is already running")?;
+        let purge_script = std::fs::canonicalize(locate_selected_mole_script("purge.sh")?)
+            .map_err(|error| format!("Mole purge script is unavailable: {error}"))?;
+        if purge_script != reviewed.script {
+            return Err("Mole runtime changed since preview; scan again".to_string());
+        }
+        let mut command = Command::new("/bin/bash");
+        command
             .arg("-c")
-            .arg(script)
-            .env("MOLE_SKIP_MAIN", "1")
-            .env(
-                "MOLE_PURGE_INCLUDE_EMPTY",
-                if include_empty { "1" } else { "0" },
-            )
+            .arg(scripts::execute(
+                &purge_script.to_string_lossy(),
+                &root,
+                include_empty,
+            ))
+            .arg("stowmind-purge-execute")
+            .arg(&reviewed.root_identity);
+        for (path, identity) in &reviewed.items {
+            command.arg(path).arg(identity);
+        }
+        let output = command
+            .env_remove("MOLE_TEST_MODE")
+            .env_remove("MOLE_DRY_RUN")
+            .env_remove("MO_NO_OPLOG")
+            .stdin(Stdio::null())
             .output()
-            .map_err(|e| e.to_string())
+            .map_err(|error| format!("Failed to run Mole purge: {error}"))?;
+        // Incomplete runs may still report removed items. Preserve that
+        // evidence instead of throwing it away or substituting preview totals.
+        Ok(parse_outcome(
+            &output_text(&output),
+            output.status.success(),
+        ))
     })
     .await
-    .map_err(|e| format!("Failed to join purge execute task: {e}"))?
-    .map_err(|e| format!("Failed to run Mole purge execute: {e}"))?;
+    .map_err(|error| format!("Failed to join purge execution: {error}"))?
+}
 
-    let raw_output = output_text(&output);
-    if !output.status.success() {
-        return Err(if raw_output.trim().is_empty() {
-            "Mole purge execute failed".to_string()
-        } else {
-            raw_output
-        });
+fn normalize_root(path: &str) -> Result<String, String> {
+    if path.trim().is_empty() {
+        return Err("Purge path is required".to_string());
     }
-
-    let (item_count, total_size) = parse_purge_execute_summary(&raw_output);
-    Ok(MoleExecuteOutcome {
-        item_count,
-        total_size,
-        raw_output: strip_ansi(&raw_output),
-    })
+    let root = std::fs::canonicalize(path.trim())
+        .map_err(|error| format!("Purge path is unavailable: {error}"))?;
+    if !root.is_dir() {
+        return Err("Purge path is not a directory".to_string());
+    }
+    Ok(root.to_string_lossy().to_string())
 }
 
 fn output_text(output: &Output) -> String {
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr);
     if stderr.trim().is_empty() {
         stdout
     } else {
         format!("{stdout}\n{stderr}")
-    }
-}
-
-fn parse_purge_execute_summary(raw: &str) -> (u64, u64) {
-    let clean = strip_ansi(raw);
-    let re = match regex::Regex::new(
-        r"Space freed:\s*([0-9]+(?:\.[0-9]+)?)\s*([KMGT]?B)(?:\s*\|\s*Items:\s*(\d+))?",
-    ) {
-        Ok(re) => re,
-        Err(_) => return (0, 0),
-    };
-    let Some(caps) = re.captures(&clean) else {
-        return (0, 0);
-    };
-    let amount = caps
-        .get(1)
-        .and_then(|m| m.as_str().parse::<f64>().ok())
-        .unwrap_or(0.0);
-    let unit = caps.get(2).map(|m| m.as_str()).unwrap_or("B");
-    let item_count = caps
-        .get(3)
-        .and_then(|m| m.as_str().parse::<u64>().ok())
-        .unwrap_or(0);
-    (item_count, unit_to_bytes(amount, unit))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{parse_purge_collect_records, parse_purge_execute_summary};
-
-    #[test]
-    fn parses_purge_collect_records() {
-        let raw = "/tmp/project/node_modules\x1f4096\x1e/tmp/project/target\x1f8192\x1e";
-
-        let items = parse_purge_collect_records(raw, false);
-
-        assert_eq!(items.len(), 2);
-        assert_eq!(items[0].path, "/tmp/project/node_modules");
-        assert_eq!(items[0].size, 4096);
-        assert_eq!(items[1].path, "/tmp/project/target");
-    }
-
-    #[test]
-    fn includes_zero_size_purge_records_when_requested() {
-        let raw = "/tmp/project/empty0";
-
-        let items = parse_purge_collect_records(raw, true);
-
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].size, 0);
-    }
-
-    #[test]
-    fn parses_purge_execute_summary() {
-        let (count, size) = parse_purge_execute_summary(
-            "Purge complete\nSpace freed: 42.50MB | Items: 3 | Free: 500Gi\n",
-        );
-
-        assert_eq!(count, 3);
-        assert!(size > 44_000_000);
-        assert!(size < 45_000_000);
     }
 }

@@ -1,4 +1,5 @@
 import { useI18n } from '@/i18n'
+import { cleanupFreedSize } from '@/lib/stowmind-supplements/cleanupActivity'
 import { cn, formatDate, formatFileSize } from '@/lib/utils'
 import { useAppStore, type HistoryRecord, type HistoryRecordType } from '@/stores/app'
 import {
@@ -40,6 +41,7 @@ interface TypeStat {
   items: number
   skipped: number
   observed: number | null
+  processed?: number
   latest?: string
 }
 
@@ -60,7 +62,7 @@ function isExecuted(record: HistoryRecord) {
 }
 
 function recordSize(record: HistoryRecord) {
-  return record.cleanupSummary?.totalSize ?? 0
+  return cleanupFreedSize(record)
 }
 
 function recordItemCount(record: HistoryRecord) {
@@ -84,6 +86,7 @@ export function StatisticsPage() {
       const current = map.get(type) ?? { count: 0, freed: 0, items: 0, skipped: 0, observed: null }
       current.count += 1
       current.freed += recordSize(record)
+      if (record.cleanupSummary?.sizeKind === 'processed') current.processed = (current.processed ?? 0) + (record.cleanupSummary.totalSize ?? 0)
       current.items += recordItemCount(record)
       current.skipped += record.cleanupSummary?.skippedCount ?? 0
       const delta = record.cleanupSummary?.systemCache?.observedDeltaBytes
@@ -102,7 +105,7 @@ export function StatisticsPage() {
     return map
   }, [executedHistory, statistics])
 
-  const totalFreed = Array.from(byType.values()).reduce((sum, v) => sum + v.freed, 0)
+  const totalFreed = Math.max(statistics.reportedFreedBytes ?? 0, Array.from(byType.values()).reduce((sum, v) => sum + v.freed, 0))
   const totalOps = executedHistory.length
   const totalFilesOrganized = statistics.totalFilesOrganized
 
@@ -341,6 +344,7 @@ function TypeBreakdownTile({
               {t('stats.typeFreed', { size: formatFileSize(stat.freed) })}
             </p>
           )}
+          {(stat.processed ?? 0) > 0 && <p className="mt-2 text-[10px] text-muted-foreground">{t('history.spaceProcessed', { size: formatFileSize(stat.processed!) })}</p>}
           {meta.type === 'system-cache' && (
             <p className="mt-2 text-[10px] text-muted-foreground">
               {stat.observed === null ? t('stats.cacheUnknown') : t('stats.cacheObserved', { size: formatFileSize(stat.observed) })}

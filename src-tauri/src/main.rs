@@ -10,6 +10,7 @@ mod hud;
 mod hud_position;
 mod ios;
 mod macos_dock;
+mod maintenance_process;
 mod mole_analyze;
 mod mole_capabilities;
 mod mole_clean;
@@ -74,6 +75,7 @@ fn main() {
         .manage(pty::PtyManager::new())
         .manage(mole_analyze::MoleAnalyzeManager::default())
         .manage(mole_clean_pty::MoleCleanPtyManager::default())
+        .manage(maintenance_process::MaintenanceManager::default())
         .on_system_tray_event(handle_tray_event)
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -98,6 +100,15 @@ fn main() {
             Ok(())
         })
         .on_window_event(|event| {
+            if matches!(
+                event.event(),
+                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+            ) {
+                event
+                    .window()
+                    .state::<maintenance_process::MaintenanceManager>()
+                    .cancel_window(event.window().label());
+            }
             if event.window().label() != HUD_WINDOW_LABEL
                 && event.window().label() != HUD_POPOVER_LABEL
             {
@@ -183,6 +194,7 @@ fn main() {
             mole_uninstall::mole_uninstall_list_json,
             mole_uninstall::mole_uninstall_preview,
             mole_uninstall::mole_uninstall_execute,
+            maintenance_process::maintenance_cancel,
             hud::hud_set_tray_labels,
             hud::hud_apply_tray_config,
             hud::hud_set_shortcut,
