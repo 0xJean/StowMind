@@ -72,6 +72,7 @@ export function CleanPage() {
     setShowPendingChoice(false)
     setPreview(null)
     setCompletedClean(completion)
+    return completion
   }
 
   const cancelActiveRun = async () => {
@@ -212,7 +213,7 @@ export function CleanPage() {
       } else {
         await clearPendingCleanScan()
       }
-      finishCleanRun({
+      const completion = finishCleanRun({
         status: 'completed',
         previewToArchive,
         rawOutput: result.raw_output,
@@ -220,7 +221,15 @@ export function CleanPage() {
         outputLines: liveOutput,
         startedAt,
       })
-      toast.success(t('clean.recorded'))
+      if (completion.summary.operationLogStatus === 'ambiguous') {
+        toast.warning(t('clean.result.logAmbiguous'))
+      } else if (completion.status === 'partial' || completion.status === 'failed') {
+        toast.warning(t('clean.result.recordedPartial', { count: completion.summary.failedCount }))
+      } else if (completion.summary.itemCount === null && completion.summary.totalSize === null && completion.summary.processedSize === null) {
+        toast.info(t('clean.summary.executionUnknown'))
+      } else {
+        toast.success(t('clean.recorded'))
+      }
       return result
     } catch (err) {
       const message = String(err)
@@ -248,6 +257,18 @@ export function CleanPage() {
       const hintLines = hasDiskAccessFailure(message) ? [t('clean.diskAccessFailureHint')] : []
       const displayedErrors = errorLines.length ? errorLines : [message]
       setScanOutput((current) => [...current, ...displayedErrors, ...hintLines].slice(-160))
+      const failedParts = splitCleanOperationLog(message)
+      finishCleanRun({
+        status: 'failed',
+        previewToArchive,
+        rawOutput: failedParts.rawOutput,
+        operationLog: failedParts.operationLog,
+        outputLines: [...liveOutput, ...displayedErrors, ...hintLines],
+        startedAt,
+      })
+      // An interrupted execution invalidates the scanned paths even when its
+      // final report is missing. Do not offer a cached pre-clean plan again.
+      await clearPendingCleanScan().catch((error) => console.warn('Could not clear completed cleanup scan', error))
       toast.error(t('clean.cleanFail', { error: hintLines[0] ?? errorLines[0] ?? message }))
       return null
     } finally {
@@ -348,6 +369,7 @@ export function CleanPage() {
     return (
       <>
         <CleanCompletedPanel
+          summary={completedClean.summary}
           preview={completedClean.preview}
           rawOutput={completedClean.rawOutput}
           outputLines={completedClean.outputLines}
@@ -376,9 +398,9 @@ export function CleanPage() {
   if (fullscreenScan) {
     return (
       <div className="stow-clean-fullscreen">
-        <CleanScopeControls externalPath={externalPath} onExternalPathChange={changeExternalPath} disabled={loading} />
         <CleanScanCard
           fullScreen
+          scopeControls={<CleanScopeControls externalPath={externalPath} onExternalPathChange={changeExternalPath} disabled={loading} />}
           preview={preview}
           loading={loading}
           scanIdle={scanIdle}
@@ -408,8 +430,8 @@ export function CleanPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-8">
-        <CleanScopeControls externalPath={externalPath} onExternalPathChange={changeExternalPath} disabled={loading} />
         <CleanScanCard
+          scopeControls={<CleanScopeControls externalPath={externalPath} onExternalPathChange={changeExternalPath} disabled={loading} />}
           preview={preview}
           loading={loading}
           scanIdle={scanIdle}

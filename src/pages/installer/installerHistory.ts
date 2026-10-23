@@ -2,27 +2,38 @@ import { createCleanupHistoryRecord } from '@/lib/historyRecords'
 import { useAppStore } from '@/stores/app'
 import type { MoleInstallerExecuteOutcome } from './types'
 
-/** Only a complete native execution report may contribute released bytes. */
+function knownMetric(value: number | null): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
+}
+
+/** Native partial reports include only installers confirmed absent after deletion. */
 export function recordInstallerOutcome(outcome: MoleInstallerExecuteOutcome, title: string, label: string, note: string) {
   const state = useAppStore.getState()
   const timestamp = new Date().toISOString()
-  const confirmed = outcome.status === 'success' && outcome.item_count !== null && outcome.total_size !== null
-  const hasExecutionEvidence = (outcome.item_count ?? 0) > 0
-  state.addHistory(createCleanupHistoryRecord({
+  const reportedCount = knownMetric(outcome.item_count)
+  const itemCount = outcome.status === 'unknown' || (outcome.status === 'failed' && reportedCount !== 0)
+    ? undefined : reportedCount
+  const measuredSize = knownMetric(outcome.total_size)
+  const totalSize = itemCount === undefined || (itemCount === 0 && measuredSize !== 0) ? undefined : measuredSize
+  const failedCount = knownMetric(outcome.failed_count)
+  const hasExecutionEvidence = (outcome.status === 'success' || outcome.status === 'partial') && (itemCount ?? 0) > 0
+  const completeReport = outcome.status === 'success' && itemCount !== undefined && totalSize !== undefined
+  const record = createCleanupHistoryRecord({
     type: 'installer', target: title, label,
-    itemCount: outcome.item_count, totalSize: outcome.total_size,
+    itemCount, totalSize,
     action: 'execute', executed: hasExecutionEvidence,
-    outcome: outcome.status === 'success' && outcome.item_count === 0 ? 'skipped' : outcome.status,
-    sizeKind: confirmed ? 'reported_freed' : 'unknown',
-    errors: confirmed ? undefined : [note],
-    skippedCount: outcome.failed_count ?? undefined, timestamp,
-  }))
-  if (!confirmed || (outcome.item_count ?? 0) === 0) return
+    outcome: outcome.status === 'success' ? itemCount === 0 ? 'skipped' : itemCount === undefined ? 'unknown' : 'success' : outcome.status,
+    // Mole sums the pre-deletion stat sizes, rounded up to KiB per file.
+    // Those are processed file bytes, including in a fully successful run.
+    sizeKind: totalSize !== undefined ? 'processed' : 'unknown',
+    errors: completeReport || !note ? undefined : [note], timestamp,
+  })
+  if (record.cleanupSummary) record.cleanupSummary.failedCount = failedCount
+  state.addHistory(record)
+  if (!hasExecutionEvidence) return
   const statistics = state.statistics
   state.updateStatistics({
-    cleanItemsRemoved: (statistics.cleanItemsRemoved ?? 0) + outcome.item_count!,
-    cleanSizeFreed: (statistics.cleanSizeFreed ?? 0) + outcome.total_size!,
-    reportedFreedBytes: (statistics.reportedFreedBytes ?? 0) + outcome.total_size!,
+    cleanItemsRemoved: (statistics.cleanItemsRemoved ?? 0) + itemCount!,
     cleanOperationCount: (statistics.cleanOperationCount ?? 0) + 1,
     lastCleaned: timestamp,
   })

@@ -30,9 +30,10 @@ export interface MoleCleanExecutionResult {
   operation_log: string
 }
 
-export type CleanCompletionStatus = 'completed' | 'cancelled'
+export type CleanCompletionStatus = 'completed' | 'partial' | 'failed' | 'cancelled'
 
 export interface CleanCompletionResult {
+  summary: CleanExecutionSummary
   preview: MoleCleanPreview
   rawOutput: string
   outputLines: string[]
@@ -52,3 +53,4 @@ export function sortCleanSectionsBySize(sections: MoleCleanSection[]) {
 function sectionSize(section: MoleCleanSection) {
   return section.items.reduce((sum, item) => sum + getCleanItemSize(item), 0)
 }
+import type { CleanExecutionSummary } from './cleanExecutionResult'

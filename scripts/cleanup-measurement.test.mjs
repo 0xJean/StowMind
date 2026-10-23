@@ -54,3 +54,68 @@ test('history labels distinguish previews, estimates, processed files and report
   assert.equal(labels.cleanupHistorySizeLabel(record('reported_freed'), t), '释放 100 B')
   assert.equal(labels.cleanupHistorySizeLabel(record('estimated', { action: 'preview', executed: false }), t), '预计 100 B')
 })
+
+test('processed amounts preserve lower bounds and completeness without entering freed totals', () => {
+  for (const [kind, pattern] of [['at_least', /至少 100 B/], ['unspecified', /完整性未提供/]]) {
+    const value = record('processed')
+    value.cleanupSummary.processedSize = 100
+    value.cleanupSummary.processedSizeKind = kind
+    assert.match(labels.cleanupHistorySizeLabel(value, t), pattern)
+    assert.equal(activity.cleanupFreedSize(value), 0)
+    assert.equal(activity.cleanupProcessedSize(value), 100)
+  }
+  const partial = record('unknown', { totalSize: undefined })
+  partial.cleanupSummary.processedSizeKind = 'partial'
+  assert.match(labels.cleanupHistorySizeLabel(partial, t), /仅部分测量/)
+  assert.equal(activity.cleanupProcessedSize(partial), 0)
+})
+
+test('one execution can retain separate physical freed and processed metrics exactly once', () => {
+  const value = record('reported_freed')
+  value.cleanupSummary.processedSize = 250
+  value.cleanupSummary.processedSizeKind = 'at_least'
+  assert.equal(activity.cleanupFreedSize(value), 100)
+  assert.equal(activity.cleanupProcessedSize(value), 250)
+  assert.match(labels.cleanupHistoryProcessedLabel(value, t), /至少 250 B/)
+  value.cleanupSummary.sizeKind = 'processed'
+  assert.equal(labels.cleanupHistoryProcessedLabel(value, t), null)
+  assert.equal(activity.cleanupProcessedSize(value), 250)
+  for (const patch of [{ executed: false }, { undone: true }]) {
+    assert.equal(activity.cleanupProcessedSize({ ...value, ...patch }), 0)
+  }
+})
+
+test('history keeps Mole item totals distinct from confirmed operation and failure records', () => {
+  const value = record('processed', { itemCount: 511 })
+  Object.assign(value.cleanupSummary, { itemCountSource: 'mole', operationCount: 946, failedCount: 4, operationLogStatus: 'available' })
+  assert.equal(labels.cleanupHistoryCountLabel(value, t), '共 511 项')
+  assert.deepEqual([...labels.cleanupHistoryOperationLabels(value, t)], ['946 条操作记录', '4 条失败记录'])
+  value.cleanupSummary.itemCountSource = 'operation_log'
+  assert.equal(labels.cleanupHistoryCountLabel(value, t), '511 条操作记录')
+  assert.deepEqual([...labels.cleanupHistoryOperationLabels(value, t)], ['4 条失败记录'])
+  for (const status of ['ambiguous', 'unavailable']) {
+    value.cleanupSummary.operationLogStatus = status
+    assert.deepEqual([...labels.cleanupHistoryOperationLabels(value, t)], [])
+  }
+})
+
+test('partial-only history has one measurement explanation and no duplicate secondary label', () => {
+  const value = record('unknown', { totalSize: undefined })
+  value.cleanupSummary.processedSizeKind = 'partial'
+  assert.match(labels.cleanupHistorySizeLabel(value, t), /仅部分测量/)
+  assert.equal(labels.cleanupHistoryProcessedLabel(value, t), null)
+  Object.assign(value.cleanupSummary, { sizeKind: 'reported_freed', totalSize: 20 })
+  assert.equal(labels.cleanupHistorySizeLabel(value, t), '释放 20 B')
+  assert.match(labels.cleanupHistoryProcessedLabel(value, t), /仅部分测量/)
+})
+
+test('HUD optimization activity counts only executed, retained work', () => {
+  const entries = [
+    record('unknown', { type: 'optimize', itemCount: 2 }),
+    record('unknown', { type: 'optimize', itemCount: null, executed: false, outcome: 'unknown' }),
+    { ...record('unknown', { type: 'optimize', itemCount: 2 }), undone: true },
+    record('unknown', { type: 'optimize', itemCount: 0, executed: false, outcome: 'failed' }),
+    record('unknown', { type: 'optimize', action: 'preview', executed: false }),
+  ]
+  assert.equal(activity.buildCleanupActivitySummary(entries, {}).optimizedCount, 1)
+})

@@ -17,17 +17,17 @@ export function recordUninstallExecution(result: MoleUninstallOperationOutput, i
   const bytes = typeof result.total_size === 'number' && Number.isSafeInteger(result.total_size) && result.total_size >= 0 ? result.total_size : null
   const executed = count !== null && count > 0
   const outcome = interruption ? executed ? 'partial' : 'unknown' : count === null ? 'unknown' : count === 0 ? 'skipped' : bytes === null ? 'partial' : 'success'
-  const freed = executed && result.permanent && bytes !== null
   state.addHistory(createCleanupHistoryRecord({
     type: 'uninstall', target: item.name, label: t('history.type.uninstall'),
-    itemCount: count, totalSize: bytes, sizeKind: count === null || bytes === null ? 'unknown' : result.permanent ? 'reported_freed' : 'processed',
+    // Mole's "freed" text is the measured app/related-file counter minus
+    // retained files. Permanent removal does not turn it into a disk delta.
+    itemCount: count, totalSize: bytes, sizeKind: count === null || bytes === null ? 'unknown' : 'processed',
     action: 'execute', executed, outcome, timestamp,
     errors: interruption ? [t(interruption === 'cancelled' ? 'maintenance.cancelled' : interruption === 'timeout' ? 'maintenance.timeout' : 'maintenance.failed')] : outcome === 'unknown' || outcome === 'partial' ? [t('apps.summaryUnknown')] : undefined,
   }))
   if (!executed) return
   state.updateStatistics({
     cleanItemsRemoved: (state.statistics.cleanItemsRemoved ?? 0) + (count ?? 0),
-    reportedFreedBytes: (state.statistics.reportedFreedBytes ?? 0) + (freed ? bytes! : 0),
     cleanOperationCount: (state.statistics.cleanOperationCount ?? 0) + 1,
     lastCleaned: timestamp,
   })

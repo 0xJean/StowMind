@@ -3,6 +3,7 @@
 
 mod adapter_roots;
 mod adapters;
+mod execution_measurement;
 mod git;
 mod measurement;
 mod scanner;
@@ -10,6 +11,7 @@ mod types;
 mod worktree;
 
 use crate::stowmind_supplements::safe_trash;
+use execution_measurement::{measured_action, processed_measurement};
 use scanner::{epoch_now, home_dir, inspect_item, refresh_process_cache, scan};
 use std::path::PathBuf;
 use types::{
@@ -84,12 +86,17 @@ fn execute(request: AgentCleanupExecuteRequest) -> Result<AgentCleanupResult, St
         if git::is_git_item_id(&item_id) {
             match git::execute_item(&item_id, &home, &policy, now) {
                 Ok((path, size_bytes, message)) => {
-                    actions.push(AgentCleanupAction {
+                    actions.push(measured_action(
                         path,
                         size_bytes,
-                        success: true,
+                        if size_bytes.is_some() {
+                            "complete"
+                        } else {
+                            "unavailable"
+                        },
+                        true,
                         message,
-                    });
+                    ));
                 }
                 Err(error) => actions.push(skipped(item_id, &error)),
             }
@@ -115,28 +122,36 @@ fn execute(request: AgentCleanupExecuteRequest) -> Result<AgentCleanupResult, St
             continue;
         };
         if !item.eligible {
-            actions.push(skipped_with_size(item.path, item.size, item.reason));
+            actions.push(measured_action(
+                item.path,
+                Some(item.size),
+                &item.size_status,
+                false,
+                item.reason,
+            ));
             continue;
         }
         match safe_trash::move_path_to_trash(&path) {
             Ok(_) => {
-                actions.push(AgentCleanupAction {
-                    path: item.path,
-                    size_bytes: Some(item.size),
-                    success: true,
-                    message: "Moved to system trash".to_string(),
-                });
+                actions.push(measured_action(
+                    item.path,
+                    Some(item.size),
+                    &item.size_status,
+                    true,
+                    "Moved to system trash".to_string(),
+                ));
             }
-            Err(error) => actions.push(skipped_with_size(item.path, item.size, error)),
+            Err(error) => actions.push(measured_action(
+                item.path,
+                Some(item.size),
+                &item.size_status,
+                false,
+                error,
+            )),
         }
     }
     let removed_count = actions.iter().filter(|action| action.success).count() as u64;
-    let processed_bytes = actions
-        .iter()
-        .filter(|action| action.success)
-        .try_fold(0_u64, |sum, action| {
-            action.size_bytes.map(|size| sum.saturating_add(size))
-        });
+    let (processed_bytes, processed_size_status) = processed_measurement(&actions);
     let skipped_count = actions.len() as u64 - removed_count;
     let errors = actions
         .iter()
@@ -147,6 +162,7 @@ fn execute(request: AgentCleanupExecuteRequest) -> Result<AgentCleanupResult, St
         source: "stowmind_supplement".to_string(),
         removed_count,
         processed_bytes,
+        processed_size_status,
         freed_bytes: None,
         skipped_count,
         errors,
@@ -156,16 +172,7 @@ fn execute(request: AgentCleanupExecuteRequest) -> Result<AgentCleanupResult, St
 }
 
 fn skipped(path: String, message: &str) -> AgentCleanupAction {
-    skipped_with_size(path, 0, message.to_string())
-}
-
-fn skipped_with_size(path: String, size_bytes: u64, message: String) -> AgentCleanupAction {
-    AgentCleanupAction {
-        path,
-        size_bytes: Some(size_bytes),
-        success: false,
-        message,
-    }
+    measured_action(path, None, "unavailable", false, message.to_string())
 }
 
 #[cfg(test)]

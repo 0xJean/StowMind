@@ -118,8 +118,17 @@ pub struct AgentCleanupExecuteRequest {
 pub struct AgentCleanupAction {
     pub path: String,
     pub size_bytes: Option<u64>,
+    pub size_status: AgentCleanupSizeStatus,
     pub success: bool,
     pub message: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentCleanupSizeStatus {
+    Complete,
+    Partial,
+    Unavailable,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -129,6 +138,9 @@ pub struct AgentCleanupResult {
     /// Logical bytes processed, including recoverable moves to Trash. This is
     /// not a measurement of physical disk space released.
     pub processed_bytes: Option<u64>,
+    /// Partial bytes are a known lower bound, including when another
+    /// successfully processed item could not be measured at all.
+    pub processed_size_status: AgentCleanupSizeStatus,
     pub freed_bytes: Option<u64>,
     pub skipped_count: u64,
     pub errors: Vec<String>,

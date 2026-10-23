@@ -2,7 +2,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useI18n } from '@/i18n'
 import { createCleanupHistoryRecord } from '@/lib/historyRecords'
-import { formatFileSize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { invoke } from '@tauri-apps/api/tauri'
 import {
@@ -21,6 +20,8 @@ import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { SystemCacheCard } from './system-cache/SystemCacheCard'
 import { useSystemCache } from './system-cache/useSystemCache'
+import { agentItemSizeLabel, agentSizeLabel, summarizeAgentSizes } from './agent-cleanup/sizeSummary'
+import { agentExecutionSizeLabel, summarizeAgentExecutionSize } from './agent-cleanup/executionSize'
 import {
   type AgentCleanupCategory,
   type AgentCleanupExecuteResult,
@@ -38,18 +39,6 @@ function formatModifiedAt(value: string | number | null | undefined) {
   if (!value) return '—'
   const date = new Date(typeof value === 'number' ? value * 1000 : value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
-}
-
-function processedBytes(result: AgentCleanupExecuteResult) {
-  // Older backends named processed sizes freed_bytes, including Trash moves.
-  const value = 'processed_bytes' in result ? result.processed_bytes : result.freed_bytes
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
-}
-
-function itemSizeLabel(item: AgentCleanupItem, t: (key: any, vars?: any) => string) {
-  if (item.size_status === 'unavailable' || (item.size_status === 'partial' && item.size === 0)) return t('clean.summary.unknown')
-  const size = formatFileSize(item.size)
-  return item.size_status === 'partial' ? t('clean.summary.atLeast', { size }) : size
 }
 
 export function AgentCleanupPage() {
@@ -82,8 +71,8 @@ export function AgentCleanupPage() {
     () => selectableItems.filter((item) => selectedIds.has(item.id)),
     [selectableItems, selectedIds]
   )
-  const selectedBytes = useMemo(
-    () => selectedItems.reduce((total, item) => total + Math.max(0, item.size), 0),
+  const selectedSize = useMemo(
+    () => summarizeAgentSizes(selectedItems),
     [selectedItems]
   )
   const groupedItems = useMemo(() => {
@@ -176,7 +165,7 @@ export function AgentCleanupPage() {
     if (selectedItems.length === 0) return
     const confirmed = window.confirm(t('agentCleanup.confirm', {
       count: selectedItems.length,
-      size: formatFileSize(selectedBytes),
+      size: agentSizeLabel(selectedSize, t),
     }))
     if (!confirmed) return
     const includesGitPrune = selectedItems.some((item) => item.category === 'git_unreachable_object')
@@ -205,13 +194,16 @@ export function AgentCleanupPage() {
       }, {})
       const hasGitPrune = includesGitPrune
       const cleanupErrors = next.errors ?? []
+      const processedSize = summarizeAgentExecutionSize(next)
       addHistory(createCleanupHistoryRecord({
         type: 'agent-cleanup',
         target: t('agentCleanup.title'),
         label: t('history.type.agent-cleanup'),
         itemCount: next.removed_count,
-        totalSize: processedBytes(next),
-        sizeKind: processedBytes(next) === null ? 'unknown' : 'processed',
+        totalSize: processedSize.bytes,
+        processedSize: processedSize.bytes,
+        processedSizeKind: processedSize.kind,
+        sizeKind: processedSize.bytes === null ? 'unknown' : 'processed',
         action: 'execute',
         executed: next.removed_count > 0,
         outcome: next.removed_count === 0 ? 'failed' : cleanupErrors.length > 0 ? 'partial' : 'success',
@@ -225,7 +217,7 @@ export function AgentCleanupPage() {
       const latestStatistics = useAppStore.getState().statistics
       updateStatistics({
         agentCleanupItemsRemoved: (latestStatistics.agentCleanupItemsRemoved ?? 0) + next.removed_count,
-        agentCleanupProcessedBytes: (latestStatistics.agentCleanupProcessedBytes ?? 0) + (processedBytes(next) ?? 0),
+        agentCleanupProcessedBytes: (latestStatistics.agentCleanupProcessedBytes ?? 0) + (processedSize.bytes ?? 0),
         agentCleanupOperationCount: (latestStatistics.agentCleanupOperationCount ?? 0) + (next.removed_count > 0 ? 1 : 0),
         agentCleanupSkipped: (latestStatistics.agentCleanupSkipped ?? 0) + (next.skipped_count ?? 0),
         agentCleanupErrors: (latestStatistics.agentCleanupErrors ?? 0) + cleanupErrors.length,
@@ -240,7 +232,7 @@ export function AgentCleanupPage() {
       const notify = next.removed_count === 0 ? toast.error : cleanupErrors.length > 0 ? toast.info : toast.success
       notify(t('agentCleanup.cleanSuccess', {
         count: next.removed_count,
-        size: processedBytes(next) === null ? t('clean.summary.unknown') : formatFileSize(processedBytes(next)!),
+        size: agentExecutionSizeLabel(processedSize, t),
       }))
     } catch (cause) {
       const message = String(cause)
@@ -309,7 +301,7 @@ export function AgentCleanupPage() {
           {result.removed_count > 0 && !result.errors?.length ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-iqon-green" /> : <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-iqon-yellow" />}
           <div>
             <p className="font-bold text-iqon-green">{t('agentCleanup.resultTitle')}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{t('agentCleanup.resultSummary', { count: result.removed_count, size: processedBytes(result) === null ? t('clean.summary.unknown') : formatFileSize(processedBytes(result)!) })}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('agentCleanup.resultSummary', { count: result.removed_count, size: agentExecutionSizeLabel(summarizeAgentExecutionSize(result), t) })}</p>
             {((result.skipped_count ?? 0) > 0 || (result.errors?.length ?? 0) > 0) && (
               <p className="mt-1 text-xs text-iqon-yellow">
                 {t('agentCleanup.resultSkipped', { skipped: result.skipped_count ?? 0, errors: result.errors?.length ?? 0 })}
@@ -342,13 +334,13 @@ export function AgentCleanupPage() {
                   <button type="button" onClick={() => setExpanded((current) => { const next = new Set(current); if (next.has(groupId)) next.delete(groupId); else next.add(groupId); return next })} className="rounded p-1 hover:bg-surface-hover" aria-label={isOpen ? t('agentCleanup.collapse') : t('agentCleanup.expand')}>
                     {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
-                  <div className="min-w-0 flex-1"><p className="text-sm font-bold">{agentDisplayName} · {categoryLabel(category as AgentCleanupCategory, t)}</p><p className="text-xs text-muted-foreground">{t('agentCleanup.groupSummary', { count: items.length, selected: selectedCount, size: items.some((item) => item.size_status && item.size_status !== 'complete') ? t('clean.summary.unknown') : formatFileSize(items.reduce((total, item) => total + item.size, 0)) })}</p></div>
+                  <div className="min-w-0 flex-1"><p className="text-sm font-bold">{agentDisplayName} · {categoryLabel(category as AgentCleanupCategory, t)}</p><p className="text-xs text-muted-foreground">{t('agentCleanup.groupSummary', { count: items.length, selected: selectedCount, size: agentSizeLabel(summarizeAgentSizes(items), t) })}</p></div>
                   <Button variant="ghost" size="sm" onClick={() => toggleGroup(items)} disabled={selectable.length === 0}>{t('agentCleanup.toggleGroup')}</Button>
                 </div>
                 {isOpen && <div className="border-t border-border/60 px-3 pb-3">{items.map((item) => (
                   <label key={item.id} className="flex items-start gap-3 border-b border-border/40 py-3 last:border-b-0">
                     <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleItem(item.id)} disabled={item.protected || executing} className="mt-1 h-4 w-4 accent-iqon-green" />
-                    <div className="min-w-0 flex-1"><p className="break-all text-xs font-semibold">{item.path}</p><p className="mt-1 text-[11px] text-muted-foreground">{item.protected ? item.reason || t('agentCleanup.protected') : item.reason || t('agentCleanup.defaultReason')} · {itemSizeLabel(item, t)} · {formatModifiedAt(item.modified_at)}</p></div>
+                    <div className="min-w-0 flex-1"><p className="break-all text-xs font-semibold">{item.path}</p><p className="mt-1 text-[11px] text-muted-foreground">{item.protected ? item.reason || t('agentCleanup.protected') : item.reason || t('agentCleanup.defaultReason')} · {agentItemSizeLabel(item, t)} · {formatModifiedAt(item.modified_at)}</p></div>
                     {item.protected && <ShieldCheck className="h-4 w-4 shrink-0 text-iqon-green" />}
                   </label>
                 ))}</div>}
@@ -360,7 +352,7 @@ export function AgentCleanupPage() {
       </Card>
 
       <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-iqon-green/25 bg-iqon-card/95 p-4 shadow-soft backdrop-blur">
-        <div><p className="text-sm font-bold">{t('agentCleanup.selectedSummary', { count: selectedItems.length, size: formatFileSize(selectedBytes) })}</p><p className="text-xs text-muted-foreground">{t('agentCleanup.safeNotice')}</p></div>
+        <div><p className="text-sm font-bold">{t('agentCleanup.selectedSummary', { count: selectedItems.length, size: agentSizeLabel(selectedSize, t) })}</p><p className="text-xs text-muted-foreground">{t('agentCleanup.safeNotice')}</p></div>
         <Button variant="destructive" onClick={() => void execute()} disabled={selectedItems.length === 0 || executing || loading}>
           {executing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
           {t('agentCleanup.cleanSelected')}

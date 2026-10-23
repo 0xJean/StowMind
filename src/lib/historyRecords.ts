@@ -8,6 +8,8 @@ interface CleanupHistoryInput {
   label: string
   itemCount: number | null | undefined
   totalSize: number | null | undefined
+  processedSize?: number | null
+  processedSizeKind?: CleanupSummary['processedSizeKind']
   sizeKind?: CleanupSummary['sizeKind']
   action: CleanupSummary['action']
   executed?: boolean
@@ -40,6 +42,8 @@ export function createCleanupHistoryRecord(input: CleanupHistoryInput): HistoryR
     cleanupSummary: {
       itemCount: input.itemCount ?? undefined,
       totalSize: input.totalSize ?? undefined,
+      processedSize: input.processedSize ?? undefined,
+      processedSizeKind: input.processedSizeKind,
       sizeKind: input.sizeKind ?? (input.action === 'preview' ? 'estimated' : 'unknown'),
       action: input.action,
       errors: input.errors && input.errors.length > 0 ? input.errors : undefined,
