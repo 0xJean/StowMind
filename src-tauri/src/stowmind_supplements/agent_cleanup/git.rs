@@ -20,6 +20,9 @@ use std::{
 mod execution;
 #[path = "git_objects.rs"]
 mod objects;
+#[cfg(test)]
+#[path = "git_ref_tests.rs"]
+mod ref_tests;
 #[path = "git_safety.rs"]
 mod safety;
 #[cfg(test)]

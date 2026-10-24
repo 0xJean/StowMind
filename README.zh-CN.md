@@ -76,7 +76,7 @@
 
 侧栏和欢迎页都提供 **Agent 清理** 入口。它只扫描 Codex、OpenCode、Claude Code、Kiro、Devin、Cursor、Windsurf、Gemini CLI / Antigravity、Continue、GitHub Copilot CLI、Amazon Q Developer、Cline、Goose 已记录的可重建路径。
 
-流程是先预览：选择保留天数，按缓存、日志、临时文件、孤立 worktree 和 Git 元数据分组检查，再确认要清理的项目。普通文件移入系统废纸篓；Codex refs 使用 `git update-ref`，不可达 Git 对象只有在仓库干净且明确确认后才由 `git gc --prune=now` 修剪。固定白名单、运行中 Agent 保护、仓库状态复核、孤立 worktree 复核，以及会话和配置路径保护会在执行前再次校验。完整范围和排除项见 [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md)。
+流程是先预览：选择保留天数，按缓存、日志、临时文件、孤立 worktree 和 Git 元数据分组检查，再确认要清理的项目。引用扫描和预览不会写入 refs 或 reflog。普通文件移入系统废纸篓；Codex 引用删除仅针对选中的 `refs/codex/turn-diffs/*`，核对预览时的对象 ID，且不会沿符号引用修改其他分支。不可达 Git 对象只有在仓库干净且单独明确确认后，才按配置的保留截止时间过期 reflog 并修剪对象。固定白名单、运行中 Agent 保护、仓库状态复核、孤立 worktree 复核，以及会话和配置路径保护会在执行前再次校验。完整范围和排除项见 [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md)。
 
 ---
 

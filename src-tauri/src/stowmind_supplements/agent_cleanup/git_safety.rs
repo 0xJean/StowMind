@@ -1,19 +1,135 @@
-//! Concurrency and retention guards for Git metadata cleanup.
+//! Concurrency, HEAD and retention guards for Git metadata cleanup.
 
 use super::super::types::AgentCleanupPolicy;
 use super::Repository;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
-    path::Path,
+    io::Write,
+    path::{Path, PathBuf},
     process::Command,
-    sync::{Mutex, OnceLock},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex, OnceLock,
+    },
     time::{Instant, UNIX_EPOCH},
 };
 use walkdir::WalkDir;
 
 const GIT_PROCESS_CACHE_TTL_MS: u128 = 250;
 static GIT_PROCESS_CACHE: OnceLock<Mutex<HashMap<String, (Instant, bool)>>> = OnceLock::new();
+static NEXT_HEAD_LOCK: AtomicU64 = AtomicU64::new(0);
+
+pub(super) struct WorktreeHeadGuard {
+    locks: Vec<(PathBuf, Vec<u8>)>,
+}
+
+impl WorktreeHeadGuard {
+    fn acquire(&mut self, git_dir: &Path) -> Result<(), String> {
+        let path = git_dir.join("HEAD.lock");
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|error| format!("Cannot lock worktree HEAD; cleanup is blocked: {error}"))?;
+        let marker = format!(
+            "stowmind-head-guard:{}:{}\n",
+            std::process::id(),
+            NEXT_HEAD_LOCK.fetch_add(1, Ordering::Relaxed)
+        )
+        .into_bytes();
+        if let Err(error) = file.write_all(&marker) {
+            drop(file);
+            let _ = fs::remove_file(path);
+            return Err(format!("Cannot initialize worktree HEAD lock: {error}"));
+        }
+        self.locks.push((path, marker));
+        Ok(())
+    }
+}
+
+impl Drop for WorktreeHeadGuard {
+    fn drop(&mut self) {
+        for (path, marker) in self.locks.iter().rev() {
+            // Never remove another writer's lock if our file was replaced.
+            if fs::symlink_metadata(path)
+                .map(|metadata| metadata.file_type().is_file())
+                .unwrap_or(false)
+                && fs::read(path).ok().as_ref() == Some(marker)
+            {
+                let _ = fs::remove_file(path);
+            }
+        }
+    }
+}
+
+/// Even a Codex-namespaced ref can be used as HEAD or an intermediate symbolic
+/// link by a worktree. Deleting it would break that HEAD and write its reflog.
+/// Hold each HEAD lock through deletion, so a concurrent Git writer cannot
+/// switch HEAD onto the candidate after the read-only symbolic-chain check.
+pub(super) fn protect_worktree_heads(
+    repository: &Repository,
+    refname: &str,
+) -> Result<WorktreeHeadGuard, String> {
+    let mut git_dirs = vec![repository.git_dir.clone()];
+    match fs::read_dir(repository.git_dir.join("worktrees")) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry =
+                    entry.map_err(|error| format!("Cannot inspect worktree HEADs: {error}"))?;
+                let kind = entry
+                    .file_type()
+                    .map_err(|error| format!("Cannot inspect worktree HEADs: {error}"))?;
+                if kind.is_symlink() {
+                    return Err("Cannot safely inspect symbolic worktree metadata".to_string());
+                }
+                if kind.is_dir() {
+                    git_dirs.push(entry.path());
+                }
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("Cannot inspect worktree HEADs: {error}")),
+    }
+    let mut guard = WorktreeHeadGuard { locks: Vec::new() };
+    for git_dir in &git_dirs {
+        guard.acquire(git_dir)?;
+    }
+    for git_dir in git_dirs {
+        let mut current = "HEAD".to_string();
+        let mut seen = HashSet::new();
+        loop {
+            // Be conservative on case-insensitive ref storage (macOS/Windows).
+            if current.eq_ignore_ascii_case(refname) {
+                return Err("Codex ref is used by a worktree HEAD; cleanup is blocked".to_string());
+            }
+            if !seen.insert(current.clone()) || seen.len() > 32 {
+                return Err("Cannot safely resolve worktree HEAD symbolic chain".to_string());
+            }
+            let output = Command::new("git")
+                .arg("--git-dir")
+                .arg(&git_dir)
+                .args(["symbolic-ref", "--quiet", "--no-recurse", &current])
+                .output()
+                .map_err(|error| format!("Cannot inspect worktree HEAD: {error}"))?;
+            match output.status.code() {
+                // A detached HEAD or the direct ref at the end of the chain.
+                Some(1) => break,
+                Some(0) => {
+                    current = String::from_utf8(output.stdout)
+                        .map_err(|_| "Invalid worktree HEAD reference encoding".to_string())?
+                        .trim()
+                        .to_string();
+                    if current.is_empty() {
+                        return Err("Cannot resolve worktree HEAD reference".to_string());
+                    }
+                }
+                _ => return Err(super::command_error("git symbolic-ref", &output.stderr)),
+            }
+        }
+    }
+    Ok(guard)
+}
 
 pub(super) fn has_git_lock(git_dir: &Path) -> bool {
     WalkDir::new(git_dir)
