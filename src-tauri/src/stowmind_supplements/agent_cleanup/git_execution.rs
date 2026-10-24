@@ -1,7 +1,8 @@
 use super::super::types::AgentCleanupPolicy;
 use super::{
-    command_error, inspect_ref, parse_prune_item_id, parse_ref_item_id, run_git,
-    scan_unreachable_objects, validate_repository, PRUNE_ITEM_PREFIX, REF_ITEM_PREFIX,
+    command_error, inspect_ref, is_allowed_ref, is_valid_object_id, parse_prune_item_id,
+    parse_ref_item_id, run_git, scan_unreachable_objects, validate_repository, Repository,
+    PRUNE_ITEM_PREFIX, REF_ITEM_PREFIX,
 };
 use super::{objects, safety};
 use std::{path::Path, process::Command};
@@ -51,25 +52,37 @@ fn execute_ref(
     if current_oid != payload.expected_oid {
         return Err("Codex internal ref changed since preview; scan again".to_string());
     }
-    let output = Command::new("git")
-        .args([
-            "--git-dir",
-            repository.git_dir.to_str().unwrap_or_default(),
-            "update-ref",
-            "-d",
-            &payload.refname,
-            &payload.expected_oid,
-        ])
-        .output()
-        .map_err(|error| format!("Failed to remove Git ref: {error}"))?;
-    if !output.status.success() {
-        return Err(command_error("git update-ref", &output.stderr));
-    }
+    delete_codex_ref(&repository, &payload.refname, &payload.expected_oid)?;
     Ok((
         item.path,
         Some(item.size),
         "Removed Codex internal Git ref".to_string(),
     ))
+}
+
+pub(super) fn delete_codex_ref(
+    repository: &Repository,
+    refname: &str,
+    expected_oid: &str,
+) -> Result<(), String> {
+    if !is_allowed_ref(refname) || !is_valid_object_id(expected_oid) {
+        return Err("Invalid Codex cleanup ref or expected object id".to_string());
+    }
+    let _head_guard = safety::protect_worktree_heads(repository, refname)?;
+    // The old OID guards the deletion atomically. Keep other validation read-only:
+    // `update-ref --stdin` verify on the current branch appends a zero-to-zero
+    // HEAD reflog entry in Git 2.48.1. Never dereference a Codex symbolic ref to
+    // mutate its target (which could be main or a release tag).
+    let output = Command::new("git")
+        .arg("--git-dir")
+        .arg(&repository.git_dir)
+        .args(["update-ref", "--no-deref", "-d", refname, expected_oid])
+        .output()
+        .map_err(|error| format!("Failed to remove Git ref: {error}"))?;
+    if !output.status.success() {
+        return Err(command_error("git update-ref", &output.stderr));
+    }
+    Ok(())
 }
 
 fn execute_prune(

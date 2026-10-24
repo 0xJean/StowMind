@@ -79,7 +79,7 @@ Agent Cleanup is available from the **Agent Cleanup** entry in the sidebar or th
 
 It also checks the macOS iconservices cache in a separate **System shared cache** card. This cache is excluded from Agent selections, retention rules, and totals; cleanup requires its own administrator review and confirmation, with a separate history record.
 
-The workflow is preview-first: choose a retention period, review grouped cache/log/temporary/worktree/Git metadata items, and confirm only the entries you want to clean. Files still move to the system Trash; Codex refs use `git update-ref`, and unreachable Git objects require a separate explicit opt-in for reflog expiry and `git gc --prune=now`. Fixed allowlists, active-process protection, repository-clean checks, stale-worktree checks, and protected session/configuration paths are enforced again before execution. See [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md) for the exact scope and exclusions.
+The workflow is preview-first: choose a retention period, review grouped cache/log/temporary/worktree/Git metadata items, and confirm only the entries you want to clean. Reference scanning and preview do not write refs or reflogs. Files move to the system Trash; Codex ref deletion is limited to selected `refs/codex/turn-diffs/*` entries, checks their previewed object IDs, and never follows symbolic refs. Unreachable Git objects require a separate explicit opt-in for reflog expiry and pruning at the configured retention cutoff. Fixed allowlists, active-process protection, repository-clean checks, stale-worktree checks, and protected session/configuration paths are enforced again before execution. See [`docs/AGENT_CLEANUP.md`](docs/AGENT_CLEANUP.md) for the exact scope and exclusions.
 
 ---
 

@@ -31,7 +31,7 @@ fn reserve_temp_directory(parent: &Path, sequence: &AtomicU64) -> PathBuf {
     panic!("Could not reserve an isolated test repository directory")
 }
 
-fn temp_repo() -> Repository {
+pub(super) fn temp_repo() -> Repository {
     let root = reserve_temp_directory(&std::env::temp_dir(), &NEXT_REPOSITORY);
     for args in [
         &["init", "-q"][..],
