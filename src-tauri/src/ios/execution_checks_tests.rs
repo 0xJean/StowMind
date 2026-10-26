@@ -156,7 +156,10 @@ fn action_context_only_allows_reflow_into_an_occupied_packed_run() {
         to_row: 0,
         to_column: 0,
     };
-    assert_eq!(action_context(&packed, &reorder)["allowReflow"], json!(true));
+    assert_eq!(
+        action_context(&packed, &reorder)["allowReflow"],
+        json!(true)
+    );
 }
 
 fn session(status: IosExecutionStatus) -> IosExecutionSession {
