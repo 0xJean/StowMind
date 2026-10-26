@@ -1,3 +1,4 @@
+use super::layout_model::{slot_of, LayoutState, MAX_PLAN_OPERATIONS};
 use super::types::{IosAppIdentity, IosLayoutPlan, IosLayoutSnapshot, IosOperation};
 use std::collections::{HashMap, HashSet};
 
@@ -103,6 +104,67 @@ pub fn validate_plan(plan: &IosLayoutPlan) -> Result<(), String> {
     Ok(())
 }
 
+fn normalized_name(name: &str) -> String {
+    name.to_lowercase()
+        .chars()
+        .filter(|character| character.is_alphanumeric())
+        .collect()
+}
+
+/// Return why an App must never be moved or shifted automatically.
+fn automation_block_reason(
+    snapshot: &IosLayoutSnapshot,
+    protected: &HashSet<&String>,
+    app_id: &str,
+) -> Option<String> {
+    let candidates = snapshot
+        .apps
+        .iter()
+        .filter(|app| app.id == app_id)
+        .collect::<Vec<_>>();
+    if candidates.len() != 1 {
+        return Some("Plan App identity is missing or ambiguous".to_string());
+    }
+    let app = candidates[0];
+    let name = normalized_name(&app.name);
+    if name.is_empty()
+        || snapshot
+            .apps
+            .iter()
+            .filter(|other| normalized_name(&other.name) == name)
+            .count()
+            != 1
+    {
+        return Some("App name is not unique in the source snapshot".to_string());
+    }
+    if protected.contains(&app.id)
+        || app.sensitive
+        || super::classification::category_for_name(&app.name).1
+    {
+        return Some(format!("Protected App cannot be moved: {}", app.name));
+    }
+    if app.in_dock
+        || snapshot.dock.contains(&app.id)
+        || app.folder_name.is_some()
+        || snapshot
+            .folders
+            .iter()
+            .any(|folder| folder.app_ids.contains(&app.id))
+    {
+        return Some("Dock and folder Apps cannot be automated".to_string());
+    }
+    if !app.confidence.is_finite() || !(MIN_AUTOMATION_CONFIDENCE..=1.0).contains(&app.confidence) {
+        return Some(format!(
+            "Low-confidence App cannot be automated: {}",
+            app.name
+        ));
+    }
+    None
+}
+
+/// Replay the whole plan through the deterministic grid model. Every drag
+/// must start at the App's simulated position and may only shift Apps that
+/// are themselves eligible for automation.
 pub fn validate_plan_against_snapshot(
     plan: &IosLayoutPlan,
     snapshot: &IosLayoutSnapshot,
@@ -111,6 +173,9 @@ pub fn validate_plan_against_snapshot(
     if plan.source_snapshot_id != snapshot.id {
         return Err("Plan source does not match the stored snapshot".to_string());
     }
+    if plan.operations.len() > MAX_PLAN_OPERATIONS {
+        return Err("Plan contains too many automatic actions".to_string());
+    }
     let protected = plan.protected_app_ids.iter().collect::<HashSet<_>>();
     if protected
         .iter()
@@ -118,17 +183,11 @@ pub fn validate_plan_against_snapshot(
     {
         return Err("Protected App is missing from the source snapshot".to_string());
     }
-    let normalized = |name: &str| {
-        name.to_lowercase()
-            .chars()
-            .filter(|character| character.is_alphanumeric())
-            .collect::<String>()
-    };
-    let mut moved = HashSet::new();
-    let mut destinations = HashSet::new();
+    let locked = |id: &str| automation_block_reason(snapshot, &protected, id).is_some();
+    let mut state = LayoutState::from_snapshot(snapshot);
     for operation in &plan.operations {
-        // Serialized variants remain a whitelist, but the current helper only
-        // supports same-page moves. Reject legacy/handcrafted unsupported plans.
+        // Serialized variants remain a whitelist, but the helper only
+        // supports App moves. Reject legacy/handcrafted unsupported plans.
         let IosOperation::MoveApp {
             app_id,
             from_page,
@@ -141,115 +200,19 @@ pub fn validate_plan_against_snapshot(
         else {
             return Err("此方案包含尚不支持的自动动作，请重新生成方案".to_string());
         };
-        if from_page != to_page || (from_row, from_column) == (to_row, to_column) {
-            return Err("Only non-empty same-page moves can be automated".to_string());
+        if let Some(reason) = automation_block_reason(snapshot, &protected, app_id) {
+            return Err(reason);
         }
-        if !moved.insert(app_id) || !destinations.insert((to_page, to_row, to_column)) {
-            return Err("A plan cannot repeat an App or destination".to_string());
+        let from = slot_of(*from_row, *from_column)
+            .ok_or("Home Screen coordinates are outside the safe grid")?;
+        let to = slot_of(*to_row, *to_column)
+            .ok_or("Home Screen coordinates are outside the safe grid")?;
+        if state.position_of(app_id) != Some((*from_page, from)) {
+            return Err(
+                "Plan source position no longer matches App, or its page is unreliable".to_string(),
+            );
         }
-        let candidates = snapshot
-            .apps
-            .iter()
-            .filter(|app| app.id == *app_id)
-            .collect::<Vec<_>>();
-        if candidates.len() != 1 {
-            return Err("Plan App identity is missing or ambiguous".to_string());
-        }
-        let app = candidates[0];
-        let name = normalized(&app.name);
-        if name.is_empty()
-            || snapshot
-                .apps
-                .iter()
-                .filter(|other| normalized(&other.name) == name)
-                .count()
-                != 1
-        {
-            return Err("App name is not unique in the source snapshot".to_string());
-        }
-        if protected.contains(&app.id)
-            || app.sensitive
-            || super::classification::category_for_name(&app.name).1
-        {
-            return Err(format!("Protected App cannot be moved: {}", app.name));
-        }
-        if app.in_dock
-            || snapshot.dock.contains(app_id)
-            || app.folder_name.is_some()
-            || snapshot
-                .folders
-                .iter()
-                .any(|folder| folder.app_ids.contains(app_id))
-        {
-            return Err("Dock and folder Apps cannot be automated".to_string());
-        }
-        if !app.confidence.is_finite()
-            || !(MIN_AUTOMATION_CONFIDENCE..=1.0).contains(&app.confidence)
-        {
-            return Err(format!(
-                "Low-confidence App cannot be automated: {}",
-                app.name
-            ));
-        }
-        if app.current_page != Some(*from_page)
-            || app.current_row != Some(*from_row)
-            || app.current_column != Some(*from_column)
-        {
-            return Err(format!(
-                "Plan source position no longer matches App: {}",
-                app.name
-            ));
-        }
-        let pages = snapshot
-            .pages
-            .iter()
-            .filter(|page| page.index == *from_page)
-            .collect::<Vec<_>>();
-        if pages.len() != 1 || pages[0].has_widgets {
-            return Err("Source page is missing, ambiguous or contains widgets".to_string());
-        }
-        if pages[0].app_ids.iter().any(|id| {
-            !snapshot.apps.iter().any(|other| {
-                other.id == *id
-                    && other.current_page == Some(*from_page)
-                    && other.current_row.is_some()
-                    && other.current_column.is_some()
-            })
-        }) {
-            return Err("Page contains an unknown or unlocated App identity".to_string());
-        }
-        // Ambiguous or unlocated contents cannot establish a safe empty slot.
-        let mut occupied = HashSet::new();
-        for other in snapshot.apps.iter().filter(|other| {
-            other.current_page == Some(*from_page)
-                && !other.in_dock
-                && other.folder_name.is_none()
-                && !snapshot
-                    .folders
-                    .iter()
-                    .any(|folder| folder.app_ids.contains(&other.id))
-        }) {
-            let (Some(row), Some(column)) = (other.current_row, other.current_column) else {
-                return Err("Page contains an App without a reliable position".to_string());
-            };
-            validate_grid(*from_page, row, column)?;
-            if !occupied.insert((row, column)) {
-                return Err("Page contains overlapping App positions".to_string());
-            }
-        }
-        for folder in snapshot
-            .folders
-            .iter()
-            .filter(|folder| folder.page == *from_page)
-        {
-            validate_grid(folder.page, folder.row, folder.column)?;
-            if !occupied.insert((folder.row, folder.column)) {
-                return Err("Page contains overlapping folder positions".to_string());
-            }
-        }
-        if occupied.contains(&(*to_row, *to_column)) {
-            return Err("Move target is already occupied in the source snapshot".to_string());
-        }
+        state.apply_move(app_id, (*from_page, from), (*to_page, to), &locked)?;
     }
     Ok(())
 }

@@ -415,6 +415,7 @@ func handle(_ request: [String: Any]) {
         }
         let result = executeAction(
             action,
+            context: payload["context"] as? [String: Any],
             target: target,
             expectedWindow: payload["expectedWindow"] as? [String: Any]
         )

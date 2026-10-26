@@ -49,6 +49,21 @@ func hasUniqueAppEvidence(
         && slotLabels[0].confidence >= 0.90
 }
 
+// Edge holds needed for an automated cross-page drag; nil when the move is
+// on one page or exceeds the automated page-flip limit.
+func pageFlipPlan(fromPage: Int, toPage: Int, maxFlips: Int = 3) -> (count: Int, forward: Bool)? {
+    let distance = abs(toPage - fromPage)
+    guard distance > 0, distance <= maxFlips else { return nil }
+    return (distance, toPage > fromPage)
+}
+
+// The landing page is proven only when every App Rust expects on it is
+// recognised exactly once. An empty expectation cannot prove anything.
+func targetPageEvidenceMatches(expectedIds: [String], screenIds: [String]) -> Bool {
+    guard !expectedIds.isEmpty else { return false }
+    return expectedIds.allSatisfy { id in screenIds.filter { $0 == id }.count == 1 }
+}
+
 struct LibraryListLabel {
     let text: String
     let confidence: Float

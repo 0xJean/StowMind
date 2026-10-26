@@ -8,6 +8,7 @@ mod execution_checks;
 mod execution_manager;
 mod inventory_scope;
 mod layout;
+mod layout_model;
 pub mod mirror_preview;
 mod planner;
 mod safety;

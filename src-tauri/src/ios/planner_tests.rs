@@ -88,9 +88,9 @@ fn moves(plan: &IosLayoutPlan) -> Vec<(&str, usize, usize)> {
                 to_column,
                 ..
             } => {
-                assert_eq!(
-                    from_page, to_page,
-                    "automatic moves must stay on the original page"
+                assert!(
+                    from_page.abs_diff(*to_page) <= 3,
+                    "automatic moves are limited to three page flips"
                 );
                 (app_id.as_str(), *to_page, to_row * 4 + to_column)
             }
@@ -106,7 +106,7 @@ async fn same_page_plan_fills_original_empty_slots_and_passes_safety_gate() {
         app("calendar", "Calendar", 0, 5),
     ]);
     let plan = plan(&snapshot, "efficiency").await;
-    assert_eq!(moves(&plan), vec![("notes", 0, 0), ("calendar", 0, 1)]);
+    assert_eq!(moves(&plan), vec![("calendar", 0, 0), ("notes", 0, 1)]);
 }
 
 #[tokio::test]
@@ -119,7 +119,7 @@ async fn category_folder_suggestion_does_not_disable_same_page_moves() {
     let plan = plan(&snapshot, "efficiency").await;
     assert_eq!(
         moves(&plan),
-        vec![("notes", 0, 0), ("calendar", 0, 1), ("notion", 0, 2)]
+        vec![("calendar", 0, 0), ("notes", 0, 1), ("notion", 0, 2)]
     );
     assert!(plan
         .warnings
@@ -138,14 +138,111 @@ async fn template_prioritizes_work_apps_when_filling_work_page() {
 }
 
 #[tokio::test]
-async fn cross_page_moves_remain_manual_suggestions() {
+async fn missing_target_page_keeps_app_on_its_page() {
     let snapshot = snapshot(vec![app("slack", "Slack", 0, 4)]);
     let plan = plan(&snapshot, "efficiency").await;
-    assert!(plan.operations.is_empty());
+    assert_eq!(moves(&plan), vec![("slack", 0, 0)]);
     assert!(plan
         .warnings
         .iter()
-        .any(|warning| warning.contains("第 1 页移动到第 2 页")));
+        .any(|warning| warning.contains("目标页不存在")));
+}
+
+#[tokio::test]
+async fn cross_page_moves_take_the_last_icon_and_append_to_the_target_page() {
+    // Page 0 is packed; Slack belongs on the work page but is not last.
+    let snapshot = snapshot(vec![
+        app("notes", "Notes", 0, 0),
+        app("slack", "Slack", 0, 1),
+        app("calendar", "Calendar", 0, 2),
+        app("github", "GitHub", 1, 0),
+    ]);
+    let plan = plan(&snapshot, "efficiency").await;
+    assert_eq!(
+        moves(&plan),
+        vec![
+            ("slack", 0, 2),
+            ("slack", 1, 1),
+            // The work page is sorted next, while it is still visible.
+            ("slack", 1, 0),
+            ("calendar", 0, 0),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn full_page_is_reordered_by_reflow() {
+    let names = [
+        "Maps",
+        "Notes",
+        "Telegram",
+        "Calendar",
+        "Reminders",
+        "Files",
+        "Weather",
+        "Clock",
+        "Camera",
+        "Photos",
+        "Music",
+        "Podcasts",
+        "Books",
+        "News",
+        "Stocks",
+        "Health",
+        "Fitness",
+        "Home",
+        "Shortcuts",
+        "Contacts",
+        "Phone",
+        "Mail",
+        "Messages",
+        "Safari",
+    ];
+    let apps = names
+        .iter()
+        .enumerate()
+        .map(|(slot, name)| app(&name.to_lowercase(), name, 0, slot))
+        .collect::<Vec<_>>();
+    let snapshot = snapshot(apps);
+    let plan = plan(&snapshot, "minimal").await;
+    assert!(
+        !plan.operations.is_empty(),
+        "a packed page must still be reorderable"
+    );
+    let target = super::super::safety::snapshot_after_operations(&snapshot, &plan.operations)
+        .expect("plan must replay");
+    assert_eq!(
+        target.pages[0].app_ids.len(),
+        24,
+        "no icon may leave a full page"
+    );
+    let mut ids = target
+        .apps
+        .iter()
+        .map(|app| app.id.clone())
+        .collect::<Vec<_>>();
+    ids.sort();
+    let mut before = snapshot
+        .apps
+        .iter()
+        .map(|app| app.id.clone())
+        .collect::<Vec<_>>();
+    before.sort();
+    assert_eq!(ids, before, "reordering never removes an App");
+}
+
+#[tokio::test]
+async fn reflow_never_shifts_protected_icons() {
+    let mut wallet = app("wallet", "Wallet", 0, 1);
+    wallet.sensitive = true;
+    let snapshot = snapshot(vec![
+        app("maps", "Maps", 0, 0),
+        wallet,
+        app("notes", "Notes", 0, 2),
+        app("calendar", "Calendar", 0, 3),
+    ]);
+    let plan = plan(&snapshot, "efficiency").await;
+    assert_eq!(moves(&plan), vec![("calendar", 0, 2)]);
 }
 
 #[tokio::test]
@@ -172,23 +269,24 @@ async fn duplicate_ids_cannot_generate_repeated_actions() {
 }
 
 #[tokio::test]
-async fn vacated_source_is_never_reused_as_a_later_target() {
+async fn vacated_slots_are_reused_after_simulation() {
     let snapshot = snapshot(vec![
         app("notes", "Notes", 0, 1),
         app("calendar", "Calendar", 0, 2),
         app("notion", "Notion", 0, 3),
     ]);
     let plan = plan(&snapshot, "efficiency").await;
-    assert_eq!(moves(&plan), vec![("notes", 0, 0)]);
+    assert_eq!(moves(&plan), vec![("calendar", 0, 0), ("notion", 0, 2)]);
 }
 
 #[tokio::test]
-async fn packed_page_does_not_move_apps_backwards_into_later_holes() {
+async fn packed_page_reorders_without_leaving_holes() {
     let snapshot = snapshot(vec![
         app("notes", "Notes", 0, 0),
         app("calendar", "Calendar", 0, 1),
     ]);
-    assert!(plan(&snapshot, "efficiency").await.operations.is_empty());
+    let plan = plan(&snapshot, "efficiency").await;
+    assert_eq!(moves(&plan), vec![("calendar", 0, 0)]);
 }
 
 #[tokio::test]
@@ -281,7 +379,7 @@ async fn generated_actions_have_unique_apps_and_original_empty_targets() {
 }
 
 #[test]
-fn restore_does_not_reuse_occupied_or_newly_vacated_slots() {
+fn restore_reuses_newly_vacated_slots() {
     let current = snapshot(vec![
         app("notes", "Notes", 0, 1),
         app("calendar", "Calendar", 0, 2),
@@ -293,15 +391,12 @@ fn restore_does_not_reuse_occupied_or_newly_vacated_slots() {
     target.id = "target".to_string();
     let plan = create_restore_plan(&current, &target);
     validate_plan_against_snapshot(&plan, &current).unwrap();
-    assert_eq!(moves(&plan), vec![("notes", 0, 0)]);
-    assert!(plan
-        .warnings
-        .iter()
-        .any(|warning| warning.contains("当前被占用")));
+    assert_eq!(moves(&plan), vec![("notes", 0, 0), ("calendar", 0, 1)]);
+    assert!(plan.warnings.is_empty());
 }
 
 #[test]
-fn restore_keeps_cross_page_moves_and_slot_swaps_manual() {
+fn restore_keeps_unknown_pages_and_free_page_swaps_manual() {
     let current = snapshot(vec![
         app("notes", "Notes", 0, 1),
         app("calendar", "Calendar", 0, 2),

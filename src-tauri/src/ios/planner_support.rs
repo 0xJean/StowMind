@@ -15,22 +15,6 @@ pub(super) fn safe_position(app: &IosAppIdentity) -> Option<(usize, usize, usize
     (page < 100 && row < 6 && column < 4).then_some((page, row, column))
 }
 
-pub(super) fn original_occupied_slots(
-    snapshot: &IosLayoutSnapshot,
-) -> HashSet<(usize, usize, usize)> {
-    snapshot
-        .apps
-        .iter()
-        .filter_map(safe_position)
-        .chain(
-            snapshot
-                .folders
-                .iter()
-                .map(|folder| (folder.page, folder.row, folder.column)),
-        )
-        .collect()
-}
-
 /// Protect ambiguous visual identities and pages whose unlocated/overlapping
 /// contents prevent us from identifying an empty target slot reliably.
 pub(super) fn protected_ids(snapshot: &IosLayoutSnapshot) -> HashSet<String> {

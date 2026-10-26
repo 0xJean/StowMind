@@ -96,6 +96,69 @@ fn mismatched_scope_widgets_and_duplicate_apps_cannot_match() {
     assert!(!matches_another_page(&source, &changed));
 }
 
+fn cross_page_operation() -> IosOperation {
+    // `a` is the last (only) icon on page 0; page 1 has a free slot 0.
+    IosOperation::MoveApp {
+        app_id: "a".into(),
+        from_page: 0,
+        from_row: 0,
+        from_column: 1,
+        to_page: 1,
+        to_row: 0,
+        to_column: 0,
+    }
+}
+
+#[test]
+fn cross_page_checkpoint_verifies_the_landing_page() {
+    let source = baseline();
+    let target = snapshot_after_operations(&source, &[cross_page_operation()]).unwrap();
+    let landed = visible(&target, 1);
+    assert!(matches_expected_target_page(
+        &target,
+        &landed,
+        &cross_page_operation()
+    ));
+    // The source page is no longer what the mirror shows after the drag.
+    assert!(!matches_expected_page(
+        &target,
+        &landed,
+        &cross_page_operation()
+    ));
+    assert!(!matches_expected_target_page(
+        &target,
+        &visible(&source, 1),
+        &cross_page_operation()
+    ));
+}
+
+#[test]
+fn action_context_only_allows_reflow_into_an_occupied_packed_run() {
+    let source = baseline();
+    let context = action_context(&source, &cross_page_operation());
+    assert_eq!(context["allowReflow"], json!(false));
+    assert_eq!(context["expectedTargetAppIds"], json!(["b"]));
+    let same_page = action_context(&source, &operation());
+    assert_eq!(same_page["allowReflow"], json!(false));
+    assert_eq!(same_page["expectedTargetAppIds"], json!([]));
+
+    let mut packed = source.clone();
+    packed.apps[1].current_page = Some(0);
+    packed.apps[1].current_column = Some(0);
+    packed.pages[0].app_ids.push("b".into());
+    packed.pages[1].app_ids.clear();
+    let reorder = IosOperation::MoveApp {
+        app_id: "a".into(),
+        from_page: 0,
+        from_row: 0,
+        from_column: 1,
+        to_page: 0,
+        to_row: 0,
+        to_column: 0,
+    };
+    assert_eq!(action_context(&packed, &reorder)["allowReflow"], json!(true));
+}
+
 fn session(status: IosExecutionStatus) -> IosExecutionSession {
     IosExecutionSession {
         id: "session".into(),

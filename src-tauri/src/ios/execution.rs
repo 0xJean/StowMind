@@ -1,5 +1,8 @@
 use super::bridge;
-use super::execution_checks::{apply_control_state, matches_another_page, matches_expected_page};
+use super::execution_checks::{
+    action_context, apply_control_state, matches_another_page, matches_expected_page,
+    matches_expected_target_page,
+};
 use super::inventory_scope::require_all_home_screen_pages;
 use super::safety::{
     contains_forbidden_text, inventory_hash, layout_hash, snapshot_after_operations,
@@ -303,9 +306,11 @@ async fn run_claimed_execution(
             }
 
             let payload = to_value(operation).map_err(|error| error.to_string())?;
+            let context = action_context(&expected_before, operation);
             let action_result = bridge::execute_action(
                 &app,
                 &payload,
+                &context,
                 &plan.source_snapshot_id,
                 baseline.window_bounds.as_ref(),
             );
@@ -403,7 +408,7 @@ async fn run_claimed_execution(
         let expected_after =
             snapshot_after_operations(&baseline, &plan.operations[..session.current_index])
                 .map_err(|error| format!("无法构造动作后布局校验：{error}"))?;
-        if !matches_expected_page(
+        if !matches_expected_target_page(
             &expected_after,
             &checkpoint,
             &plan.operations[session.current_index.saturating_sub(1)],

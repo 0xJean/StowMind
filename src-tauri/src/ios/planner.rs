@@ -2,16 +2,35 @@ use super::classification::{
     category_for_name, classify_with_ai, is_hard_case, preserve_sensitive,
 };
 use super::safety::MIN_AUTOMATION_CONFIDENCE;
-use super::types::{
-    IosAppIdentity, IosLayoutPlan, IosLayoutSnapshot, IosOperation, IosPlanRequest,
-};
+use super::types::{IosLayoutPlan, IosLayoutSnapshot, IosOperation, IosPlanRequest};
 use crate::ai::MIN_AI_CLASSIFICATION_CONFIDENCE;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[path = "planner_support.rs"]
 mod support;
-use support::{normalized_name, original_occupied_slots, protected_ids, safe_position};
+use support::{normalized_name, protected_ids, safe_position};
+
+#[path = "planner_moves.rs"]
+mod moves;
+use super::layout_model::MAX_PLAN_OPERATIONS;
+use moves::MovePlanner;
+
+fn preview_names(names: &[String]) -> String {
+    let mut sorted = names.to_vec();
+    sorted.sort();
+    let shown = sorted
+        .iter()
+        .take(5)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("、");
+    if sorted.len() > 5 {
+        format!("{shown} 等")
+    } else {
+        shown
+    }
+}
 
 #[cfg(test)]
 #[path = "planner_tests.rs"]
@@ -92,20 +111,6 @@ impl LayoutTemplate {
             .position(|value| *value == category)
             .unwrap_or(categories.len())
     }
-}
-
-fn next_empty_slot(
-    occupied: &HashSet<(usize, usize, usize)>,
-    page: usize,
-) -> Option<(usize, usize)> {
-    for slot in 0..24 {
-        let row = slot / 4;
-        let column = slot % 4;
-        if !occupied.contains(&(page, row, column)) {
-            return Some((row, column));
-        }
-    }
-    None
 }
 
 pub async fn create_plan(snapshot: &IosLayoutSnapshot, request: &IosPlanRequest) -> IosLayoutPlan {
@@ -204,96 +209,89 @@ pub async fn create_plan(snapshot: &IosLayoutSnapshot, request: &IosPlanRequest)
         ));
     }
 
-    let mut operations = Vec::new();
-    // Never reuse a source slot vacated by an earlier action: each target must
-    // already be empty in the saved snapshot used by the execution safety gate.
-    let mut occupied = original_occupied_slots(snapshot);
     let protected_set: HashSet<&str> = protected.iter().map(String::as_str).collect();
+    let by_id = apps
+        .iter()
+        .map(|app| (app.id.as_str(), app))
+        .collect::<HashMap<_, _>>();
+    let locked = |id: &str| {
+        protected_set.contains(id)
+            || by_id
+                .get(id)
+                .map(|app| app.in_dock || app.confidence < MIN_AUTOMATION_CONFIDENCE)
+                .unwrap_or(true)
+    };
+    let mut mover = MovePlanner::new(snapshot, &locked);
 
-    let mut grouped: BTreeMap<(usize, usize, String), Vec<&IosAppIdentity>> = BTreeMap::new();
-    for app in &apps {
-        if protected_set.contains(app.id.as_str())
-            || app.in_dock
-            || app.confidence < MIN_AUTOMATION_CONFIDENCE
-        {
-            continue;
-        }
-        grouped
+    let mut category_counts = BTreeMap::<(usize, String), usize>::new();
+    let mut desired = HashMap::new();
+    let mut unreachable = Vec::new();
+    for app in apps.iter().filter(|app| !locked(&app.id)) {
+        *category_counts
             .entry((
-                template.page_for_category(&app.category),
                 template.category_priority(&app.category),
                 app.category.clone(),
             ))
-            .or_default()
-            .push(app);
-    }
-
-    for ((page, _, category), mut group) in grouped {
-        if widget_pages.contains(&page) {
-            warnings.push(format!(
-                "目标第 {} 页包含组件，{} 类 App 保持原位",
-                page + 1,
-                category
-            ));
+            .or_default() += 1;
+        let Some(from_page) = app.current_page else {
+            continue;
+        };
+        let target = template.page_for_category(&app.category);
+        if target == from_page || !mover.has_page(from_page) {
             continue;
         }
-
-        if group.len() >= template.folder_threshold() && category != "其他" {
-            warnings.push(format!(
-                "{} 类共 {} 个 App，建议人工创建文件夹后重新盘点；本次只整理该类别可安全移动的同页图标",
-                category,
-                group.len()
-            ));
-        }
-
-        group.sort_by_key(|app| {
-            (
-                app.current_row,
-                app.current_column,
-                normalized_name(&app.name),
-            )
-        });
-        for app in group {
-            let Some(from_page) = app.current_page else {
-                warnings.push(format!("无法确定 {} 的当前页面，需人工处理", app.name));
-                continue;
-            };
-            if from_page != page {
-                warnings.push(format!(
-                    "{} 需要从第 {} 页移动到第 {} 页；当前执行器只支持同页移动，已跳过自动移动",
-                    app.name,
-                    from_page + 1,
-                    page + 1
-                ));
-                continue;
-            }
-            let Some(from_row) = app.current_row else {
-                warnings.push(format!("无法确定 {} 的当前行，需人工处理", app.name));
-                continue;
-            };
-            let Some(from_column) = app.current_column else {
-                warnings.push(format!("无法确定 {} 的当前列，需人工处理", app.name));
-                continue;
-            };
-            let Some((to_row, to_column)) = next_empty_slot(&occupied, page) else {
-                warnings.push(format!("第 {} 页没有足够的安全格位", page + 1));
-                continue;
-            };
-            if (to_row, to_column) >= (from_row, from_column) {
-                continue;
-            }
-            operations.push(IosOperation::MoveApp {
-                app_id: app.id.clone(),
-                from_page,
-                from_row,
-                from_column,
-                to_page: page,
-                to_row,
-                to_column,
-            });
-            occupied.insert((page, to_row, to_column));
+        if mover.has_page(target) {
+            desired.insert(app.id.clone(), target);
+        } else {
+            unreachable.push(app.name.clone());
         }
     }
+    for ((_, category), count) in &category_counts {
+        if *count >= template.folder_threshold() && category != "其他" {
+            warnings.push(format!(
+                "{category} 类共 {count} 个 App，建议人工创建文件夹后重新盘点；本次只移动图标位置"
+            ));
+        }
+    }
+    if !unreachable.is_empty() {
+        warnings.push(format!(
+            "{} 个 App 的目标页不存在或包含组件，保留在原页并只做同页整理：{}",
+            unreachable.len(),
+            preview_names(&unreachable)
+        ));
+    }
+
+    mover.relocate(&desired);
+    let stranded = desired
+        .iter()
+        .filter(|(id, page)| mover.position_of(id).map(|(at, _)| at) != Some(**page))
+        .filter_map(|(id, _)| by_id.get(id.as_str()).map(|app| app.name.clone()))
+        .collect::<Vec<_>>();
+    if !stranded.is_empty() {
+        warnings.push(format!(
+            "{} 个 App 暂时无法自动跨页（目标页已满、超过 3 页，或会挤动受保护图标），已保留在原页：{}",
+            stranded.len(),
+            preview_names(&stranded)
+        ));
+    }
+    let rank = |id: &str| {
+        by_id
+            .get(id)
+            .map(|app| {
+                (
+                    template.category_priority(&app.category),
+                    normalized_name(&app.name),
+                )
+            })
+            .unwrap_or((usize::MAX, String::new()))
+    };
+    mover.reorder(&rank);
+    if mover.truncated {
+        warnings.push(format!(
+            "动作较多，本次只生成前 {MAX_PLAN_OPERATIONS} 步；执行完成后请重新盘点并生成方案继续整理"
+        ));
+    }
+    let operations = mover.operations;
 
     for folder in &snapshot.folders {
         if widget_pages.contains(&folder.page)
@@ -324,12 +322,20 @@ pub async fn create_plan(snapshot: &IosLayoutSnapshot, request: &IosPlanRequest)
     }
 
     if operations.is_empty() {
-        warnings.push("当前没有可自动整理的同页前方空位；请按建议人工调整后重新盘点".to_string());
-    } else {
         warnings.push(
-            "本次按模板分类优先级填补同页已有空位；执行完成后可重新盘点，继续整理新产生的空位"
+            "当前布局已符合模板，或剩余调整都会挤动受保护图标；请按建议人工调整后重新盘点"
                 .to_string(),
         );
+    } else {
+        let cross_page = operations
+            .iter()
+            .filter(|operation| matches!(operation, IosOperation::MoveApp { from_page, to_page, .. } if from_page != to_page))
+            .count();
+        warnings.push(format!(
+            "本次共 {} 步（其中跨页 {} 步）：排满的页面按顺序重排，跨页只移动页面最后一个图标并放到目标页末尾；如需切换页面会暂停提示",
+            operations.len(),
+            cross_page
+        ));
     }
 
     IosLayoutPlan {
@@ -355,7 +361,6 @@ pub fn create_restore_plan(
         .iter()
         .map(|app| (app.id.as_str(), app))
         .collect::<HashMap<_, _>>();
-    let mut operations = Vec::new();
     let mut warnings = Vec::new();
 
     let mut protected = protected_ids(current);
@@ -363,7 +368,20 @@ pub fn create_restore_plan(
     // Keep the protection list valid even if called with mismatched snapshots;
     // the command boundary rejects inventory mismatches before planning.
     protected.retain(|id| current.apps.iter().any(|app| app.id == *id));
-    let mut occupied = original_occupied_slots(current);
+    let current_by_id = current
+        .apps
+        .iter()
+        .map(|app| (app.id.as_str(), app))
+        .collect::<HashMap<_, _>>();
+    let locked = |id: &str| {
+        protected.contains(id)
+            || current_by_id
+                .get(id)
+                .map(|app| app.in_dock || app.confidence < MIN_AUTOMATION_CONFIDENCE)
+                .unwrap_or(true)
+    };
+    let mut mover = MovePlanner::new(current, &locked);
+    let mut goals = Vec::new();
 
     for app in &current.apps {
         let Some(target_app) = target_by_id.get(app.id.as_str()) else {
@@ -381,43 +399,45 @@ pub fn create_restore_plan(
             warnings.push(format!("{} 属于受保护区域，恢复时保持原样", app.name));
             continue;
         }
-        let Some((from_page, from_row, from_column)) = safe_position(app) else {
+        if safe_position(app).is_none() {
             warnings.push(format!("无法恢复 {} 的当前位置", app.name));
             continue;
-        };
+        }
         let Some((to_page, to_row, to_column)) = safe_position(target_app) else {
             warnings.push(format!("目标快照没有 {} 的位置", app.name));
             continue;
         };
-        if from_page != to_page {
-            warnings.push(format!(
-                "{} 需要从第 {} 页恢复到第 {} 页；当前执行器只支持同页移动，已跳过自动恢复",
-                app.name,
-                from_page + 1,
-                to_page + 1
-            ));
-            continue;
-        }
-        if (from_page, from_row, from_column) != (to_page, to_row, to_column) {
-            if occupied.contains(&(to_page, to_row, to_column)) {
-                warnings.push(format!(
-                    "{} 的原位置当前被占用或已分配；请人工腾出后重新盘点再恢复",
-                    app.name
-                ));
+        goals.push((to_page, to_row * 4 + to_column, app));
+    }
+    // Fill targets in reading order; a few passes let earlier moves vacate
+    // slots or reflow neighbours that later goals depend on.
+    goals.sort_by_key(|(page, slot, _)| (*page, *slot));
+    for _ in 0..4 {
+        let mut progressed = false;
+        for (page, slot, app) in &goals {
+            let Some(at) = mover.position_of(&app.id) else {
                 continue;
+            };
+            if at != (*page, *slot) && mover.push(&app.id, at, (*page, *slot)) {
+                progressed = true;
             }
-            operations.push(IosOperation::MoveApp {
-                app_id: app.id.clone(),
-                from_page,
-                from_row,
-                from_column,
-                to_page,
-                to_row,
-                to_column,
-            });
-            occupied.insert((to_page, to_row, to_column));
+        }
+        if !progressed {
+            break;
         }
     }
+    for (page, slot, app) in &goals {
+        if mover.position_of(&app.id) != Some((*page, *slot)) {
+            warnings.push(format!(
+                "{} 无法安全自动恢复到第 {} 页第 {} 行第 {} 列；请人工调整后重新盘点",
+                app.name,
+                page + 1,
+                slot / 4 + 1,
+                slot % 4 + 1
+            ));
+        }
+    }
+    let operations = mover.operations;
 
     let mut protected_app_ids = protected.into_iter().collect::<Vec<_>>();
     protected_app_ids.sort();
