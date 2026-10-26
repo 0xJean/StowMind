@@ -141,8 +141,46 @@ private func actionLabels(
     }
 }
 
+private func slotOccupied(
+    _ hits: [TextHit], image: CGImage, geometry: MirrorGeometry, row: Int, column: Int
+) -> Bool {
+    hits.contains {
+        guard let position = gridPosition($0, image: image, geometry: geometry) else {
+            return false
+        }
+        return position.row == row && position.column == column
+    }
+}
+
+// Called while the icon is still held: prove the flipped-to page is the one
+// Rust expects and that the drop slot is free. Returns a problem or nil.
+private func landingProblem(
+    target: WindowTarget, expectedIds: [String], row: Int, column: Int
+) -> String? {
+    guard mirroringInputTargetStillMatches(target), let image = capture(target: target) else {
+        return "跨页拖拽中无法确认目标页"
+    }
+    let hits = recognizeText(image)
+    if containsForbiddenText(hits) {
+        return "跨页拖拽中出现删除、移除或隐藏菜单"
+    }
+    guard let geometry = detectMirrorGeometry(image, hits: hits), geometry.confidence >= 0.90 else {
+        return "跨页拖拽中无法可靠定位 iPhone 屏幕"
+    }
+    guard targetPageEvidenceMatches(
+        expectedIds: expectedIds, screenIds: hits.map { normalizedId($0.text) }
+    ) else {
+        return "翻页后的页面与方案目标页不一致"
+    }
+    guard !slotOccupied(hits, image: image, geometry: geometry, row: row, column: column) else {
+        return "目标页的落点已被占用"
+    }
+    return nil
+}
+
 func executeAction(
     _ action: [String: Any],
+    context: [String: Any]?,
     target: WindowTarget,
     expectedWindow: [String: Any]?
 ) -> [String: Any] {
@@ -209,22 +247,6 @@ func executeAction(
           let toColumn = action["toColumn"] as? Int else {
         return guidance("目标 App 坐标无效，请重新生成方案")
     }
-    guard fromPage == toPage else {
-        return guidance("跨页面移动采用人工引导，完成后请重新盘点")
-    }
-    let occupiedTarget = hits.contains {
-        guard let position = gridPosition(
-            $0,
-            image: before,
-            geometry: beforeGeometry
-        ) else {
-            return false
-        }
-        return position.row == toRow && position.column == toColumn
-    }
-    guard !occupiedTarget else {
-        return guidance("目标格位已被识别到的 App 占用，请重新生成方案")
-    }
     guard let to = globalPoint(
         target,
         image: before,
@@ -235,8 +257,51 @@ func executeAction(
     ) else {
         return guidance("目标位置超出镜像安全区域")
     }
-    guard postDrag(target: target, from: from, to: to) else {
-        return guidance("无法发送安全拖拽事件")
+    if fromPage == toPage {
+        // Rust only allows a drop onto an occupied slot for a packed-page
+        // reorder, where SpringBoard reflows the icons in between.
+        let allowReflow = (context?["allowReflow"] as? Bool) == true
+        guard allowReflow || !slotOccupied(
+            hits, image: before, geometry: beforeGeometry, row: toRow, column: toColumn
+        ) else {
+            return guidance("目标格位已被识别到的 App 占用，请重新生成方案")
+        }
+        guard postDrag(target: target, from: from, to: to) else {
+            return guidance("无法发送安全拖拽事件")
+        }
+    } else {
+        guard let flips = pageFlipPlan(fromPage: fromPage, toPage: toPage) else {
+            return guidance("跨页距离超过自动翻页上限，请人工完成后重新盘点")
+        }
+        let expectedIds = context?["expectedTargetAppIds"] as? [String] ?? []
+        guard !expectedIds.isEmpty else {
+            return guidance("目标页没有可核对的 App，跨页移动请人工完成")
+        }
+        let outcome = postCrossPageDrag(
+            target: target,
+            from: from,
+            to: to,
+            contentBounds: globalContentBounds(
+                target: target, image: before, geometry: beforeGeometry
+            ),
+            flips: flips.count,
+            forward: flips.forward,
+            verifyLanding: {
+                landingProblem(
+                    target: target, expectedIds: expectedIds, row: toRow, column: toColumn
+                )
+            }
+        )
+        switch outcome {
+        case .dropped:
+            break
+        case .cancelled:
+            return guidance("已紧急停止，图标已在当前位置松开；请重新盘点")
+        case .inputFailed:
+            return guidance("无法发送安全拖拽事件")
+        case .landingRejected(let problem):
+            return guidance("\(problem)；已尝试把图标带回原页原位，请重新盘点")
+        }
     }
     usleep(700_000)
     guard let after = capture(target: target) else {

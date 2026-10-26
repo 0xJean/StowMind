@@ -163,7 +163,7 @@ fn overlapping_and_unlocated_page_contents_are_rejected() {
     let plan = plan(vec![movement("first", 0, 1)]);
     let mut overlapping = snapshot();
     overlapping.apps[1].current_column = Some(0);
-    assert_rejected(&plan, &overlapping, "overlapping App");
+    assert_rejected(&plan, &overlapping, "page is unreliable");
     let mut unlocated = snapshot();
     unlocated.apps[1].current_row = None;
     assert!(validate_plan_against_snapshot(&plan, &unlocated).is_err());
@@ -181,11 +181,8 @@ fn folder_occupied_destination_is_rejected() {
             column: 1,
             app_ids: Vec::new(),
         });
-    assert_rejected(
-        &plan(vec![movement("first", 0, 1)]),
-        &snapshot,
-        "already occupied",
-    );
+    // The folder closes the gap, so the move would reflow the folder.
+    assert_rejected(&plan(vec![movement("first", 0, 1)]), &snapshot, "folder");
 }
 
 #[test]
@@ -221,26 +218,148 @@ fn missing_or_unlocated_page_membership_cannot_establish_empty_targets() {
 }
 
 #[test]
-fn repeated_app_and_shared_destination_are_rejected() {
-    for operations in [
-        vec![movement("first", 0, 1), movement("first", 0, 3)],
-        vec![movement("first", 0, 1), movement("second", 2, 1)],
-    ] {
-        assert_rejected(
-            &plan(operations),
-            &snapshot(),
-            "repeat an App or destination",
-        );
+fn sequential_replay_rejects_stale_sources_and_shared_destinations() {
+    assert_rejected(
+        &plan(vec![movement("first", 0, 1), movement("first", 0, 3)]),
+        &snapshot(),
+        "source position",
+    );
+    assert_rejected(
+        &plan(vec![movement("first", 0, 1), movement("second", 2, 1)]),
+        &snapshot(),
+        "already occupied",
+    );
+}
+
+#[test]
+fn vacated_source_can_be_reused_after_simulation() {
+    validate_plan_against_snapshot(
+        &plan(vec![movement("first", 0, 1), movement("second", 2, 0)]),
+        &snapshot(),
+    )
+    .unwrap();
+}
+
+fn packed(count: usize) -> IosLayoutSnapshot {
+    let mut snapshot = snapshot();
+    snapshot.apps = (0..count)
+        .map(|slot| {
+            let mut item = app(&format!("app{slot}"));
+            item.current_row = Some(slot / 4);
+            item.current_column = Some(slot % 4);
+            item
+        })
+        .collect();
+    snapshot.pages[0].app_ids = snapshot.apps.iter().map(|app| app.id.clone()).collect();
+    snapshot
+}
+
+fn with_page(mut snapshot: IosLayoutSnapshot, index: usize, ids: &[&str]) -> IosLayoutSnapshot {
+    for (slot, id) in ids.iter().enumerate() {
+        let mut item = app(id);
+        item.current_page = Some(index);
+        item.current_row = Some(slot / 4);
+        item.current_column = Some(slot % 4);
+        snapshot.apps.push(item);
+    }
+    snapshot.pages.push(super::super::types::IosPageSnapshot {
+        index,
+        app_ids: ids.iter().map(|id| id.to_string()).collect(),
+        has_widgets: false,
+    });
+    snapshot
+}
+
+fn cross(id: &str, from: (usize, usize), to: (usize, usize)) -> IosOperation {
+    IosOperation::MoveApp {
+        app_id: id.to_string(),
+        from_page: from.0,
+        from_row: from.1 / 4,
+        from_column: from.1 % 4,
+        to_page: to.0,
+        to_row: to.1 / 4,
+        to_column: to.1 % 4,
     }
 }
 
 #[test]
-fn vacated_source_is_not_an_automatic_target() {
+fn full_page_reorder_is_accepted_but_cannot_shift_protected_apps() {
+    let full = packed(24);
+    validate_plan_against_snapshot(&plan(vec![movement("app20", 20, 3)]), &full).unwrap();
+    let mut guarded = plan(vec![movement("app20", 20, 3)]);
+    guarded.protected_app_ids = vec!["app10".to_string()];
+    assert_rejected(&guarded, &full, "protected App or folder");
+    let mut sensitive = full.clone();
+    sensitive.apps[5].sensitive = true;
     assert_rejected(
-        &plan(vec![movement("first", 0, 1), movement("second", 2, 0)]),
-        &snapshot(),
-        "already occupied",
+        &plan(vec![movement("app20", 20, 3)]),
+        &sensitive,
+        "protected",
     );
+    assert_rejected(
+        &plan(vec![movement("app2", 2, 23)]),
+        &packed(10),
+        "occupied slots",
+    );
+}
+
+#[test]
+fn cross_page_moves_require_last_icon_append_and_known_pages() {
+    let source = with_page(packed(3), 1, &["b0", "b1"]);
+    validate_plan_against_snapshot(&plan(vec![cross("app2", (0, 2), (1, 2))]), &source).unwrap();
+    assert_rejected(
+        &plan(vec![cross("app1", (0, 1), (1, 2))]),
+        &source,
+        "last icon",
+    );
+    assert_rejected(
+        &plan(vec![cross("app2", (0, 2), (1, 5))]),
+        &source,
+        "append",
+    );
+    assert_rejected(
+        &plan(vec![cross("app2", (0, 2), (1, 1))]),
+        &source,
+        "occupied",
+    );
+
+    let far = with_page(
+        with_page(
+            with_page(with_page(packed(1), 1, &["p1"]), 2, &["p2"]),
+            3,
+            &["p3"],
+        ),
+        4,
+        &["p4"],
+    );
+    assert_rejected(
+        &plan(vec![cross("app0", (0, 0), (4, 1))]),
+        &far,
+        "page flips",
+    );
+    validate_plan_against_snapshot(&plan(vec![cross("app0", (0, 0), (3, 1))]), &far).unwrap();
+
+    let mut widgets = source.clone();
+    widgets.pages[1].has_widgets = true;
+    assert_rejected(
+        &plan(vec![cross("app2", (0, 2), (1, 2))]),
+        &widgets,
+        "Target page",
+    );
+}
+
+#[test]
+fn oversized_plans_are_rejected() {
+    let operations = (0..=MAX_PLAN_OPERATIONS)
+        .map(|step| {
+            if step % 2 == 0 {
+                movement("first", 0, 1)
+            } else {
+                movement("first", 1, 0)
+            }
+        })
+        .collect();
+    assert_rejected(&plan(operations), &snapshot(), "too many");
 }
 
 #[test]
@@ -249,11 +368,11 @@ fn legacy_cross_page_folder_and_dock_plans_cannot_execute() {
     if let IosOperation::MoveApp { to_page, .. } = &mut cross_page {
         *to_page = 1;
     }
-    assert_rejected(&plan(vec![cross_page]), &snapshot(), "same-page");
+    assert_rejected(&plan(vec![cross_page]), &snapshot(), "unknown page");
     assert_rejected(
         &plan(vec![movement("first", 0, 0)]),
         &snapshot(),
-        "same-page",
+        "non-empty",
     );
     for operation in [
         IosOperation::CreateFolder {

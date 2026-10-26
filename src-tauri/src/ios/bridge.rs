@@ -413,6 +413,7 @@ pub fn scan_inventory(
 pub fn execute_action(
     app: &AppHandle,
     action: &Value,
+    context: &Value,
     snapshot_id: &str,
     expected_window: Option<&IosWindowBounds>,
 ) -> Result<IosActionResult, String> {
@@ -421,6 +422,7 @@ pub fn execute_action(
         "executeAction",
         json!({
             "action": action,
+            "context": context,
             "snapshotId": snapshot_id,
             "expectedWindow": expected_window,
             "maxDurationMs": Duration::from_secs(20).as_millis(),

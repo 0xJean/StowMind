@@ -96,6 +96,21 @@ struct EvidenceRegressionTests {
         }
         expect(signalled.isCancelled, "SIGUSR1 must latch cancellation through DispatchSource")
         expect(!signalled.performIfActive { events += 1 }, "Signalled cancellation must gate later input")
+
+        expect(pageFlipPlan(fromPage: 0, toPage: 0) == nil, "Same-page moves never flip pages")
+        expect(pageFlipPlan(fromPage: 0, toPage: 4) == nil, "More than three flips stay manual")
+        expect(pageFlipPlan(fromPage: 2, toPage: 0).map { $0.count == 2 && !$0.forward } == true,
+               "Backward moves flip towards the previous page")
+        expect(pageFlipPlan(fromPage: 0, toPage: 3).map { $0.count == 3 && $0.forward } == true,
+               "Forward moves flip once per page")
+        expect(targetPageEvidenceMatches(expectedIds: ["a", "b"], screenIds: ["b", "x", "a"]),
+               "All expected landing-page Apps prove the page")
+        expect(!targetPageEvidenceMatches(expectedIds: ["a", "b"], screenIds: ["a"]),
+               "A missing landing-page App means the flip count is wrong")
+        expect(!targetPageEvidenceMatches(expectedIds: ["a"], screenIds: ["a", "a"]),
+               "Duplicate labels cannot prove the landing page")
+        expect(!targetPageEvidenceMatches(expectedIds: [], screenIds: ["a"]),
+               "An empty expectation cannot prove the landing page")
         print("Passed \(checks) iOS helper evidence regression checks (no device access)")
     }
 }

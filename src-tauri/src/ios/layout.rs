@@ -1,3 +1,4 @@
+use super::layout_model::{slot_of, LayoutState};
 #[cfg(test)]
 use super::types::IosAppIdentity;
 use super::types::{IosLayoutSnapshot, IosOperation};
@@ -87,17 +88,6 @@ pub fn layout_matches(before: &IosLayoutSnapshot, after: &IosLayoutSnapshot) -> 
     layout_value(before) == layout_value(after)
 }
 
-fn set_page_app(snapshot: &mut IosLayoutSnapshot, app_id: &str, page: usize) {
-    for page_snapshot in &mut snapshot.pages {
-        page_snapshot.app_ids.retain(|id| id != app_id);
-    }
-    if let Some(page_snapshot) = snapshot.pages.iter_mut().find(|item| item.index == page) {
-        if !page_snapshot.app_ids.iter().any(|id| id == app_id) {
-            page_snapshot.app_ids.push(app_id.to_string());
-        }
-    }
-}
-
 fn remove_from_pages(snapshot: &mut IosLayoutSnapshot, app_id: &str) {
     for page_snapshot in &mut snapshot.pages {
         page_snapshot.app_ids.retain(|id| id != app_id);
@@ -116,22 +106,28 @@ pub fn snapshot_after_operations(
         match operation {
             IosOperation::MoveApp {
                 app_id,
+                from_page,
+                from_row,
+                from_column,
                 to_page,
                 to_row,
                 to_column,
-                ..
             } => {
-                let app = expected
-                    .apps
-                    .iter_mut()
-                    .find(|app| app.id == *app_id)
-                    .ok_or_else(|| format!("Plan references an unknown App: {app_id}"))?;
-                app.current_page = Some(*to_page);
-                app.current_row = Some(*to_row);
-                app.current_column = Some(*to_column);
-                app.in_dock = false;
-                app.folder_name = None;
-                set_page_app(&mut expected, app_id, *to_page);
+                // Use the same reflow model as the planner and safety gate,
+                // so checkpoints expect neighbours shifted by SpringBoard.
+                let slot = |row: usize, column: usize| {
+                    slot_of(row, column).ok_or_else(|| {
+                        "Home Screen coordinates are outside the safe grid".to_string()
+                    })
+                };
+                let mut state = LayoutState::from_snapshot(&expected);
+                state.apply_move(
+                    app_id,
+                    (*from_page, slot(*from_row, *from_column)?),
+                    (*to_page, slot(*to_row, *to_column)?),
+                    &|_| false,
+                )?;
+                state.write_back(&mut expected);
             }
             IosOperation::MoveToDock {
                 app_id, dock_index, ..
@@ -284,7 +280,9 @@ mod tests {
 
     #[test]
     fn snapshot_after_operations_updates_layout() {
-        let first = snapshot(vec![app("a"), app("b")]);
+        let mut second = app("b");
+        second.current_column = Some(1);
+        let first = snapshot(vec![app("a"), second]);
         let expected = snapshot_after_operations(
             &first,
             &[IosOperation::MoveApp {
@@ -294,12 +292,14 @@ mod tests {
                 from_column: 0,
                 to_page: 0,
                 to_row: 0,
-                to_column: 2,
+                to_column: 1,
             }],
         )
         .expect("operation should produce an expected layout");
-        assert_eq!(expected.apps[0].current_column, Some(2));
+        // A packed page reflows: the neighbour shifts into the vacated slot.
+        assert_eq!(expected.apps[0].current_column, Some(1));
+        assert_eq!(expected.apps[1].current_column, Some(0));
         assert_ne!(layout_hash(&first), expected.layout_hash);
-        assert!(expected.pages[0].app_ids.contains(&"a".to_string()));
+        assert_eq!(expected.pages[0].app_ids, ["b", "a"]);
     }
 }
