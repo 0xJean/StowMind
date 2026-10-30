@@ -1,10 +1,10 @@
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { cn, formatDate, formatFileSize } from '@/lib/utils'
-import { AlertTriangle, CheckCircle2, HardDrive, Loader2, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, HardDrive, Loader2, RefreshCw, ShieldCheck, X } from 'lucide-react'
 import { useId } from 'react'
 import { CleanInteractionPrompt } from '../clean/CleanInteractionPrompt'
-import { canCleanSystemCache, hasMeasuredSize, measurementDeltaLabel, statusLabelKey } from './helpers'
+import { hasMeasuredSize, measurementDeltaLabel, statusLabelKey } from './helpers'
 import type { SystemCacheReport } from './types'
 import type { SystemCacheController } from './useSystemCache'
 
@@ -12,9 +12,10 @@ interface SystemCacheCardProps {
   cache: SystemCacheController
   active: boolean
   shared?: boolean
+  onClean?: () => void
 }
 
-export function SystemCacheCard({ cache, active, shared = false }: SystemCacheCardProps) {
+export function SystemCacheCard({ cache, active, shared = false, onClean }: SystemCacheCardProps) {
   const { t } = useI18n()
   const headingId = useId()
   const { report, outcome, activity } = cache
@@ -61,15 +62,12 @@ export function SystemCacheCard({ cache, active, shared = false }: SystemCacheCa
           </>
         )}
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={() => void cache.review()} disabled={busy || report?.status === 'unsupported'}>
+          <Button type="button" size="sm" variant="outline" onClick={onClean ?? (() => void cache.review())} disabled={busy || report?.status === 'unsupported'}>
             <ShieldCheck className="mr-2 h-4 w-4" />{t('systemCache.review')}
-          </Button>
-          <Button type="button" size="sm" variant="destructive" onClick={() => void cache.clean()} disabled={busy || !canCleanSystemCache(report)}>
-            <Trash2 className="mr-2 h-4 w-4" />{t('systemCache.clean')}
           </Button>
         </div>
         {shared && <p className="text-xs font-semibold text-muted-foreground">{t('systemCache.sharedScopeHint')}</p>}
-        <p className="text-[11px] text-muted-foreground">{t('systemCache.reviewHint')}</p>
+        <p className="text-[11px] text-muted-foreground">{t(shared ? 'systemCache.reviewHintTop' : 'systemCache.reviewHint')}</p>
       </div>
 
       {busy && activity && (
