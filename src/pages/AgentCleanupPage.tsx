@@ -18,6 +18,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import { canCleanSystemCache } from './system-cache/helpers'
 import { SystemCacheCard } from './system-cache/SystemCacheCard'
 import { useSystemCache } from './system-cache/useSystemCache'
 import { agentItemSizeLabel, agentSizeLabel, summarizeAgentSizes } from './agent-cleanup/sizeSummary'
@@ -114,9 +115,9 @@ export function AgentCleanupPage() {
   }
 
   const scan = (preserveResult = false) => {
-    // The shared system probe has its own result and authorization flow. It
-    // must not delay Agent results or enter their selections and statistics.
-    void systemCache.scan()
+    // The shared system probe runs alongside the Agent scan; requesting
+    // administrator review is part of this same scan entry when needed.
+    void systemCache.probe(true)
     return scanAgent(preserveResult)
   }
 
@@ -127,8 +128,9 @@ export function AgentCleanupPage() {
   }, [])
 
   useEffect(() => {
-    if (active) void systemCache.scan()
-    // Invalidate old cache authorization when returning to this keep-alive page.
+    // Scanning from this page's own entry point also chains the
+    // administrator review when the fresh measurement lacks authorization.
+    if (active) void systemCache.probe(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active])
 
@@ -162,12 +164,15 @@ export function AgentCleanupPage() {
   }
 
   const execute = async () => {
-    if (selectedItems.length === 0) return
+    const cleanSystemCache = canCleanSystemCache(systemCache.report)
+    if (selectedItems.length === 0 && !cleanSystemCache) return
     const confirmed = window.confirm(t('agentCleanup.confirm', {
       count: selectedItems.length,
       size: agentSizeLabel(selectedSize, t),
+      cache: cleanSystemCache ? t('agentCleanup.confirmCacheSuffix') : '',
     }))
     if (!confirmed) return
+    if (cleanSystemCache && !window.confirm(t('systemCache.cleanConfirm', { path: systemCache.report!.path }))) return
     const includesGitPrune = selectedItems.some((item) => item.category === 'git_unreachable_object')
     if (includesGitPrune && !window.confirm(t('agentCleanup.gitPruneConfirm'))) return
 
@@ -225,6 +230,7 @@ export function AgentCleanupPage() {
       })
       setResult(next)
       setGitPruneExecuted(includesGitPrune)
+      if (cleanSystemCache) await systemCache.clean()
       await scan(true)
       // A successful refresh applies its normal defaults; after an execute
       // operation the next action must be explicit rather than preselected.
@@ -314,7 +320,7 @@ export function AgentCleanupPage() {
         </div>
       )}
 
-      <SystemCacheCard cache={systemCache} active={active} shared />
+      <SystemCacheCard cache={systemCache} active={active} shared onClean={() => void systemCache.review()} />
 
       <Card>
         <CardHeader className="flex-row items-start justify-between space-y-0">
@@ -352,8 +358,8 @@ export function AgentCleanupPage() {
       </Card>
 
       <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-iqon-green/25 bg-iqon-card/95 p-4 shadow-soft backdrop-blur">
-        <div><p className="text-sm font-bold">{t('agentCleanup.selectedSummary', { count: selectedItems.length, size: agentSizeLabel(selectedSize, t) })}</p><p className="text-xs text-muted-foreground">{t('agentCleanup.safeNotice')}</p></div>
-        <Button variant="destructive" onClick={() => void execute()} disabled={selectedItems.length === 0 || executing || loading}>
+        <div><p className="text-sm font-bold">{t('agentCleanup.selectedSummary', { count: selectedItems.length, size: agentSizeLabel(selectedSize, t) })}{canCleanSystemCache(systemCache.report) ? t('agentCleanup.selectedCacheSuffix') : ''}</p><p className="text-xs text-muted-foreground">{t('agentCleanup.safeNotice')}</p></div>
+        <Button variant="destructive" onClick={() => void execute()} disabled={(selectedItems.length === 0 && !canCleanSystemCache(systemCache.report)) || executing || loading}>
           {executing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
           {t('agentCleanup.cleanSelected')}
         </Button>

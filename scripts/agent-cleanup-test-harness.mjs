@@ -143,6 +143,8 @@ function createPage(invokeOverride) {
     'react-router-dom': { useLocation: () => ({ pathname }) },
     'react-toastify': { toast },
     './system-cache/SystemCacheCard': { SystemCacheCard },
+    './system-cache/helpers': helpers,
+    './system-cache/helpers.ts': helpers,
     './system-cache/useSystemCache': { useSystemCache },
     './agent-cleanup/sizeSummary': agentSizes,
     './agent-cleanup/executionSize': executionSize,

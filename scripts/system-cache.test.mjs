@@ -124,8 +124,12 @@ test('unknown measurements render as unknown, without a zero-sized cleanup affor
   assert.ok(renderedText(tree).includes(t('systemCache.unknownSize')))
   const size = findElements(tree, (element) => element.props?.className === 'text-2xl font-bold tabular-nums')[0]
   assert.equal(renderedText(size), t('systemCache.unknownSize'))
+  // Cleanup is no longer a separate card affordance; only the read-only
+  // review action remains and stays disabled for an unsupported target.
   const clean = findElements(tree, (element) => element.type === 'Button' && renderedText(element).includes(t('systemCache.clean')))[0]
-  assert.equal(clean.props.disabled, true)
+  assert.equal(clean, undefined)
+  const review = findElements(tree, (element) => element.type === 'Button' && renderedText(element).includes(t('systemCache.review')))[0]
+  assert.ok(review)
 })
 
 test('StrictMode setup-cleanup-setup preserves a pending read-only scan without duplicating it', async () => {

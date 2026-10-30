@@ -23,6 +23,7 @@ export function useSystemCache(active: boolean) {
   const [submitting, setSubmitting] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const busyRef = useRef(false)
+  const latestReportRef = useRef<SystemCacheReport | null>(null)
   const runRef = useRef<string | null>(null)
   const cancelledRef = useRef(false)
   const cancellingRef = useRef(false)
@@ -75,7 +76,7 @@ export function useSystemCache(active: boolean) {
   }, [active])
 
   const run = async (kind: Exclude<Activity, null>, token?: string) => {
-    if (busyRef.current) return
+    if (busyRef.current) return false
     busyRef.current = true
     cancelledRef.current = false
     setActivity(kind)
@@ -126,7 +127,10 @@ export function useSystemCache(active: boolean) {
       } else {
         const next = await invoke<SystemCacheReport>(kind === 'scan' ? 'system_cache_scan' : 'system_cache_review',
           kind === 'scan' ? undefined : { runId })
-        if (mountedRef.current && !cancelledRef.current) setReport(next)
+        if (mountedRef.current && !cancelledRef.current) {
+          setReport(next)
+          latestReportRef.current = next
+        }
       }
     } catch (cause) {
       if (mountedRef.current) {
@@ -143,12 +147,23 @@ export function useSystemCache(active: boolean) {
         setCancelling(false)
       }
     }
+    return true
   }
 
   const clean = async () => {
     if (busyRef.current || !canCleanSystemCache(report)) return
     if (!window.confirm(t('systemCache.cleanConfirm', { path: report.path }))) return
     await run('clean', report.review_token!)
+  }
+
+  // A page-initiated probe chains the administrator review when the fresh
+  // measurement still lacks authorization; post-execute refreshes stay
+  // read-only and never raise the password prompt again.
+  const probe = async (withReview = false) => {
+    await run('scan')
+    if (!withReview || !mountedRef.current || cancelledRef.current) return
+    const latest = latestReportRef.current
+    if (latest?.status === 'complete' && !latest.authorized) await run('review')
   }
 
   const submit = async (value?: string) => {
@@ -167,7 +182,7 @@ export function useSystemCache(active: boolean) {
 
   return {
     report, outcome, activity, error, progress, interaction, input, submitting, cancelling,
-    scan: () => run('scan'), review: () => run('review'), clean, cancel, submit, setInput,
+    scan: () => run('scan'), probe, review: () => run('review'), clean, cancel, submit, setInput,
   }
 }
 
