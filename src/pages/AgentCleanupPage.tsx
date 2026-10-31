@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useI18n } from '@/i18n'
 import { createCleanupHistoryRecord } from '@/lib/historyRecords'
+import { formatFileSize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
 import { invoke } from '@tauri-apps/api/tauri'
 import {
@@ -358,7 +359,7 @@ export function AgentCleanupPage() {
       </Card>
 
       <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-iqon-green/25 bg-iqon-card/95 p-4 shadow-soft backdrop-blur">
-        <div><p className="text-sm font-bold">{t('agentCleanup.selectedSummary', { count: selectedItems.length, size: agentSizeLabel(selectedSize, t) })}{canCleanSystemCache(systemCache.report) ? t('agentCleanup.selectedCacheSuffix') : ''}</p><p className="text-xs text-muted-foreground">{t('agentCleanup.safeNotice')}</p></div>
+        <div><p className="text-sm font-bold">{t('agentCleanup.selectedSummary', { count: selectedItems.length, size: agentSizeLabel(selectedSize, t) })}{canCleanSystemCache(systemCache.report) ? t('agentCleanup.selectedCacheSuffix', { size: formatFileSize(systemCache.report!.size_bytes!) }) : ''}</p><p className="text-xs text-muted-foreground">{t('agentCleanup.safeNotice')}</p></div>
         <Button variant="destructive" onClick={() => void execute()} disabled={(selectedItems.length === 0 && !canCleanSystemCache(systemCache.report)) || executing || loading}>
           {executing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
           {t('agentCleanup.cleanSelected')}

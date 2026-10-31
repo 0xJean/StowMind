@@ -1275,7 +1275,7 @@ export const zh = {
   'agentCleanup.cleanSelected': '清理已选内容',
   'agentCleanup.sizeUnspecified': '{size}（测量完整性未提供）',
   'agentCleanup.confirmCacheSuffix': '，连同已复核的共享图标缓存',
-  'agentCleanup.selectedCacheSuffix': ' · 含共享缓存',
+  'agentCleanup.selectedCacheSuffix': ' · 含共享缓存 {size}',
   'agentCleanup.confirm': '确认清理 {count} 项 Agent 内容（预览体积：{size}）{cache}？受保护路径不会被修改；不可达 Git 对象的修剪不可撤销。',
   'agentCleanup.cleanSuccess': 'Agent 清理结束：已处理 {count} 项、{size}；磁盘释放量未测量',
   'agentCleanup.resultTitle': 'Agent 清理结果',
