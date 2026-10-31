@@ -163,7 +163,11 @@ export function useSystemCache(active: boolean) {
     await run('scan')
     if (!withReview || !mountedRef.current || cancelledRef.current) return
     const latest = latestReportRef.current
-    if (latest?.status === 'complete' && !latest.authorized) await run('review')
+    // 'complete' means measured but still unauthorized; 'permission_denied'
+    // means the probe itself could not inspect the cache without admin.
+    const needsReview = latest?.status === 'complete' && !latest.authorized
+      || latest?.status === 'permission_denied'
+    if (needsReview) await run('review')
   }
 
   const submit = async (value?: string) => {
