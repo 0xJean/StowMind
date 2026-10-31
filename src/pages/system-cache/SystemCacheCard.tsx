@@ -61,11 +61,13 @@ export function SystemCacheCard({ cache, active, shared = false, onClean }: Syst
             {!report.mole_supported && <p className="text-xs text-iqon-yellow">{t('systemCache.moleUnavailable')} {report.mole_message}</p>}
           </>
         )}
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={onClean ?? (() => void cache.review())} disabled={busy || report?.status === 'unsupported'}>
-            <ShieldCheck className="mr-2 h-4 w-4" />{t('systemCache.review')}
-          </Button>
-        </div>
+        {!shared && (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={onClean ?? (() => void cache.review())} disabled={busy || report?.status === 'unsupported'}>
+              <ShieldCheck className="mr-2 h-4 w-4" />{t('systemCache.review')}
+            </Button>
+          </div>
+        )}
         {shared && <p className="text-xs font-semibold text-muted-foreground">{t('systemCache.sharedScopeHint')}</p>}
         <p className="text-[11px] text-muted-foreground">{t(shared ? 'systemCache.reviewHintTop' : 'systemCache.reviewHint')}</p>
       </div>

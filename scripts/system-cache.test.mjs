@@ -146,9 +146,24 @@ test('StrictMode setup-cleanup-setup preserves a pending read-only scan without 
   const report = { ...complete, authorized: false, review_token: null }
   finishScan(report)
   await scanning
-  assert.equal(hook.render().report, report)
+  assert.deepEqual({ ...hook.render().report }, report)
   assert.equal(hook.render().activity, null)
   assert.equal(hook.history.length, 0)
+})
+
+test('a read-only rescan after review keeps the issued token so the cache stays queued', async () => {
+  const hook = createHook(async (command) => {
+    if (command === 'system_cache_review') return { ...complete, authorized: true, review_token: 'issued-token' }
+    if (command === 'system_cache_scan') return { ...complete, authorized: true, review_token: null }
+    assert.fail(`Unexpected command: ${command}`)
+  })
+  await hook.render().review()
+  assert.equal(hook.render().report.review_token, 'issued-token')
+  assert.equal(helpers.canCleanSystemCache(hook.render().report), true)
+  await hook.render().scan()
+  assert.equal(hook.render().report.review_token, 'issued-token', 'read-only scans must not drop the queued authorization')
+  assert.equal(helpers.canCleanSystemCache(hook.render().report), true)
+  assert.equal(hook.calls.filter(({ command }) => command === 'system_cache_review').length, 1)
 })
 
 for (const result of ['resolve', 'reject']) {

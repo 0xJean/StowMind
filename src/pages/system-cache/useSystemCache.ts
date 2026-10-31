@@ -82,7 +82,12 @@ export function useSystemCache(active: boolean) {
     setActivity(kind)
     setError(null)
     setProgress('')
-    setReport((current) => current ? { ...current, review_token: null } : null)
+    // A read-only re-measurement keeps the issued review token; the backend
+    // consumes it during cleaning and re-issues it during a fresh review.
+    // Only mutating runs drop the visible token while they are in flight.
+    if (kind !== 'scan') {
+      setReport((current) => current ? { ...current, review_token: null } : null)
+    }
     resetInteraction()
     const runId = `system-cache-${crypto.randomUUID()}`
     runRef.current = kind === 'scan' ? null : runId
@@ -128,8 +133,15 @@ export function useSystemCache(active: boolean) {
         const next = await invoke<SystemCacheReport>(kind === 'scan' ? 'system_cache_scan' : 'system_cache_review',
           kind === 'scan' ? undefined : { runId })
         if (mountedRef.current && !cancelledRef.current) {
-          setReport(next)
-          latestReportRef.current = next
+          // A read-only re-measurement returns no token; the issued review
+          // stays valid until the backend consumes it during cleaning or a
+          // fresh review replaces it. Carry it over so the shared cache stays
+          // queued for the bottom clean entry.
+          const merged = kind === 'scan' && next.review_token === null
+            ? { ...next, review_token: latestReportRef.current?.review_token ?? null }
+            : next
+          setReport(merged)
+          latestReportRef.current = merged
         }
       }
     } catch (cause) {
