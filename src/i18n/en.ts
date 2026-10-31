@@ -1276,7 +1276,7 @@ export const en = {
   'agentCleanup.cleanSelected': 'Clean selected',
   'agentCleanup.sizeUnspecified': '{size} (measurement completeness not reported)',
   'agentCleanup.confirmCacheSuffix': ', plus the reviewed shared icon cache',
-  'agentCleanup.selectedCacheSuffix': ' · plus shared cache',
+  'agentCleanup.selectedCacheSuffix': ' · plus shared cache {size}',
   'agentCleanup.confirm': 'Clean {count} selected agent item(s) (preview size: {size}){cache}? Protected paths remain untouched; pruning unreachable Git objects cannot be undone.',
   'agentCleanup.cleanSuccess': 'Agent cleanup ended: {count} item(s), {size} processed; disk space freed was not measured',
   'agentCleanup.resultTitle': 'Agent cleanup result',
