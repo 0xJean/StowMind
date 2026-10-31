@@ -320,7 +320,7 @@ export function AgentCleanupPage() {
         </div>
       )}
 
-      <SystemCacheCard cache={systemCache} active={active} shared onClean={() => void systemCache.review()} />
+      <SystemCacheCard cache={systemCache} active={active} shared />
 
       <Card>
         <CardHeader className="flex-row items-start justify-between space-y-0">
